@@ -184,7 +184,7 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
           <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-primary/40 bg-background">
             <MousePointerClick className="h-3.5 w-3.5 text-primary" />
           </span>
-          Para confirmar o pagamento, clique na parcela para dar baixa.
+          Clique em "Confirmar" para marcar a parcela como paga.
         </p>
       </div>
       {grouped.map((group) => {
