@@ -1,6 +1,7 @@
 # Meu Cartaozinho
 
 Aplicacao para organizar compras de cartao de credito, parcelas e faturas por mes.
+Projeto simples que fiz para minha noiva organizar melhor os gastos e as parcelas do cartao.
 
 ## Objetivo
 
