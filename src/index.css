@@ -131,6 +131,26 @@
 }
 
 @layer utilities {
+  :root.accent-theme-animating .gradient-primary,
+  :root.accent-theme-animating [class*="bg-primary"],
+  :root.accent-theme-animating [class*="text-primary"],
+  :root.accent-theme-animating [class*="border-primary"],
+  :root.accent-theme-animating [class*="ring-primary"],
+  :root.accent-theme-animating [class*="shadow-primary"],
+  :root.accent-theme-animating [class*="from-primary"],
+  :root.accent-theme-animating [class*="via-primary"],
+  :root.accent-theme-animating [class*="to-primary"],
+  :root.accent-theme-animating [class*="bg-accent"],
+  :root.accent-theme-animating [class*="text-accent"],
+  :root.accent-theme-animating [class*="border-accent"],
+  :root.accent-theme-animating [class*="from-accent"],
+  :root.accent-theme-animating [class*="via-accent"],
+  :root.accent-theme-animating [class*="to-accent"] {
+    transition-property: background-color, color, border-color, box-shadow, fill, stroke, background-image;
+    transition-duration: 340ms;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
   .gradient-primary {
     background: var(--gradient-primary);
   }
