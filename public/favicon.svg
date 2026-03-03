@@ -2,8 +2,8 @@
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#E65A8D" />
-      <stop offset="50%" stop-color="#E65A8D" />
-      <stop offset="50%" stop-color="#57B8EA" />
+      <stop offset="38%" stop-color="#D86EA7" />
+      <stop offset="70%" stop-color="#86B7D8" />
       <stop offset="100%" stop-color="#57B8EA" />
     </linearGradient>
   </defs>
@@ -11,4 +11,3 @@
   <rect x="16" y="20" width="32" height="24" rx="5" fill="none" stroke="#FFFFFF" stroke-width="4" />
   <rect x="16" y="29" width="32" height="4" fill="#FFFFFF" />
 </svg>
-
