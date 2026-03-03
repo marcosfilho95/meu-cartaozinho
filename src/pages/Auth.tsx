@@ -11,6 +11,42 @@ import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/acce
 
 type View = "login" | "signup" | "forgot";
 
+const USERNAME_REGEX = /^[a-z0-9._-]{3,20}$/;
+const ALLOWED_EMAIL_DOMAINS = [
+  "gmail.com",
+  "hotmail.com",
+  "outlook.com",
+  "live.com",
+  "yahoo.com",
+  "icloud.com",
+  "bol.com.br",
+  "uol.com.br",
+];
+
+const normalizeEmail = (value: string) => value.trim().toLowerCase();
+const normalizeUsername = (value: string) => value.trim().toLowerCase();
+
+const getEmailValidationError = (value: string) => {
+  const email = normalizeEmail(value);
+  if (!email) return "Informe seu email.";
+  const basicRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!basicRegex.test(email)) return "Email invalido. Exemplo: nome@gmail.com";
+  const domain = email.split("@")[1] || "";
+  if (!ALLOWED_EMAIL_DOMAINS.includes(domain)) {
+    return "Use um provedor comum (gmail, hotmail, outlook, live, yahoo, icloud, bol ou uol).";
+  }
+  return "";
+};
+
+const getUsernameValidationError = (value: string) => {
+  const username = normalizeUsername(value);
+  if (!username) return "Escolha um nome de usuario.";
+  if (!USERNAME_REGEX.test(username)) {
+    return "Use 3-20 caracteres: letras minusculas, numeros, ponto, underline ou hifen.";
+  }
+  return "";
+};
+
 const getPasswordStrength = (password: string): { score: number; label: string } => {
   if (!password) return { score: 0, label: "" };
   let score = 0;
@@ -28,7 +64,10 @@ const getPasswordStrength = (password: string): { score: number; label: string }
 const Auth: React.FC = () => {
   const [view, setView] = useState<View>("login");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [signupEmail, setSignupEmail] = useState("");
+  const [loginIdentifier, setLoginIdentifier] = useState("");
+  const [forgotEmail, setForgotEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -39,21 +78,39 @@ const Auth: React.FC = () => {
   const strength = useMemo(() => getPasswordStrength(password), [password]);
   const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword;
   const passwordsMismatch = confirmPassword.length > 0 && password !== confirmPassword;
+  const usernameError = useMemo(() => (view === "signup" ? getUsernameValidationError(username) : ""), [username, view]);
+  const signupEmailError = useMemo(() => (view === "signup" ? getEmailValidationError(signupEmail) : ""), [signupEmail, view]);
 
   const canSubmitSignup =
     name.trim().length > 0 &&
-    email.trim().length > 0 &&
+    !usernameError &&
+    !signupEmailError &&
     password.length >= 6 &&
     password === confirmPassword;
+
+  const resolveLoginEmail = async (identifier: string) => {
+    const normalized = identifier.trim().toLowerCase();
+    if (!normalized) throw new Error("Informe seu usuario.");
+    if (normalized.includes("@")) {
+      return normalized;
+    }
+    const { data, error } = await supabase.rpc("get_login_email_by_username", {
+      p_username: normalized,
+    });
+    if (error) throw error;
+    if (!data) throw new Error("Usuario nao encontrado.");
+    return data;
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
+      const email = await resolveLoginEmail(loginIdentifier);
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         if (error.message.includes("Invalid login")) {
-          throw new Error("Email ou senha incorretos. Tente novamente.");
+          throw new Error("Usuario ou senha incorretos. Tente novamente.");
         }
         throw error;
       }
@@ -71,16 +128,19 @@ const Auth: React.FC = () => {
     setLoading(true);
     try {
       const { error } = await supabase.auth.signUp({
-        email,
+        email: normalizeEmail(signupEmail),
         password,
         options: {
           emailRedirectTo: window.location.origin,
-          data: { name: name.trim() },
+          data: { name: name.trim(), username: normalizeUsername(username) },
         },
       });
       if (error) {
         if (error.message.includes("already registered")) {
           throw new Error("Esse email ja esta em uso. Tente fazer login.");
+        }
+        if (error.message.toLowerCase().includes("profiles_username_lower_uniq")) {
+          throw new Error("Esse nome de usuario ja esta em uso.");
         }
         throw error;
       }
@@ -94,10 +154,15 @@ const Auth: React.FC = () => {
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
+    if (!forgotEmail.trim()) return;
+    const emailError = getEmailValidationError(forgotEmail);
+    if (emailError) {
+      toast.error(emailError);
+      return;
+    }
     setLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      const { error } = await supabase.auth.resetPasswordForEmail(normalizeEmail(forgotEmail), {
         redirectTo: `${window.location.origin}/reset-password`,
       });
       if (error) throw error;
@@ -164,11 +229,20 @@ const Auth: React.FC = () => {
           {view === "login" && (
             <form onSubmit={handleLogin} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="identifier">Usuario</Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
-                  <Input id="email" type="email" placeholder="seu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required className={inputClasses} />
+                  <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
+                  <Input
+                    id="identifier"
+                    type="text"
+                    placeholder="seu_usuario"
+                    value={loginIdentifier}
+                    onChange={(e) => setLoginIdentifier(e.target.value)}
+                    required
+                    className={inputClasses}
+                  />
                 </div>
+                <p className="text-xs text-muted-foreground">Voce tambem pode usar email aqui, se preferir.</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Senha</Label>
@@ -216,6 +290,24 @@ const Auth: React.FC = () => {
                 </div>
               </div>
               <div className="space-y-2">
+                <Label htmlFor="username">Nome de usuario</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
+                  <Input
+                    id="username"
+                    type="text"
+                    placeholder="ex: marco.silva"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value.toLowerCase())}
+                    required
+                    minLength={3}
+                    maxLength={20}
+                    className={inputClasses}
+                  />
+                </div>
+                {usernameError && <p className="text-xs text-destructive">{usernameError}</p>}
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="signup-email">Email</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
@@ -223,13 +315,18 @@ const Auth: React.FC = () => {
                     id="signup-email"
                     type="email"
                     placeholder="seu@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    value={signupEmail}
+                    onChange={(e) => setSignupEmail(e.target.value)}
                     required
                     maxLength={255}
                     className={inputClasses}
                   />
                 </div>
+                {signupEmailError ? (
+                  <p className="text-xs text-destructive">{signupEmailError}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Aceitamos: gmail, hotmail, outlook, live, yahoo, icloud, bol e uol.</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="signup-password">Senha</Label>
@@ -304,7 +401,15 @@ const Auth: React.FC = () => {
                 <Label htmlFor="forgot-email">Email</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
-                  <Input id="forgot-email" type="email" placeholder="seu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required className={inputClasses} />
+                  <Input
+                    id="forgot-email"
+                    type="email"
+                    placeholder="seu@email.com"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    required
+                    className={inputClasses}
+                  />
                 </div>
               </div>
               <Button type="submit" className="h-12 w-full rounded-xl gradient-primary text-base font-semibold text-primary-foreground" disabled={loading}>
