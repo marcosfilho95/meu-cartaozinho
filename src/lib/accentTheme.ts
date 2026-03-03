@@ -1,4 +1,4 @@
-export type AccentTheme = "pink" | "blue";
+﻿export type AccentTheme = "pink" | "blue";
 
 const STORAGE_KEY = "accent-theme";
 const THEME_ANIMATION_CLASS = "accent-theme-animating";
@@ -36,8 +36,8 @@ const syncPwaTheme = (theme: AccentTheme) => {
     background_color: colors.background,
     theme_color: colors.theme,
     icons: [
-      { src: `${origin}/icons/icon-${theme}-192x192.png`, sizes: "192x192", type: "image/png", purpose: "any maskable" },
-      { src: `${origin}/icons/icon-${theme}-512x512.png`, sizes: "512x512", type: "image/png", purpose: "any maskable" },
+      { src: `${origin}/icons/icon-${theme}-192x192.png`, sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: `${origin}/icons/icon-${theme}-512x512.png`, sizes: "512x512", type: "image/png", purpose: "any" },
     ],
   };
 

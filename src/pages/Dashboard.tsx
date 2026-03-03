@@ -7,7 +7,6 @@ import { CardSummary } from "@/components/CardSummary";
 import { AddCardDialog } from "@/components/AddCardDialog";
 import { AccentThemeSwitch } from "@/components/AccentThemeSwitch";
 import { UserAvatar } from "@/components/UserAvatar";
-import { AppLogo } from "@/components/AppLogo";
 import { AppFooter } from "@/components/AppFooter";
 import { getCurrentMonth, formatCurrency, getMonthPaymentStatus, MonthPaymentStatus } from "@/lib/installments";
 import { Button } from "@/components/ui/button";
@@ -239,7 +238,6 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
       <header className="gradient-primary px-4 pb-8 pt-6">
         <div className="container flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3">
-            <AppLogo size="sm" className="shrink-0" />
             <UserAvatar avatarId={profile?.avatar_id} name={profile?.name} size={52} />
             <div className="min-w-0">
               <p className="text-base font-extrabold tracking-tight text-primary-foreground sm:text-lg">

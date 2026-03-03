@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { AVATAR_OPTIONS, DEFAULT_AVATAR_ID } from "@/data/avatars";
 import { UserAvatar } from "@/components/UserAvatar";
-import { AppLogo } from "@/components/AppLogo";
 import { AppFooter } from "@/components/AppFooter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -117,8 +116,7 @@ const Profile: React.FC = () => {
             <ArrowLeft className="h-4 w-4" />
             Voltar
           </Button>
-          <div className="flex items-center gap-2">
-            <AppLogo size="sm" />
+          <div>
             <h1 className="font-heading text-2xl font-bold text-primary-foreground">Perfil</h1>
           </div>
           <p className="text-sm text-primary-foreground/80">Escolha seu avatar e personalize sua conta</p>

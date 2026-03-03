@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { BankLogo } from "@/components/BankLogo";
-import { AppLogo } from "@/components/AppLogo";
 import { AppFooter } from "@/components/AppFooter";
 import { formatCurrency, formatMonth } from "@/lib/installments";
 import { ArrowLeft, Trash2, ShoppingBag } from "lucide-react";
@@ -120,7 +119,6 @@ const Purchases: React.FC<PurchasesProps> = ({ initialUserId }) => {
             Voltar
           </Button>
           <div className="flex items-center gap-3">
-            <AppLogo size="sm" />
             <ShoppingBag className="h-6 w-6 text-primary-foreground" />
             <h1 className="font-heading text-xl font-bold text-primary-foreground">Minhas Compras</h1>
           </div>

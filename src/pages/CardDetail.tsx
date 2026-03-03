@@ -6,7 +6,6 @@ import { MonthNavigator } from "@/components/MonthNavigator";
 import { InstallmentList } from "@/components/InstallmentList";
 import { BankLogo } from "@/components/BankLogo";
 import { UserAvatar } from "@/components/UserAvatar";
-import { AppLogo } from "@/components/AppLogo";
 import { AppFooter } from "@/components/AppFooter";
 import { formatCurrency, getCurrentMonth, getMonthPaymentStatus } from "@/lib/installments";
 import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
@@ -312,8 +311,7 @@ const CardDetail: React.FC = () => {
             Voltar
           </Button>
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <AppLogo size="sm" />
+          <div className="flex items-center gap-3">
               <BankLogo brand={card?.brand} size={52} />
               <div>
                 <h1 className="font-heading text-2xl font-bold text-primary-foreground">{card?.name || "Carregando..."}</h1>
