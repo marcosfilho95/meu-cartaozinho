@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { BankLogo } from "@/components/BankLogo";
+import { AppLogo } from "@/components/AppLogo";
+import { AppFooter } from "@/components/AppFooter";
 import { formatCurrency, formatMonth } from "@/lib/installments";
 import { ArrowLeft, Trash2, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
@@ -105,7 +107,7 @@ const Purchases: React.FC<PurchasesProps> = ({ initialUserId }) => {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-background flex flex-col">
       <header className="gradient-primary px-4 pb-8 pt-6">
         <div className="container">
           <Button
@@ -118,13 +120,14 @@ const Purchases: React.FC<PurchasesProps> = ({ initialUserId }) => {
             Voltar
           </Button>
           <div className="flex items-center gap-3">
+            <AppLogo size="sm" />
             <ShoppingBag className="h-6 w-6 text-primary-foreground" />
             <h1 className="font-heading text-xl font-bold text-primary-foreground">Minhas Compras</h1>
           </div>
         </div>
       </header>
 
-      <div className="container -mt-4 space-y-3">
+      <div className="container -mt-4 flex-1 space-y-3 pb-4">
         {loading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
@@ -186,6 +189,7 @@ const Purchases: React.FC<PurchasesProps> = ({ initialUserId }) => {
           ))
         )}
       </div>
+      <AppFooter plain className="pt-0 pb-1" />
     </div>
   );
 };

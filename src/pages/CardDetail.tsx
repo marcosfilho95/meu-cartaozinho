@@ -6,6 +6,8 @@ import { MonthNavigator } from "@/components/MonthNavigator";
 import { InstallmentList } from "@/components/InstallmentList";
 import { BankLogo } from "@/components/BankLogo";
 import { UserAvatar } from "@/components/UserAvatar";
+import { AppLogo } from "@/components/AppLogo";
+import { AppFooter } from "@/components/AppFooter";
 import { formatCurrency, getCurrentMonth, getMonthPaymentStatus } from "@/lib/installments";
 import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
 import { getStoredProfile, setStoredProfile } from "@/lib/profileCache";
@@ -76,6 +78,7 @@ const CardDetail: React.FC = () => {
   const [newSubgroupName, setNewSubgroupName] = useState("");
   const [editingSubgroupId, setEditingSubgroupId] = useState<string | null>(null);
   const [editingSubgroupName, setEditingSubgroupName] = useState("");
+  const [legendVisible, setLegendVisible] = useState(false);
 
   useEffect(() => {
     if (navState.initialUserId) {
@@ -284,10 +287,19 @@ const CardDetail: React.FC = () => {
     return { label: "Sem lancamentos", className: "border-border bg-secondary text-secondary-foreground" };
   }, [installments, month]);
 
+  useEffect(() => {
+    if (loading) {
+      setLegendVisible(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setLegendVisible(true), 90);
+    return () => window.clearTimeout(timer);
+  }, [month, subgroupChartData.length, loading]);
+
   if (!userId) return null;
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-background flex flex-col">
       <header className="gradient-primary px-4 pb-8 pt-6">
         <div className="container">
           <Button
@@ -301,6 +313,7 @@ const CardDetail: React.FC = () => {
           </Button>
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
+              <AppLogo size="sm" />
               <BankLogo brand={card?.brand} size={52} />
               <div>
                 <h1 className="font-heading text-2xl font-bold text-primary-foreground">{card?.name || "Carregando..."}</h1>
@@ -311,7 +324,7 @@ const CardDetail: React.FC = () => {
         </div>
       </header>
 
-      <div className="container -mt-4 space-y-4">
+      <div className="container -mt-4 flex-1 space-y-4 pb-4">
         {card ? (
         <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-elevated animate-fade-in">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -468,9 +481,9 @@ const CardDetail: React.FC = () => {
                           outerRadius={82}
                           paddingAngle={3}
                           isAnimationActive
-                          animationBegin={0}
-                          animationDuration={360}
-                          animationEasing="ease-out"
+                          animationBegin={40}
+                          animationDuration={600}
+                          animationEasing="cubic-bezier(0.22, 1, 0.36, 1)"
                         >
                         {subgroupChartData.map((item, index) => (
                           <Cell key={item.name} fill={SUBGROUP_CHART_COLORS[index % SUBGROUP_CHART_COLORS.length]} />
@@ -493,7 +506,7 @@ const CardDetail: React.FC = () => {
                   </ResponsiveContainer>
                 </div>
 
-                <div className="space-y-2">
+                <div className={`space-y-2 transition-opacity duration-500 ${legendVisible ? "opacity-100" : "opacity-0"}`}>
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Legenda</p>
                   {subgroupChartData.map((item, index) => {
                     const pct = subgroupTotal > 0 ? (item.value / subgroupTotal) * 100 : 0;
@@ -539,6 +552,7 @@ const CardDetail: React.FC = () => {
           />
         )}
       </div>
+      <AppFooter plain className="pt-0 pb-1" />
     </div>
   );
 };

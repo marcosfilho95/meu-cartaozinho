@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { applyAccentTheme, getStoredAccentTheme } from "@/lib/accentTheme";
@@ -19,15 +19,28 @@ const queryClient = new QueryClient();
 const AppRoutes = () => {
   const [session, setSession] = useState<any>(undefined);
   const location = useLocation();
+  const navigate = useNavigate();
 
   useLayoutEffect(() => {
     applyAccentTheme(getStoredAccentTheme());
   }, [location.pathname]);
 
   useEffect(() => {
+    const hash = window.location.hash || "";
+    const search = window.location.search || "";
+    const isRecoveryLink = hash.includes("type=recovery") || search.includes("type=recovery");
+    if (isRecoveryLink && location.pathname !== "/reset-password") {
+      navigate("/reset-password", { replace: true });
+    }
+  }, [location.pathname, navigate]);
+
+  useEffect(() => {
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === "PASSWORD_RECOVERY" && location.pathname !== "/reset-password") {
+        navigate("/reset-password", { replace: true });
+      }
       setSession(nextSession);
     });
 
@@ -36,7 +49,7 @@ const AppRoutes = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [location.pathname, navigate]);
 
   if (session === undefined) {
     return (
@@ -66,7 +79,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/*" element={<AppRoutes />} />

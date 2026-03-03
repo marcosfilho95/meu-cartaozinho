@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { AVATAR_OPTIONS, DEFAULT_AVATAR_ID } from "@/data/avatars";
 import { UserAvatar } from "@/components/UserAvatar";
+import { AppLogo } from "@/components/AppLogo";
+import { AppFooter } from "@/components/AppFooter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
@@ -103,7 +105,7 @@ const Profile: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-background flex flex-col">
       <header className="gradient-primary px-4 pb-8 pt-6">
         <div className="container">
           <Button
@@ -115,12 +117,15 @@ const Profile: React.FC = () => {
             <ArrowLeft className="h-4 w-4" />
             Voltar
           </Button>
-          <h1 className="font-heading text-2xl font-bold text-primary-foreground">Perfil</h1>
+          <div className="flex items-center gap-2">
+            <AppLogo size="sm" />
+            <h1 className="font-heading text-2xl font-bold text-primary-foreground">Perfil</h1>
+          </div>
           <p className="text-sm text-primary-foreground/80">Escolha seu avatar e personalize sua conta</p>
         </div>
       </header>
 
-      <div className="container -mt-4 space-y-4 animate-fade-in">
+      <div className="container -mt-4 flex-1 space-y-4 pb-4 animate-fade-in">
         <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-card animate-fade-in">
           <div className="mb-4 flex items-center gap-3">
             <UserAvatar avatarId={avatarId} name={name} size={84} />
@@ -165,6 +170,7 @@ const Profile: React.FC = () => {
           {saving ? "Salvando..." : "Salvar perfil"}
         </Button>
       </div>
+      <AppFooter plain className="pt-0 pb-1" />
     </div>
   );
 };
