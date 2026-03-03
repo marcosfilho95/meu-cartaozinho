@@ -120,8 +120,8 @@ const Profile: React.FC = () => {
         </div>
       </header>
 
-      <div className="container -mt-4 space-y-4">
-        <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-card">
+      <div className="container -mt-4 space-y-4 animate-fade-in">
+        <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-card animate-fade-in">
           <div className="mb-4 flex items-center gap-3">
             <UserAvatar avatarId={avatarId} name={name} size={84} />
             <div>
@@ -133,7 +133,7 @@ const Profile: React.FC = () => {
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome" maxLength={100} />
         </section>
 
-        <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-card">
+        <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-card animate-fade-in">
           <h2 className="font-heading text-lg font-bold text-foreground">Escolha seu avatar</h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {AVATAR_OPTIONS.map((avatar) => {
@@ -161,7 +161,7 @@ const Profile: React.FC = () => {
           </div>
         </section>
 
-        <Button className="w-full gradient-primary text-primary-foreground" onClick={saveProfile} disabled={saving}>
+        <Button className="w-full gradient-primary text-primary-foreground animate-fade-in" onClick={saveProfile} disabled={saving}>
           {saving ? "Salvando..." : "Salvar perfil"}
         </Button>
       </div>

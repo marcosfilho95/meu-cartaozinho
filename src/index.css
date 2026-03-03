@@ -131,6 +131,60 @@
 }
 
 @layer utilities {
+  .wow-click {
+    position: relative;
+    overflow: visible;
+  }
+
+  .wow-click .wow-shape {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .wow-click .wow-shape span {
+    position: absolute;
+    margin: auto;
+    height: 8px;
+    width: 2px;
+    background: currentColor;
+    opacity: 0;
+  }
+
+  .wow-click .wow-shape span:nth-of-type(1) { top: -20px; left: 0; right: 0; }
+  .wow-click .wow-shape span:nth-of-type(2) { bottom: -20px; left: 0; right: 0; }
+  .wow-click .wow-shape span:nth-of-type(3) { top: 0; bottom: 0; left: -10px; }
+  .wow-click .wow-shape span:nth-of-type(4) { top: 0; bottom: 0; right: -10px; }
+  .wow-click .wow-shape span:nth-of-type(5) { top: -18px; left: -70%; right: 0; transform: rotate(-30deg); }
+  .wow-click .wow-shape span:nth-of-type(6) { top: -18px; left: 0; right: -70%; transform: rotate(30deg); }
+  .wow-click .wow-shape span:nth-of-type(7) { bottom: -18px; right: 0; left: -70%; transform: rotate(30deg); }
+  .wow-click .wow-shape span:nth-of-type(8) { bottom: -18px; left: 0; right: -70%; transform: rotate(-30deg); }
+
+  .wow-click.wow-play {
+    animation: wow-bounce 300ms ease-out 1;
+  }
+
+  .wow-click.wow-play .wow-shape span:nth-of-type(1) { animation: wow-anim1 420ms ease-out 1; }
+  .wow-click.wow-play .wow-shape span:nth-of-type(2) { animation: wow-anim2 420ms ease-out 1; }
+  .wow-click.wow-play .wow-shape span:nth-of-type(3) { animation: wow-anim3 420ms ease-out 1; }
+  .wow-click.wow-play .wow-shape span:nth-of-type(4) { animation: wow-anim4 420ms ease-out 1; }
+  .wow-click.wow-play .wow-shape span:nth-of-type(5) { animation: wow-anim5 420ms ease-out 1; }
+  .wow-click.wow-play .wow-shape span:nth-of-type(6) { animation: wow-anim6 420ms ease-out 1; }
+  .wow-click.wow-play .wow-shape span:nth-of-type(7) { animation: wow-anim7 420ms ease-out 1; }
+  .wow-click.wow-play .wow-shape span:nth-of-type(8) { animation: wow-anim8 420ms ease-out 1; }
+
+  .btn-firstfx {
+    transition: box-shadow 300ms ease-in-out, color 300ms ease-in-out, border-color 300ms ease-in-out;
+  }
+
+  .btn-firstfx:hover,
+  .btn-firstfx:focus-visible {
+    color: hsl(var(--primary-foreground));
+    border-color: hsl(var(--primary));
+    box-shadow: 0 0 40px 40px hsl(var(--primary)) inset;
+    outline: 0;
+  }
+
   :root.accent-theme-animating .gradient-primary,
   :root.accent-theme-animating [class*="bg-primary"],
   :root.accent-theme-animating [class*="text-primary"],
@@ -183,4 +237,51 @@
     opacity: 1;
     transform: rotate(0deg) scale(1);
   }
+}
+
+@keyframes wow-bounce {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+@keyframes wow-anim1 {
+  0% { transform: scaleY(0.5); opacity: 0; }
+  50% { transform: translateY(-10px) scaleY(1.4); opacity: 1; }
+  100% { transform: translateY(-20px) scaleY(0.5); opacity: 0; }
+}
+@keyframes wow-anim2 {
+  0% { transform: scaleY(1); opacity: 0; }
+  50% { transform: translateY(10px) scaleY(1.4); opacity: 1; }
+  100% { transform: translateY(20px) scaleY(0.5); opacity: 0; }
+}
+@keyframes wow-anim3 {
+  0% { transform: rotate(90deg) scaleX(0.5); opacity: 0; }
+  50% { transform: rotate(90deg) translateY(10px) scaleX(1.4); opacity: 1; }
+  100% { transform: rotate(90deg) translateY(20px) scaleX(0.5); opacity: 0; }
+}
+@keyframes wow-anim4 {
+  0% { transform: rotate(90deg) scaleX(0.5); opacity: 0; }
+  50% { transform: rotate(90deg) translateY(-10px) scaleX(1.4); opacity: 1; }
+  100% { transform: rotate(90deg) translateY(-20px) scaleX(0.5); opacity: 0; }
+}
+@keyframes wow-anim5 {
+  0% { transform: rotate(-30deg) scaleY(0.5); opacity: 0; }
+  50% { transform: rotate(-30deg) translateY(-8px) scaleY(1.4); opacity: 1; }
+  100% { transform: rotate(-30deg) translateY(-16px) scaleY(0.5); opacity: 0; }
+}
+@keyframes wow-anim6 {
+  0% { transform: rotate(30deg) scaleY(0.5); opacity: 0; }
+  50% { transform: rotate(30deg) translateY(-8px) scaleY(1.4); opacity: 1; }
+  100% { transform: rotate(30deg) translateY(-16px) scaleY(0.5); opacity: 0; }
+}
+@keyframes wow-anim7 {
+  0% { transform: rotate(30deg) scaleY(0.5); opacity: 0; }
+  50% { transform: rotate(30deg) translateY(8px) scaleY(1.4); opacity: 1; }
+  100% { transform: rotate(30deg) translateY(16px) scaleY(0.5); opacity: 0; }
+}
+@keyframes wow-anim8 {
+  0% { transform: rotate(-30deg) scaleY(0.5); opacity: 0; }
+  50% { transform: rotate(-30deg) translateY(8px) scaleY(1.4); opacity: 1; }
+  100% { transform: rotate(-30deg) translateY(16px) scaleY(0.5); opacity: 0; }
 }

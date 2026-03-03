@@ -64,6 +64,19 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
     setLocalInstallments(installments);
   }, [installments]);
 
+  const replayAnimationClass = (el: HTMLElement, className: string, durationMs: number) => {
+    const timerKey = `__${className}Timer`;
+    const prevTimer = (el as unknown as Record<string, number | undefined>)[timerKey];
+    if (prevTimer) window.clearTimeout(prevTimer);
+    el.classList.remove(className);
+    void el.offsetWidth;
+    el.classList.add(className);
+    (el as unknown as Record<string, number | undefined>)[timerKey] = window.setTimeout(() => {
+      el.classList.remove(className);
+      (el as unknown as Record<string, number | undefined>)[timerKey] = undefined;
+    }, durationMs);
+  };
+
   const toggleStatus = async (inst: Installment) => {
     const newStatus = inst.status === "pago" ? "pendente" : "pago";
     const { error } = await supabase
@@ -240,19 +253,30 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
                 <Button
                   size="sm"
                   variant="secondary"
-                  className="h-8 text-xs sm:h-7"
+                  className="wow-click h-8 rounded-xl border border-primary/30 bg-primary/10 px-3 text-xs font-semibold text-primary sm:h-9 sm:px-3.5 sm:text-sm"
                   disabled={group.items.length === 0}
                   onClick={(e) => {
                     e.stopPropagation();
+                    replayAnimationClass(e.currentTarget, "wow-play", 420);
                     setGroupStatus(group.items, "pago");
                   }}
                 >
-                  Pagar tudo
+                  <span>Pagar tudo</span>
+                  <span className="wow-shape" aria-hidden="true">
+                    <span />
+                    <span />
+                    <span />
+                    <span />
+                    <span />
+                    <span />
+                    <span />
+                    <span />
+                  </span>
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-8 text-xs sm:h-7"
+                  className="btn-firstfx h-8 rounded-xl border border-border/80 bg-background/85 px-3 text-xs font-semibold text-foreground hover:border-primary/35 sm:h-9 sm:px-3.5 sm:text-sm"
                   disabled={group.items.length === 0}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -320,15 +344,30 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
                               }`}
                             >
                               <button
-                                onClick={() => toggleStatus(inst)}
-                                className={`inline-flex h-8 shrink-0 items-center gap-1 rounded-full border px-3 text-xs font-semibold transition-all duration-300 ${
+                                onClick={(e) => {
+                                  if (inst.status !== "pago") replayAnimationClass(e.currentTarget, "wow-play", 420);
+                                  toggleStatus(inst);
+                                }}
+                                className={`inline-flex h-8 shrink-0 items-center gap-1 rounded-full border px-3 text-xs font-semibold ${
                                   inst.status === "pago"
                                     ? "border-success bg-success/10 text-success hover:bg-success/20"
-                                    : "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+                                    : "wow-click border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
                                 }`}
                               >
                                 {inst.status === "pago" ? <Check className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}
-                                {inst.status === "pago" ? "Desfazer" : "Confirmar"}
+                                <span>{inst.status === "pago" ? "Desfazer" : "Confirmar"}</span>
+                                {inst.status !== "pago" && (
+                                  <span className="wow-shape" aria-hidden="true">
+                                    <span />
+                                    <span />
+                                    <span />
+                                    <span />
+                                    <span />
+                                    <span />
+                                    <span />
+                                    <span />
+                                  </span>
+                                )}
                               </button>
                               <div className="min-w-0 flex-1">
                                 {isOverdue && (
