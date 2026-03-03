@@ -26,8 +26,8 @@ const syncPwaTheme = (theme: AccentTheme) => {
   const origin = window.location.origin;
 
   const manifestPayload = {
-    name: "Meu Cartaozinho",
-    short_name: "Cartaozinho",
+    name: "Meu Cartãozinho",
+    short_name: "Meu Cartãozinho",
     description: "Suas parcelas organizadas, mes a mes.",
     start_url: `${origin}/`,
     scope: `${origin}/`,

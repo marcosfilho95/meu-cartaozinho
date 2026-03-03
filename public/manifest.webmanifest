@@ -1,6 +1,6 @@
 {
-  "name": "Meu Cartaozinho",
-  "short_name": "Cartaozinho",
+  "name": "Meu Cartãozinho",
+  "short_name": "Meu Cartãozinho",
   "description": "Suas parcelas organizadas, mes a mes.",
   "start_url": "/",
   "scope": "/",
@@ -23,4 +23,3 @@
     }
   ]
 }
-

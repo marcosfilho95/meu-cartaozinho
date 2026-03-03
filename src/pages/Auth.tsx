@@ -27,7 +27,6 @@ const ALLOWED_EMAIL_DOMAINS = [
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 const normalizeUsername = (value: string) => value.trim().toLowerCase();
 const BASIC_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-let usernameRpcAvailable: boolean | null = null;
 const isMissingUsernameRpc = (error: any) => {
   const text = String(error?.message || error?.details || "");
   return (
@@ -105,20 +104,15 @@ const Auth: React.FC = () => {
       return normalized;
     }
     if (!USERNAME_REGEX.test(normalized)) throw new Error("Use um usuario valido ou um email valido.");
-    if (usernameRpcAvailable === false) {
-      throw new Error("Login por usuário não está habilitado neste projeto. Entre com e-mail.");
-    }
     const { data, error } = await supabase.rpc("get_login_email_by_username", {
       p_username: normalized,
     });
     if (error) {
       if (isMissingUsernameRpc(error)) {
-        usernameRpcAvailable = false;
         throw new Error("Login por usuário não está habilitado neste projeto. Entre com e-mail.");
       }
       throw error;
     }
-    usernameRpcAvailable = true;
     if (!data) throw new Error("Usuario nao encontrado.");
     return data;
   };
