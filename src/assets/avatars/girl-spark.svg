@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Avatar girl spark">
+  <rect width="96" height="96" rx="28" fill="#FDE2EE"/>
+  <circle cx="48" cy="50" r="24" fill="#FFC9B9"/>
+  <path d="M24 44c0-14 10-24 24-24s24 10 24 24v3H24v-3z" fill="#C94F8A"/>
+  <circle cx="39" cy="50" r="3" fill="#4B1E33"/>
+  <circle cx="57" cy="50" r="3" fill="#4B1E33"/>
+  <path d="M40 61c4 3 12 3 16 0" stroke="#B45B6E" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M18 28l8 3-7 5zM78 28l-8 3 7 5z" fill="#FFD76C"/>
+</svg>

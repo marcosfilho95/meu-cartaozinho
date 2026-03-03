@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Avatar gato femea">
+  <rect width="96" height="96" rx="28" fill="#FFE7EF"/>
+  <path d="M24 38l9-15 12 11zm48 0l-9-15-12 11z" fill="#E387A9"/>
+  <circle cx="48" cy="54" r="24" fill="#F7B4C9"/>
+  <circle cx="40" cy="53" r="3" fill="#5C2F43"/>
+  <circle cx="56" cy="53" r="3" fill="#5C2F43"/>
+  <path d="M45 61l3 3 3-3" stroke="#5C2F43" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M33 60h8M55 60h8" stroke="#5C2F43" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="48" cy="66" r="2" fill="#D95D8A"/>
+</svg>

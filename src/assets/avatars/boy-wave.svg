@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Avatar boy wave">
+  <rect width="96" height="96" rx="28" fill="#DFF4FF"/>
+  <circle cx="48" cy="50" r="24" fill="#FFD3BF"/>
+  <path d="M24 43c0-14 10-24 24-24s24 10 24 24v3H24z" fill="#1E4A72"/>
+  <circle cx="39" cy="51" r="3" fill="#1E2A38"/>
+  <circle cx="57" cy="51" r="3" fill="#1E2A38"/>
+  <path d="M41 61h14" stroke="#B36A6A" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="72" cy="25" r="8" fill="#82D0FF"/>
+  <path d="M69 25h6M72 22v6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+</svg>

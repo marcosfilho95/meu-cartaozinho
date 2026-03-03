@@ -10,6 +10,7 @@ import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import CardDetail from "./pages/CardDetail";
 import Purchases from "./pages/Purchases";
+import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -18,8 +19,10 @@ const AppRoutes = () => {
   const [session, setSession] = useState<any>(undefined);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
     });
 
     supabase.auth.getSession().then(({ data }) => {
@@ -29,7 +32,6 @@ const AppRoutes = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Loading state
   if (session === undefined) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -47,6 +49,7 @@ const AppRoutes = () => {
       <Route path="/" element={<Dashboard />} />
       <Route path="/cartao/:cardId" element={<CardDetail />} />
       <Route path="/compras" element={<Purchases />} />
+      <Route path="/perfil" element={<Profile />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
@@ -68,3 +71,4 @@ const App = () => (
 );
 
 export default App;
+
