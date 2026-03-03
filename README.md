@@ -1,11 +1,10 @@
 # Meu Cartaozinho
 
-Aplicacao para organizar compras de cartao de credito, parcelas e faturas por mes.
-Projeto simples que fiz para minha noiva organizar melhor os gastos e as parcelas do cartao.
+Projeto simples que criei para minha noiva organizar contas de cartão de crédito, parcelas e faturas por mês.
 
 ## Objetivo
 
-Facilitar a visualizacao do que foi gasto, quanto falta pagar e como dividir melhor as contas.
+A ideia é facilitar a visualização do que foi gasto, quanto falta pagar e como dividir melhor as contas.
 
 ## Rodando localmente
 
@@ -17,6 +16,8 @@ npm run dev
 ## Usar no celular como app (PWA)
 
 O projeto e instalavel no celular como aplicativo (sem Play Store/App Store), desde que esteja publicado com HTTPS.
+
+> **Segue o passo a passo abaixo:**
 
 ### Android (Chrome)
 
