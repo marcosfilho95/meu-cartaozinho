@@ -171,7 +171,7 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
     });
   }, [localInstallments, currentMonth, subgroupNames]);
 
-  if (localInstallments.length === 0) {
+  if (localInstallments.length === 0 && subgroupNames.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-14 text-center animate-fade-in">
         <p className="font-heading text-xl font-bold text-foreground">Nenhuma conta para este mes</p>

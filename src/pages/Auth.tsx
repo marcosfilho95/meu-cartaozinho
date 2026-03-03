@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+﻿import React, { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -91,9 +91,8 @@ const Auth: React.FC = () => {
   const resolveLoginEmail = async (identifier: string) => {
     const normalized = identifier.trim().toLowerCase();
     if (!normalized) throw new Error("Informe seu usuario.");
-    if (normalized.includes("@")) {
-      return normalized;
-    }
+    if (normalized.includes("@")) throw new Error("Use apenas seu usuario.");
+    if (!USERNAME_REGEX.test(normalized)) throw new Error("Use apenas seu usuario.");
     const { data, error } = await supabase.rpc("get_login_email_by_username", {
       p_username: normalized,
     });
@@ -235,14 +234,13 @@ const Auth: React.FC = () => {
                   <Input
                     id="identifier"
                     type="text"
-                    placeholder="seu_usuario"
+                    placeholder="Usuário"
                     value={loginIdentifier}
                     onChange={(e) => setLoginIdentifier(e.target.value)}
                     required
                     className={inputClasses}
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">Voce tambem pode usar email aqui, se preferir.</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Senha</Label>
@@ -296,7 +294,7 @@ const Auth: React.FC = () => {
                   <Input
                     id="username"
                     type="text"
-                    placeholder="ex: marco.silva"
+                    placeholder="ex: marcosfilho"
                     value={username}
                     onChange={(e) => setUsername(e.target.value.toLowerCase())}
                     required

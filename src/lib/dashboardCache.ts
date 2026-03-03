@@ -14,6 +14,7 @@ interface TotalsCacheValue {
 export interface DashboardCache {
   cards: CardCache[];
   totals: Record<string, TotalsCacheValue>;
+  monthPaymentStatus?: "paid" | "open" | "empty";
 }
 
 const cacheKey = (userId: string, month: string) => `dashboard-cache:${userId}:${month}`;

@@ -60,6 +60,15 @@ const isMissingAvatarColumnError = (error: { code?: string; message?: string } |
   return error.code === "42703" || error.code === "PGRST204" || message.includes("avatar_id");
 };
 
+const inferMonthStatusFromTotals = (totals: Record<string, { total: number; count: number; active: number }>): MonthPaymentStatus => {
+  const values = Object.values(totals);
+  if (values.length === 0) return "empty";
+  const total = values.reduce((sum, item) => sum + item.total, 0);
+  if (total <= 0) return "empty";
+  const active = values.reduce((sum, item) => sum + item.active, 0);
+  return active > 0 ? "open" : "paid";
+};
+
 interface DashboardProps {
   initialUserId?: string;
 }
@@ -100,6 +109,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
     if (!cachedDashboard) return;
     setCards(cachedDashboard.cards);
     setTotals(cachedDashboard.totals);
+    setMonthPaymentStatus(cachedDashboard.monthPaymentStatus || inferMonthStatusFromTotals(cachedDashboard.totals));
     setLoading(false);
   }, [userId, month]);
 
@@ -124,7 +134,8 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
     ]);
 
     const installmentRows = (installments as (MonthInstallmentStatus & { card_id: string; amount: number; status: string })[]) || [];
-    setMonthPaymentStatus(getMonthPaymentStatus(installmentRows, month));
+    const resolvedMonthPaymentStatus = getMonthPaymentStatus(installmentRows, month);
+    setMonthPaymentStatus(resolvedMonthPaymentStatus);
 
     setCards((cardsData as Card[]) || []);
     const localAvatar = getStoredAvatarId(userId);
@@ -158,6 +169,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
         default_due_day: card.default_due_day,
       })),
       totals: t,
+      monthPaymentStatus: resolvedMonthPaymentStatus,
     });
     setTotals(t);
     setLoading(false);
@@ -184,6 +196,9 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
   );
   const chartTotal = useMemo(() => chartData.reduce((sum, item) => sum + item.value, 0), [chartData]);
   const monthStatusUI = useMemo(() => {
+    if (loading) {
+      return { label: "Carregando...", className: "border-border bg-secondary text-secondary-foreground" };
+    }
     if (monthPaymentStatus === "paid") {
       return { label: "Pago", className: "border-success/30 bg-success/10 text-success" };
     }
@@ -191,9 +206,14 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
       return { label: "Em aberto", className: "border-warning/35 bg-warning/15 text-[hsl(var(--warning-foreground))]" };
     }
     return { label: "Sem lancamentos", className: "border-border bg-secondary text-secondary-foreground" };
-  }, [monthPaymentStatus]);
+  }, [loading, monthPaymentStatus]);
 
   useEffect(() => {
+    if (loading) {
+      setChartVisible(false);
+      setChartIntroActive(false);
+      return;
+    }
     setChartVisible(false);
     setChartAnimKey((prev) => prev + 1);
     setChartIntroActive(true);
@@ -203,7 +223,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
       window.clearTimeout(timer);
       window.clearTimeout(introTimer);
     };
-  }, [month, chartData.length]);
+  }, [month, chartData.length, loading]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -219,13 +239,13 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
           <div className="flex min-w-0 items-center gap-3">
             <UserAvatar avatarId={profile?.avatar_id} name={profile?.name} size={52} />
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-primary-foreground/90">
+              <p className="text-base font-extrabold tracking-tight text-primary-foreground sm:text-lg">
                 {`Olá, ${getFirstName(profile?.name)}`}
               </p>
-              <h1 className="truncate font-heading text-xl font-bold text-primary-foreground sm:text-2xl">Minhas Faturas</h1>
+              <h1 className="truncate font-heading text-2xl font-extrabold text-primary-foreground sm:text-3xl">Minhas Faturas</h1>
             </div>
           </div>
-          <div className="grid w-full grid-cols-4 gap-2 sm:flex sm:w-auto sm:grid-cols-none">
+          <div className="grid w-full grid-cols-4 items-center gap-2.5 sm:flex sm:w-auto sm:grid-cols-none">
             <AccentThemeSwitch
               compact
               theme={accentTheme}
@@ -235,28 +255,31 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
               variant="ghost"
               size="icon"
               onClick={() => navigate("/perfil")}
-              className="h-11 w-full text-primary-foreground hover:bg-primary-foreground/15 sm:h-10 sm:w-10"
+              className="h-12 w-full rounded-xl border border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20 sm:h-11 sm:w-11"
               aria-label="Perfil"
+              title="Perfil"
             >
-              <UserCircle2 className="h-[22px] w-[22px]" />
+              <UserCircle2 className="h-6 w-6" />
             </Button>
             <Button
               variant="ghost"
               size="icon"
               onClick={() => navigate("/compras")}
-              className="h-11 w-full text-primary-foreground hover:bg-primary-foreground/15 sm:h-10 sm:w-10"
+              className="h-12 w-full rounded-xl border border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20 sm:h-11 sm:w-11"
               aria-label="Compras"
+              title="Minhas compras"
             >
-              <ShoppingBag className="h-[22px] w-[22px]" />
+              <ShoppingBag className="h-6 w-6" />
             </Button>
             <Button
               variant="ghost"
               size="icon"
               onClick={handleLogout}
-              className="h-11 w-full text-primary-foreground hover:bg-primary-foreground/15 sm:h-10 sm:w-10"
+              className="h-12 w-full rounded-xl border border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20 sm:h-11 sm:w-11"
               aria-label="Sair"
+              title="Sair"
             >
-              <LogOut className="h-[22px] w-[22px]" />
+              <LogOut className="h-6 w-6" />
             </Button>
           </div>
         </div>
@@ -275,10 +298,12 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
               <p className="text-sm text-muted-foreground">Total do mês</p>
               <p className="font-heading text-4xl font-extrabold text-foreground">{formatCurrency(grandTotal)}</p>
               <p className="mt-2 text-sm text-muted-foreground">{activeInstallments} parcela(s) ativa(s) neste mês</p>
-              {grandTotal === 0 && <p className="mt-2 font-semibold text-muted-foreground">Nenhuma conta para este mês</p>}
+              {!loading && grandTotal === 0 && <p className="mt-2 font-semibold text-muted-foreground">Nenhuma conta para este mês</p>}
             </div>
             <div className={`rounded-2xl border border-border/70 bg-background/60 p-4 transition-all duration-500 ${chartVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1"}`}>
-              {chartData.length === 0 ? (
+              {loading ? (
+                <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">Carregando distribuição...</div>
+              ) : chartData.length === 0 ? (
                 <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">Sem distribuicao no mes</div>
               ) : (
                 <div className="grid items-center gap-4 lg:grid-cols-[1.2fr_1.05fr]">
