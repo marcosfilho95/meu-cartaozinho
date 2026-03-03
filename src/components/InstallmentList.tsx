@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { formatCurrency, formatMonth } from "@/lib/installments";
+import { formatCurrency, formatMonth, isInstallmentOpen, isInstallmentPaid } from "@/lib/installments";
 import { toast } from "sonner";
 import { Check, ChevronDown, Circle, MousePointerClick, Trash2 } from "lucide-react";
 import {
@@ -78,7 +78,7 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
   };
 
   const toggleStatus = async (inst: Installment) => {
-    const newStatus = inst.status === "pago" ? "pendente" : "pago";
+    const newStatus = isInstallmentPaid(inst.status) ? "pendente" : "pago";
     const { error } = await supabase
       .from("installments")
       .update({
@@ -178,7 +178,7 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
       return {
         ...group,
         subtotal: group.items.reduce((sum, item) => sum + Number(item.amount), 0),
-        overdueCount: group.items.filter((item) => item.status === "pendente" && item.ref_month && item.ref_month < currentMonth).length,
+        overdueCount: group.items.filter((item) => isInstallmentOpen(item.status) && item.ref_month && item.ref_month < currentMonth).length,
         purchases,
       };
     });
@@ -194,7 +194,7 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
   }
 
   const total = localInstallments.reduce((sum, i) => sum + Number(i.amount), 0);
-  const activeCount = localInstallments.filter((i) => i.status === "pendente").length;
+  const activeCount = localInstallments.filter((i) => isInstallmentOpen(i.status)).length;
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -220,7 +220,9 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
                   <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-300 ${isCollapsed ? "-rotate-90" : "rotate-0"}`} />
                 </span>
                 <div className="min-w-0">
-                  <h3 className="font-heading text-base font-bold text-foreground">{group.subgroupName}</h3>
+                  <h3 className="inline-flex items-center rounded-md border border-primary/25 bg-primary/10 px-2 py-0.5 font-heading text-base font-bold text-foreground">
+                    {group.subgroupName}
+                  </h3>
                   <p className="text-xs text-muted-foreground">
                     {group.purchases.length} compra(s) - subtotal {formatCurrency(group.subtotal)}
                     {group.overdueCount > 0 ? ` - ${group.overdueCount} atrasada(s)` : ""}
@@ -331,12 +333,13 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
 
                       <div className="space-y-2">
                         {purchase.rows.map((inst) => {
-                          const isOverdue = inst.status === "pendente" && !!inst.ref_month && inst.ref_month < currentMonth;
+                          const isPaid = isInstallmentPaid(inst.status);
+                          const isOverdue = isInstallmentOpen(inst.status) && !!inst.ref_month && inst.ref_month < currentMonth;
                           return (
                             <div
                               key={inst.id}
                               className={`flex items-center gap-3 rounded-md border p-2 transition-colors ${
-                                inst.status === "pago"
+                                isPaid
                                   ? "border-success/40 bg-success/5"
                                   : isOverdue
                                     ? "border-destructive/35 bg-destructive/5"
@@ -345,18 +348,18 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
                             >
                               <button
                                 onClick={(e) => {
-                                  if (inst.status !== "pago") replayAnimationClass(e.currentTarget, "wow-play", 420);
+                                  if (!isPaid) replayAnimationClass(e.currentTarget, "wow-play", 420);
                                   toggleStatus(inst);
                                 }}
                                 className={`inline-flex h-8 shrink-0 items-center gap-1 rounded-full border px-3 text-xs font-semibold ${
-                                  inst.status === "pago"
+                                  isPaid
                                     ? "border-success bg-success/10 text-success hover:bg-success/20"
                                     : "wow-click border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
                                 }`}
                               >
-                                {inst.status === "pago" ? <Check className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}
-                                <span>{inst.status === "pago" ? "Desfazer" : "Confirmar"}</span>
-                                {inst.status !== "pago" && (
+                                {isPaid ? <Check className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}
+                                <span>{isPaid ? "Desfazer" : "Confirmar"}</span>
+                                {!isPaid && (
                                   <span className="wow-shape" aria-hidden="true">
                                     <span />
                                     <span />
@@ -375,11 +378,11 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
                                     Conta atrasada ({formatMonth(inst.ref_month || currentMonth)})
                                   </p>
                                 )}
-                                <p className={`text-sm ${inst.status === "pago" ? "line-through text-muted-foreground" : "text-card-foreground"}`}>
+                                <p className={`text-sm ${isPaid ? "line-through text-muted-foreground" : "text-card-foreground"}`}>
                                   Parcela {inst.installment_number}/{inst.installments_count} - Dia {inst.due_day}
                                 </p>
                               </div>
-                              <span className={`font-heading text-sm font-bold ${inst.status === "pago" ? "text-success" : "text-foreground"}`}>
+                              <span className={`font-heading text-sm font-bold ${isPaid ? "text-success" : "text-foreground"}`}>
                                 {formatCurrency(Number(inst.amount))}
                               </span>
                             </div>

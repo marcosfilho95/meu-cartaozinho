@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Pie, PieChart, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,7 +8,7 @@ import { AddCardDialog } from "@/components/AddCardDialog";
 import { AccentThemeSwitch } from "@/components/AccentThemeSwitch";
 import { UserAvatar } from "@/components/UserAvatar";
 import { AppFooter } from "@/components/AppFooter";
-import { getCurrentMonth, formatCurrency, getMonthPaymentStatus, MonthPaymentStatus } from "@/lib/installments";
+import { getCurrentMonth, formatCurrency, getMonthPaymentStatus, isInstallmentOpen, MonthPaymentStatus } from "@/lib/installments";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CreditCard, LogOut, ShoppingBag, Plus, UserCircle2 } from "lucide-react";
@@ -87,6 +87,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
   const [chartAnimKey, setChartAnimKey] = useState(0);
   const [chartIntroActive, setChartIntroActive] = useState(false);
   const [monthPaymentStatus, setMonthPaymentStatus] = useState<MonthPaymentStatus>("empty");
+  const [overdueOpenCount, setOverdueOpenCount] = useState(0);
 
   useEffect(() => {
     if (initialUserId) {
@@ -111,6 +112,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
     setCards(cachedDashboard.cards);
     setTotals(cachedDashboard.totals);
     setMonthPaymentStatus(cachedDashboard.monthPaymentStatus || inferMonthStatusFromTotals(cachedDashboard.totals));
+    setOverdueOpenCount(cachedDashboard.overdueOpenCount || 0);
     setLoading(false);
   }, [userId, month]);
 
@@ -130,13 +132,18 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
         .from("installments")
         .select("card_id, amount, status, ref_month")
         .eq("user_id", userId)
-        .or(`ref_month.eq.${month},and(ref_month.lt.${month},status.eq.pendente)`),
+        .or(`ref_month.eq.${month},ref_month.lt.${month}`),
       profilePromise,
     ]);
 
-    const installmentRows = (installments as (MonthInstallmentStatus & { card_id: string; amount: number; status: string })[]) || [];
+    const rawInstallmentRows = (installments as (MonthInstallmentStatus & { card_id: string; amount: number; status: string })[]) || [];
+    const installmentRows = rawInstallmentRows.filter(
+      (inst) => inst.ref_month === month || (!!inst.ref_month && inst.ref_month < month && isInstallmentOpen(inst.status)),
+    );
     const resolvedMonthPaymentStatus = getMonthPaymentStatus(installmentRows, month);
+    const overdueCount = installmentRows.filter((inst) => !!inst.ref_month && inst.ref_month < month && isInstallmentOpen(inst.status)).length;
     setMonthPaymentStatus(resolvedMonthPaymentStatus);
+    setOverdueOpenCount(overdueCount);
 
     setCards((cardsData as Card[]) || []);
     const localAvatar = getStoredAvatarId(userId);
@@ -160,7 +167,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
       if (!t[inst.card_id]) t[inst.card_id] = { total: 0, count: 0, active: 0 };
       t[inst.card_id].total += Number(inst.amount);
       t[inst.card_id].count += 1;
-      if (inst.status === "pendente") t[inst.card_id].active += 1;
+      if (isInstallmentOpen(inst.status)) t[inst.card_id].active += 1;
     });
     setDashboardCache(userId, month, {
       cards: ((cardsData as Card[]) || []).map((card) => ({
@@ -171,6 +178,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
       })),
       totals: t,
       monthPaymentStatus: resolvedMonthPaymentStatus,
+      overdueOpenCount: overdueCount,
     });
     setTotals(t);
     setLoading(false);
@@ -208,6 +216,29 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
     }
     return { label: "Sem lancamentos", className: "border-border bg-secondary text-secondary-foreground" };
   }, [loading, monthPaymentStatus]);
+
+  const monthHighlightMessage = useMemo(() => {
+    if (loading) return null;
+    if (overdueOpenCount > 0) {
+      return {
+        text: "Voce tem parcelas atrasadas. Evite juros e pague o quanto antes.",
+        className: "border-destructive/40 bg-destructive/10 text-destructive",
+      };
+    }
+    if (monthPaymentStatus === "open") {
+      return {
+        text: "Cuidado para nao atrasar as parcelas!!!",
+        className: "border-warning/35 bg-warning/15 text-[hsl(var(--warning-foreground))]",
+      };
+    }
+    if (monthPaymentStatus === "paid") {
+      return {
+        text: "Todas as suas contas foram pagas, muito bem! :)",
+        className: "border-success/30 bg-success/10 text-success",
+      };
+    }
+    return null;
+  }, [loading, monthPaymentStatus, overdueOpenCount]);
 
   useEffect(() => {
     if (loading) {
@@ -247,11 +278,13 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
             </div>
           </div>
           <div className="grid w-full grid-cols-4 items-center gap-2.5 sm:flex sm:w-auto sm:grid-cols-none">
-            <AccentThemeSwitch
-              compact
-              theme={accentTheme}
-              onToggle={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
-            />
+            <div data-tour="theme-switch">
+              <AccentThemeSwitch
+                compact
+                theme={accentTheme}
+                onToggle={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
+              />
+            </div>
             <Button
               variant="ghost"
               size="icon"
@@ -259,6 +292,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
               className="h-12 w-full rounded-xl border border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20 sm:h-11 sm:w-11"
               aria-label="Perfil"
               title="Perfil"
+              data-tour="profile-button"
             >
               <UserCircle2 className="h-6 w-6" />
             </Button>
@@ -269,6 +303,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
               className="h-12 w-full rounded-xl border border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20 sm:h-11 sm:w-11"
               aria-label="Compras"
               title="Minhas compras"
+              data-tour="purchases-button"
             >
               <ShoppingBag className="h-6 w-6" />
             </Button>
@@ -279,6 +314,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
               className="h-12 w-full rounded-xl border border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20 sm:h-11 sm:w-11"
               aria-label="Sair"
               title="Sair"
+              data-tour="logout-button"
             >
               <LogOut className="h-6 w-6" />
             </Button>
@@ -287,7 +323,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
       </header>
 
       <div className="container -mt-4 flex-1 space-y-6 pb-4">
-        <section className="overflow-hidden rounded-3xl border border-border/60 bg-card p-5 shadow-elevated animate-fade-in">
+        <section data-tour="month-summary" className="overflow-hidden rounded-3xl border border-border/60 bg-card p-5 shadow-elevated animate-fade-in">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <MonthNavigator currentMonth={month} onMonthChange={setMonth} />
             <Badge variant="outline" className={monthStatusUI.className}>
@@ -299,6 +335,11 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
               <p className="text-sm text-muted-foreground">Total do mês</p>
               <p className="font-heading text-4xl font-extrabold text-foreground">{formatCurrency(grandTotal)}</p>
               <p className="mt-2 text-sm text-muted-foreground">{activeInstallments} parcela(s) ativa(s) neste mês</p>
+              {monthHighlightMessage && (
+                <p className={`mt-2 inline-flex rounded-md border px-2.5 py-1 text-xs font-semibold ${monthHighlightMessage.className}`}>
+                  {monthHighlightMessage.text}
+                </p>
+              )}
               {!loading && grandTotal === 0 && <p className="mt-2 font-semibold text-muted-foreground">Nenhuma conta para este mês</p>}
             </div>
             <div className={`rounded-2xl border border-border/70 bg-background/60 p-4 transition-all duration-500 ${chartVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1"}`}>
@@ -370,7 +411,16 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
         </section>
 
         <div className="flex flex-wrap gap-3">
-          <AddCardDialog userId={userId} onCardAdded={fetchData} />
+          <AddCardDialog
+            userId={userId}
+            onCardAdded={fetchData}
+            trigger={
+              <Button data-tour="new-card-button" className="gap-2 gradient-primary text-primary-foreground">
+                <Plus className="h-4 w-4" />
+                Novo cartao
+              </Button>
+            }
+          />
         </div>
 
         {loading ? (
@@ -431,3 +481,4 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
 };
 
 export default Dashboard;
+

@@ -69,12 +69,24 @@ export function formatCurrency(value: number): string {
 
 export type MonthPaymentStatus = "paid" | "open" | "empty";
 
+const normalizeStatus = (status?: string | null) => (status || "").trim().toLowerCase();
+
+export const isInstallmentPaid = (status?: string | null) => {
+  const normalized = normalizeStatus(status);
+  return normalized === "pago" || normalized === "paid" || normalized === "quitado";
+};
+
+export const isInstallmentOpen = (status?: string | null) => !isInstallmentPaid(status);
+
 export function getMonthPaymentStatus(
   installments: Array<{ ref_month?: string | null; status?: string | null }>,
   month: string,
 ): MonthPaymentStatus {
+  if (installments.length === 0) return "empty";
   const monthRows = installments.filter((item) => item.ref_month === month);
-  if (monthRows.length === 0) return "empty";
-  const hasPending = monthRows.some((item) => item.status === "pendente");
-  return hasPending ? "open" : "paid";
+  const overdueOpenRows = installments.filter((item) => item.ref_month && item.ref_month < month && isInstallmentOpen(item.status));
+  const relevantRows = [...monthRows, ...overdueOpenRows];
+  if (relevantRows.length === 0) return "empty";
+  const hasOpen = relevantRows.some((item) => isInstallmentOpen(item.status));
+  return hasOpen ? "open" : "paid";
 }

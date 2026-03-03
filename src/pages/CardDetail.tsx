@@ -7,7 +7,7 @@ import { InstallmentList } from "@/components/InstallmentList";
 import { BankLogo } from "@/components/BankLogo";
 import { UserAvatar } from "@/components/UserAvatar";
 import { AppFooter } from "@/components/AppFooter";
-import { formatCurrency, getCurrentMonth, getMonthPaymentStatus } from "@/lib/installments";
+import { formatCurrency, getCurrentMonth, getMonthPaymentStatus, isInstallmentOpen } from "@/lib/installments";
 import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
 import { getStoredProfile, setStoredProfile } from "@/lib/profileCache";
 import { getCardDetailCache, setCardDetailCache } from "@/lib/cardDetailCache";
@@ -135,13 +135,16 @@ const CardDetail: React.FC = () => {
         .from("installments")
         .select("id, installment_number, installments_count, due_day, amount, status, ref_month, purchase_id, purchases(id, description, person)")
         .eq("card_id", cardId)
-        .or(`ref_month.eq.${month},and(ref_month.lt.${month},status.eq.pendente)`)
+        .or(`ref_month.eq.${month},ref_month.lt.${month}`)
         .order("due_day")
         .order("installment_number"),
       profilePromise,
     ]);
 
-    let instData: any[] = instResult.data || [];
+    const rawInstData: any[] = instResult.data || [];
+    const instData = rawInstData.filter(
+      (inst) => inst.ref_month === month || (!!inst.ref_month && inst.ref_month < month && isInstallmentOpen(inst.status)),
+    );
     const localAvatar = getStoredAvatarId(userId);
     let profileData: any = profileResult.data || null;
 

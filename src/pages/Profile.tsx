@@ -116,7 +116,7 @@ const Profile: React.FC = () => {
             <ArrowLeft className="h-4 w-4" />
             Voltar
           </Button>
-          <div>
+          <div data-tour="profile-title">
             <h1 className="font-heading text-2xl font-bold text-primary-foreground">Perfil</h1>
           </div>
           <p className="text-sm text-primary-foreground/80">Escolha seu avatar e personalize sua conta</p>

@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-ro
 import { useEffect, useLayoutEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { applyAccentTheme, getStoredAccentTheme } from "@/lib/accentTheme";
+import { FirstLoginTour } from "@/components/FirstLoginTour";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
@@ -64,13 +65,16 @@ const AppRoutes = () => {
   }
 
   return (
-    <Routes>
-      <Route path="/" element={<Dashboard initialUserId={session?.user?.id} />} />
-      <Route path="/cartao/:cardId" element={<CardDetail />} />
-      <Route path="/compras" element={<Purchases initialUserId={session?.user?.id} />} />
-      <Route path="/perfil" element={<Profile />} />
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/" element={<Dashboard initialUserId={session?.user?.id} />} />
+        <Route path="/cartao/:cardId" element={<CardDetail />} />
+        <Route path="/compras" element={<Purchases initialUserId={session?.user?.id} />} />
+        <Route path="/perfil" element={<Profile />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+      <FirstLoginTour userId={session?.user?.id} />
+    </>
   );
 };
 

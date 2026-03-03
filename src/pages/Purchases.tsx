@@ -118,7 +118,7 @@ const Purchases: React.FC<PurchasesProps> = ({ initialUserId }) => {
             <ArrowLeft className="h-4 w-4" />
             Voltar
           </Button>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3" data-tour="purchases-title">
             <ShoppingBag className="h-6 w-6 text-primary-foreground" />
             <h1 className="font-heading text-xl font-bold text-primary-foreground">Minhas Compras</h1>
           </div>
