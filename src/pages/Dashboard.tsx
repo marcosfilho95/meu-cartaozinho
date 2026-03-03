@@ -26,13 +26,10 @@ interface Profile {
   avatar_id: string | null;
 }
 
-const toUsername = (name?: string | null) => {
-  const base = (name || "usuario")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "_")
-    .replace(/[^\w]/g, "");
-  return base || "usuario";
+const getFirstName = (name?: string | null) => {
+  const firstName = (name || "").trim().split(/\s+/)[0];
+  if (!firstName) return "Usuario";
+  return firstName;
 };
 
 const BANK_CHART_COLORS: Record<string, string> = {
@@ -133,7 +130,7 @@ const Dashboard: React.FC = () => {
             <UserAvatar avatarId={profile?.avatar_id} name={profile?.name} size={44} />
             <div>
               <p className="text-sm font-semibold text-primary-foreground/90">
-                {`Olá, @${toUsername(profile?.name)}`}
+                {`Olá, ${getFirstName(profile?.name)}`}
               </p>
               <h1 className="font-heading text-2xl font-bold text-primary-foreground">Minhas Faturas</h1>
             </div>
