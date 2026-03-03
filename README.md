@@ -15,25 +15,24 @@ npm run dev
 
 ## Usar no celular como app (PWA)
 
-O projeto e instalavel no celular como aplicativo (sem Play Store/App Store), desde que esteja publicado com HTTPS.
+O projeto é instalável no celular como aplicativo, desde que esteja publicado com HTTPS.
 
-> **Segue o passo a passo abaixo:**
 
-### Android (Chrome)
+### PASSO A PASSO
 
-1. Abra o link publicado da aplicacao no Chrome.
-2. Toque no menu de tres pontos.
-3. Toque em `Instalar app` ou `Adicionar a tela inicial`.
-4. Confirme em `Instalar`.
-5. O app vai abrir em modo standalone, como aplicativo.
+> [!NOTE]
+> ### 🤖 Android (Chrome)
+> 1. Abra o link da aplicação no **Chrome**.
+> 2. Toque no menu de **três pontos** (canto superior direito).
+> 3. Selecione `Instalar app` ou `Adicionar à tela inicial`.
+> 4. Confirme em **Instalar**.
 
-### iPhone (Safari)
-
-1. Abra o link publicado da aplicacao no Safari.
-2. Toque no botao de compartilhar.
-3. Toque em `Adicionar a Tela de Inicio`.
-4. Confirme em `Adicionar`.
-5. O app sera instalado na tela inicial.
+> [!NOTE]
+> ### 🍎 iPhone (Safari)
+> 1. Abra o link da aplicação no **Safari**.
+> 2. Toque no botão de **Compartilhar** (ícone de quadrado com seta).
+> 3. Role para baixo e toque em `Adicionar à Tela de Início`.
+> 4. Confirme em **Adicionar**.
 
 ## Tecnologias
 
