@@ -45,10 +45,8 @@ const Auth: React.FC = () => {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl gradient-primary shadow-elevated">
             <CreditCard className="h-8 w-8 text-primary-foreground" />
           </div>
-          <h1 className="font-heading text-2xl font-bold text-foreground">Minhas Faturas</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Controle suas parcelas de forma simples 💳
-          </p>
+          <h1 className="font-heading text-2xl font-bold text-foreground">Meu Cartãozinho</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Suas parcelas organizadas, mês a mês</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -99,10 +97,7 @@ const Auth: React.FC = () => {
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
           {isLogin ? "Não tem conta?" : "Já tem conta?"}{" "}
-          <button
-            onClick={() => setIsLogin(!isLogin)}
-            className="font-semibold text-primary hover:underline"
-          >
+          <button onClick={() => setIsLogin(!isLogin)} className="font-semibold text-primary hover:underline">
             {isLogin ? "Criar conta" : "Entrar"}
           </button>
         </p>
