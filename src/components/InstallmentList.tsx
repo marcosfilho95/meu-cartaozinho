@@ -1,8 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { formatCurrency } from "@/lib/installments";
+import { formatCurrency, formatMonth } from "@/lib/installments";
 import { toast } from "sonner";
-import { Check, ChevronDown, Circle, Trash2 } from "lucide-react";
+import { Check, ChevronDown, Circle, MousePointerClick, Trash2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,6 +15,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { AddPurchaseDialog } from "@/components/AddPurchaseDialog";
 
 interface Installment {
   id: string;
@@ -24,6 +25,7 @@ interface Installment {
   amount: number;
   status: string;
   purchase_id: string;
+  ref_month?: string;
 }
 
 interface PurchaseInfo {
@@ -36,11 +38,29 @@ interface PurchaseInfo {
 
 interface InstallmentListProps {
   installments: (Installment & { purchases: PurchaseInfo | null })[];
+  currentMonth: string;
+  userId: string;
+  cards: { id: string; name: string; brand: string | null; default_due_day: number | null }[];
+  cardId: string;
+  subgroupNames: string[];
   onUpdate: () => void;
 }
 
-export const InstallmentList: React.FC<InstallmentListProps> = ({ installments, onUpdate }) => {
+export const InstallmentList: React.FC<InstallmentListProps> = ({
+  installments,
+  currentMonth,
+  userId,
+  cards,
+  cardId,
+  subgroupNames,
+  onUpdate,
+}) => {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [localInstallments, setLocalInstallments] = useState(installments);
+
+  useEffect(() => {
+    setLocalInstallments(installments);
+  }, [installments]);
 
   const toggleStatus = async (inst: Installment) => {
     const newStatus = inst.status === "pago" ? "pendente" : "pago";
@@ -56,8 +76,13 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({ installments, 
       toast.error("Erro ao atualizar parcela: " + error.message);
       return;
     }
-    toast.success(newStatus === "pago" ? "Parcela marcada como paga" : "Parcela voltou para pendente");
-    onUpdate();
+    setLocalInstallments((prev) =>
+      prev.map((item) =>
+        item.id === inst.id
+          ? { ...item, status: newStatus }
+          : item,
+      ),
+    );
   };
 
   const setGroupStatus = async (groupItems: (Installment & { purchases: PurchaseInfo | null })[], status: "pago" | "pendente") => {
@@ -74,8 +99,13 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({ installments, 
       toast.error("Erro ao atualizar subgrupo: " + error.message);
       return;
     }
-    toast.success(status === "pago" ? "Subgrupo marcado como pago" : "Subgrupo desmarcado");
-    onUpdate();
+    setLocalInstallments((prev) =>
+      prev.map((item) =>
+        ids.includes(item.id)
+          ? { ...item, status }
+          : item,
+      ),
+    );
   };
 
   const deletePurchase = async (purchaseId: string, description: string) => {
@@ -98,16 +128,24 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({ installments, 
       }
     > = {};
 
-    installments.forEach((inst) => {
-      const subgroupId = inst.purchases?.subgroup_id || inst.purchases?.person || "sem-subgrupo";
-      const subgroupName = inst.purchases?.card_subgroups?.name || inst.purchases?.person || "Sem subgrupo";
+    subgroupNames.forEach((name) => {
+      const cleaned = name.trim();
+      if (!cleaned) return;
+      groups[cleaned] = { subgroupId: cleaned, subgroupName: cleaned, items: [] };
+    });
+
+    localInstallments.forEach((inst) => {
+      const subgroupId = inst.purchases?.person || "sem-subgrupo";
+      const subgroupName = inst.purchases?.person || "Sem subgrupo";
       if (!groups[subgroupId]) {
         groups[subgroupId] = { subgroupId, subgroupName, items: [] };
       }
       groups[subgroupId].items.push(inst);
     });
 
-    return Object.values(groups).map((group) => {
+    return Object.values(groups)
+      .sort((a, b) => a.subgroupName.localeCompare(b.subgroupName))
+      .map((group) => {
       const purchasesMap: Record<string, (Installment & { purchases: PurchaseInfo | null })[]> = {};
       group.items.forEach((inst) => {
         if (!purchasesMap[inst.purchase_id]) purchasesMap[inst.purchase_id] = [];
@@ -121,12 +159,13 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({ installments, 
       return {
         ...group,
         subtotal: group.items.reduce((sum, item) => sum + Number(item.amount), 0),
+        overdueCount: group.items.filter((item) => item.status === "pendente" && item.ref_month && item.ref_month < currentMonth).length,
         purchases,
       };
     });
-  }, [installments]);
+  }, [localInstallments, currentMonth, subgroupNames]);
 
-  if (installments.length === 0) {
+  if (localInstallments.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-14 text-center animate-fade-in">
         <p className="font-heading text-xl font-bold text-foreground">Nenhuma conta para este mes</p>
@@ -135,11 +174,19 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({ installments, 
     );
   }
 
-  const total = installments.reduce((sum, i) => sum + Number(i.amount), 0);
-  const activeCount = installments.filter((i) => i.status === "pendente").length;
+  const total = localInstallments.reduce((sum, i) => sum + Number(i.amount), 0);
+  const activeCount = localInstallments.filter((i) => i.status === "pendente").length;
 
   return (
     <div className="space-y-4 animate-fade-in">
+      <div className="rounded-xl border border-primary/30 bg-gradient-to-r from-primary/15 to-primary/5 px-3 py-2 shadow-sm">
+        <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-primary/40 bg-background">
+            <MousePointerClick className="h-3.5 w-3.5 text-primary" />
+          </span>
+          Para confirmar o pagamento, clique na parcela para dar baixa.
+        </p>
+      </div>
       {grouped.map((group) => {
         const isCollapsed = collapsedGroups[group.subgroupId] || false;
         return (
@@ -153,13 +200,34 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({ installments, 
                 <h3 className="font-heading text-base font-bold text-foreground">{group.subgroupName}</h3>
                 <p className="text-xs text-muted-foreground">
                   {group.purchases.length} compra(s) - subtotal {formatCurrency(group.subtotal)}
+                  {group.overdueCount > 0 ? ` - ${group.overdueCount} atrasada(s)` : ""}
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                {group.subgroupId !== "sem-subgrupo" && (
+                  <AddPurchaseDialog
+                    userId={userId}
+                    cards={cards}
+                    onPurchaseAdded={onUpdate}
+                    defaultCardId={cardId}
+                    lockCardId
+                    forcedPersonName={group.subgroupName}
+                    disableDbSubgroups
+                    trigger={
+                      <Button
+                        size="sm"
+                        className="h-9 rounded-xl gradient-primary px-4 text-sm font-extrabold text-primary-foreground shadow-lg shadow-primary/45 ring-2 ring-primary/25 transition-all hover:-translate-y-0.5 hover:brightness-105"
+                      >
+                        + Nova conta
+                      </Button>
+                    }
+                  />
+                )}
                 <Button
                   size="sm"
                   variant="secondary"
                   className="h-7 text-xs"
+                  disabled={group.items.length === 0}
                   onClick={(e) => {
                     e.stopPropagation();
                     setGroupStatus(group.items, "pago");
@@ -171,6 +239,7 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({ installments, 
                   size="sm"
                   variant="outline"
                   className="h-7 text-xs"
+                  disabled={group.items.length === 0}
                   onClick={(e) => {
                     e.stopPropagation();
                     setGroupStatus(group.items, "pendente");
@@ -185,7 +254,12 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({ installments, 
             <div className={`grid transition-all duration-300 ease-out ${isCollapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]"}`}>
               <div className="overflow-hidden">
                 <div className="space-y-3 p-3">
-                  {group.purchases.map((purchase) => (
+                  {group.purchases.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-border/80 bg-background/40 p-4 text-sm text-muted-foreground">
+                      Nenhuma conta neste usuario ainda. Clique em <span className="font-semibold text-foreground">+ Nova conta</span> para cadastrar.
+                    </div>
+                  ) : (
+                    group.purchases.map((purchase) => (
                     <article key={purchase.purchaseId} className="rounded-lg border border-border/80 bg-background/65 p-3">
                       <div className="mb-2 flex items-start justify-between gap-2">
                         <div className="min-w-0">
@@ -219,34 +293,50 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({ installments, 
                       </div>
 
                       <div className="space-y-2">
-                        {purchase.rows.map((inst) => (
-                          <div
-                            key={inst.id}
-                            className={`flex items-center gap-3 rounded-md border p-2 transition-colors ${
-                              inst.status === "pago" ? "border-success/40 bg-success/5" : "border-border/70 bg-card"
-                            }`}
-                          >
-                            <button
-                              onClick={() => toggleStatus(inst)}
-                              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
-                                inst.status === "pago" ? "border-success bg-success text-success-foreground" : "border-border hover:border-primary"
+                        {purchase.rows.map((inst) => {
+                          const isOverdue = inst.status === "pendente" && !!inst.ref_month && inst.ref_month < currentMonth;
+                          return (
+                            <div
+                              key={inst.id}
+                              className={`flex items-center gap-3 rounded-md border p-2 transition-colors ${
+                                inst.status === "pago"
+                                  ? "border-success/40 bg-success/5"
+                                  : isOverdue
+                                    ? "border-destructive/35 bg-destructive/5"
+                                    : "border-border/70 bg-card"
                               }`}
                             >
-                              {inst.status === "pago" ? <Check className="h-4 w-4" /> : <Circle className="h-4 w-4 text-muted-foreground" />}
-                            </button>
-                            <div className="min-w-0 flex-1">
-                              <p className={`text-sm ${inst.status === "pago" ? "line-through text-muted-foreground" : "text-card-foreground"}`}>
-                                Parcela {inst.installment_number}/{inst.installments_count} - Dia {inst.due_day}
-                              </p>
+                              <button
+                                onClick={() => toggleStatus(inst)}
+                                className={`inline-flex h-8 shrink-0 items-center gap-1 rounded-full border px-3 text-xs font-semibold transition-all duration-300 ${
+                                  inst.status === "pago"
+                                    ? "border-success bg-success/10 text-success hover:bg-success/20"
+                                    : "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+                                }`}
+                              >
+                                {inst.status === "pago" ? <Check className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}
+                                {inst.status === "pago" ? "Desfazer" : "Confirmar"}
+                              </button>
+                              <div className="min-w-0 flex-1">
+                                {isOverdue && (
+                                  <p className="mb-0.5 text-[11px] font-semibold text-destructive">
+                                    Conta atrasada ({formatMonth(inst.ref_month || currentMonth)})
+                                  </p>
+                                )}
+                                <p className={`text-sm ${inst.status === "pago" ? "line-through text-muted-foreground" : "text-card-foreground"}`}>
+                                  Parcela {inst.installment_number}/{inst.installments_count} - Dia {inst.due_day}
+                                </p>
+                              </div>
+                              <span className={`font-heading text-sm font-bold ${inst.status === "pago" ? "text-success" : "text-foreground"}`}>
+                                {formatCurrency(Number(inst.amount))}
+                              </span>
                             </div>
-                            <span className={`font-heading text-sm font-bold ${inst.status === "pago" ? "text-success" : "text-foreground"}`}>
-                              {formatCurrency(Number(inst.amount))}
-                            </span>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </article>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
             </div>

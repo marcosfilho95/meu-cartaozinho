@@ -5,7 +5,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { MonthNavigator } from "@/components/MonthNavigator";
 import { CardSummary } from "@/components/CardSummary";
 import { AddCardDialog } from "@/components/AddCardDialog";
-import { AddPurchaseDialog } from "@/components/AddPurchaseDialog";
 import { AccentThemeSwitch } from "@/components/AccentThemeSwitch";
 import { UserAvatar } from "@/components/UserAvatar";
 import { getCurrentMonth, formatCurrency } from "@/lib/installments";
@@ -68,7 +67,11 @@ const Dashboard: React.FC = () => {
 
     const [{ data: cardsData }, { data: installments }, profileResult] = await Promise.all([
       supabase.from("cards").select("id, name, brand, default_due_day").eq("user_id", userId).order("created_at"),
-      supabase.from("installments").select("card_id, amount, status").eq("user_id", userId).eq("ref_month", month),
+      supabase
+        .from("installments")
+        .select("card_id, amount, status")
+        .eq("user_id", userId)
+        .or(`ref_month.eq.${month},and(ref_month.lt.${month},status.eq.pendente)`),
       supabase.from("profiles").select("name, avatar_id").eq("user_id", userId).maybeSingle(),
     ]);
 
@@ -235,7 +238,6 @@ const Dashboard: React.FC = () => {
 
         <div className="flex flex-wrap gap-3">
           <AddCardDialog userId={userId} onCardAdded={fetchData} />
-          {cards.length > 0 && <AddPurchaseDialog userId={userId} cards={cards} onPurchaseAdded={fetchData} />}
         </div>
 
         {loading ? (

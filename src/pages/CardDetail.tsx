@@ -4,7 +4,6 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { MonthNavigator } from "@/components/MonthNavigator";
 import { InstallmentList } from "@/components/InstallmentList";
-import { AddPurchaseDialog } from "@/components/AddPurchaseDialog";
 import { BankLogo } from "@/components/BankLogo";
 import { UserAvatar } from "@/components/UserAvatar";
 import { formatCurrency, getCurrentMonth } from "@/lib/installments";
@@ -32,8 +31,6 @@ interface Card {
 }
 
 interface Subgroup {
-  id: string;
-  card_id: string;
   name: string;
 }
 
@@ -43,6 +40,7 @@ interface Profile {
 }
 
 const SUBGROUP_CHART_COLORS = ["#FF3D81", "#3A86FF", "#FF9F1C", "#06D6A0", "#8338EC", "#E71D36", "#118AB2"];
+const getManualSubgroupsKey = (userId: string, cardId: string) => `manual-subgroups:${userId}:${cardId}`;
 
 const CardDetail: React.FC = () => {
   const { cardId } = useParams<{ cardId: string }>();
@@ -53,8 +51,7 @@ const CardDetail: React.FC = () => {
   const [allCards, setAllCards] = useState<Card[]>([]);
   const [month, setMonth] = useState(searchParams.get("mes") || getCurrentMonth());
   const [installments, setInstallments] = useState<any[]>([]);
-  const [subgroups, setSubgroups] = useState<Subgroup[]>([]);
-  const [subgroupFeatureAvailable, setSubgroupFeatureAvailable] = useState(true);
+  const [manualSubgroupNames, setManualSubgroupNames] = useState<string[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [newSubgroupName, setNewSubgroupName] = useState("");
@@ -67,68 +64,39 @@ const CardDetail: React.FC = () => {
     });
   }, []);
 
+  useEffect(() => {
+    if (!userId || !cardId) return;
+    try {
+      const raw = localStorage.getItem(getManualSubgroupsKey(userId, cardId));
+      const parsed = raw ? (JSON.parse(raw) as string[]) : [];
+      setManualSubgroupNames(Array.isArray(parsed) ? parsed.filter(Boolean) : []);
+    } catch {
+      setManualSubgroupNames([]);
+    }
+  }, [userId, cardId]);
+
   const fetchData = useCallback(async () => {
     if (!userId || !cardId) return;
     setLoading(true);
 
-    const [{ data: cardData }, { data: cardsData }, instResult, subgroupResult, profileResult] = await Promise.all([
+    const [{ data: cardData }, { data: cardsData }, instResult, profileResult] = await Promise.all([
       supabase.from("cards").select("id, name, brand, default_due_day").eq("id", cardId).single(),
       supabase.from("cards").select("id, name, brand, default_due_day").eq("user_id", userId).order("created_at"),
       supabase
         .from("installments")
-        .select(
-          "id, installment_number, installments_count, due_day, amount, status, purchase_id, purchases(id, description, person, subgroup_id, card_subgroups(name))",
-        )
+        .select("id, installment_number, installments_count, due_day, amount, status, ref_month, purchase_id, purchases(id, description, person)")
         .eq("card_id", cardId)
-        .eq("ref_month", month)
+        .or(`ref_month.eq.${month},and(ref_month.lt.${month},status.eq.pendente)`)
         .order("due_day")
         .order("installment_number"),
-      supabase.from("card_subgroups").select("id, card_id, name").eq("user_id", userId).eq("card_id", cardId).order("created_at"),
       supabase.from("profiles").select("name, avatar_id").eq("user_id", userId).maybeSingle(),
     ]);
 
     let instData: any[] = instResult.data || [];
-    let subgroupData: any[] = subgroupResult.data || [];
     let profileData: any = profileResult.data || null;
 
     if (instResult.error) {
-      const message = String(instResult.error.message || "");
-      const missingSubgroupsSchema =
-        instResult.error.code === "42P01" ||
-        instResult.error.code === "42703" ||
-        instResult.error.code === "PGRST205" ||
-        message.includes("card_subgroups") ||
-        message.toLowerCase().includes("could not find the table");
-      if (missingSubgroupsSchema) {
-        setSubgroupFeatureAvailable(false);
-        const fallbackInstallments = await supabase
-          .from("installments")
-          .select("id, installment_number, installments_count, due_day, amount, status, purchase_id, purchases(id, description, person)")
-          .eq("card_id", cardId)
-          .eq("ref_month", month)
-          .order("due_day")
-          .order("installment_number");
-        instData = fallbackInstallments.data || [];
-      } else {
-        toast.error("Erro ao carregar fatura: " + instResult.error.message);
-      }
-    } else {
-      setSubgroupFeatureAvailable(true);
-    }
-
-    if (subgroupResult.error) {
-      const message = String(subgroupResult.error.message || "");
-      const missingSubgroupTable =
-        subgroupResult.error.code === "42P01" ||
-        subgroupResult.error.code === "PGRST205" ||
-        message.includes("card_subgroups") ||
-        message.toLowerCase().includes("could not find the table");
-      if (missingSubgroupTable) {
-        setSubgroupFeatureAvailable(false);
-        subgroupData = [];
-      } else {
-        toast.error("Erro ao carregar subgrupos: " + subgroupResult.error.message);
-      }
+      toast.error("Erro ao carregar fatura: " + instResult.error.message);
     }
 
     if (profileResult.error) {
@@ -142,7 +110,6 @@ const CardDetail: React.FC = () => {
     setCard(cardData as Card | null);
     setAllCards((cardsData as Card[]) || []);
     setInstallments(instData || []);
-    setSubgroups((subgroupData as Subgroup[]) || []);
     setProfile((profileData as Profile | null) || null);
     setLoading(false);
   }, [userId, cardId, month]);
@@ -151,52 +118,77 @@ const CardDetail: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
+  const subgroups = useMemo<Subgroup[]>(() => {
+    const names = new Set<string>();
+    manualSubgroupNames.forEach((name) => {
+      const cleaned = name.trim();
+      if (cleaned) names.add(cleaned);
+    });
+    installments.forEach((inst) => {
+      const cleaned = String(inst.purchases?.person || "").trim();
+      if (cleaned) names.add(cleaned);
+    });
+    return Array.from(names)
+      .sort((a, b) => a.localeCompare(b))
+      .map((name) => ({ name }));
+  }, [installments, manualSubgroupNames]);
+
   const createSubgroup = async () => {
     if (!userId || !cardId) return;
-    if (!subgroupFeatureAvailable) {
-      toast.error("Subgrupos indisponiveis no banco. Rode a migration para habilitar.");
-      return;
-    }
     const name = newSubgroupName.trim();
     if (!name) return;
-    const { error } = await supabase.from("card_subgroups").insert({
-      user_id: userId,
-      card_id: cardId,
-      name,
-    });
-    if (error) {
-      toast.error("Erro ao criar subgrupo: " + error.message);
+    const exists = subgroups.some((s) => s.name.toLowerCase() === name.toLowerCase());
+    if (exists) {
+      toast.error("Este usuario ja existe na lista");
       return;
     }
-    toast.success("Subgrupo criado");
+    const next = [...manualSubgroupNames, name];
+    setManualSubgroupNames(next);
+    localStorage.setItem(getManualSubgroupsKey(userId, cardId), JSON.stringify(next));
+    toast.success("Usuario criado");
     setNewSubgroupName("");
-    fetchData();
   };
 
   const saveSubgroup = async () => {
-    if (!editingSubgroupId) return;
-    if (!subgroupFeatureAvailable) return;
-    const name = editingSubgroupName.trim();
-    if (!name) return;
-    const { error } = await supabase.from("card_subgroups").update({ name }).eq("id", editingSubgroupId);
+    if (!editingSubgroupId || !userId || !cardId) return;
+    const oldName = editingSubgroupId;
+    const newName = editingSubgroupName.trim();
+    if (!newName) return;
+    const { error } = await supabase
+      .from("purchases")
+      .update({ person: newName })
+      .eq("user_id", userId)
+      .eq("card_id", cardId)
+      .eq("person", oldName);
     if (error) {
-      toast.error("Erro ao atualizar subgrupo: " + error.message);
+      toast.error("Erro ao atualizar usuario: " + error.message);
       return;
     }
-    toast.success("Subgrupo atualizado");
+    const nextManual = manualSubgroupNames.map((name) => (name === oldName ? newName : name));
+    setManualSubgroupNames(nextManual);
+    localStorage.setItem(getManualSubgroupsKey(userId, cardId), JSON.stringify(nextManual));
+    toast.success("Usuario atualizado");
     setEditingSubgroupId(null);
     setEditingSubgroupName("");
     fetchData();
   };
 
-  const deleteSubgroup = async (subgroupId: string) => {
-    if (!subgroupFeatureAvailable) return;
-    const { error } = await supabase.from("card_subgroups").delete().eq("id", subgroupId);
+  const deleteSubgroup = async (subgroupName: string) => {
+    if (!userId || !cardId) return;
+    const { error } = await supabase
+      .from("purchases")
+      .delete()
+      .eq("user_id", userId)
+      .eq("card_id", cardId)
+      .eq("person", subgroupName);
     if (error) {
-      toast.error("Erro ao excluir subgrupo: " + error.message);
+      toast.error("Erro ao excluir usuario: " + error.message);
       return;
     }
-    toast.success("Subgrupo excluido com todas as compras vinculadas");
+    const nextManual = manualSubgroupNames.filter((name) => name !== subgroupName);
+    setManualSubgroupNames(nextManual);
+    localStorage.setItem(getManualSubgroupsKey(userId, cardId), JSON.stringify(nextManual));
+    toast.success("Usuario excluido com todas as compras vinculadas");
     fetchData();
   };
 
@@ -211,11 +203,11 @@ const CardDetail: React.FC = () => {
     navigate("/");
   };
 
-  const usedSubgroupIds = useMemo(() => new Set(installments.map((inst) => inst.purchases?.subgroup_id).filter(Boolean)), [installments]);
+  const usedSubgroupNames = useMemo(() => new Set(installments.map((inst) => inst.purchases?.person).filter(Boolean)), [installments]);
   const subgroupChartData = useMemo(() => {
     const map: Record<string, { name: string; value: number }> = {};
     installments.forEach((inst) => {
-      const subgroupName = inst.purchases?.card_subgroups?.name || inst.purchases?.person || "Sem subgrupo";
+      const subgroupName = inst.purchases?.person || "Sem subgrupo";
       if (!map[subgroupName]) map[subgroupName] = { name: subgroupName, value: 0 };
       map[subgroupName].value += Number(inst.amount);
     });
@@ -256,7 +248,6 @@ const CardDetail: React.FC = () => {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <MonthNavigator currentMonth={month} onMonthChange={setMonth} />
             <div className="flex gap-2">
-              <AddPurchaseDialog userId={userId} cards={allCards} onPurchaseAdded={fetchData} defaultCardId={cardId} />
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="destructive" className="gap-2">
@@ -299,31 +290,24 @@ const CardDetail: React.FC = () => {
                 placeholder="Ex: Pai, Tio, Primo"
                 value={newSubgroupName}
                 onChange={(e) => setNewSubgroupName(e.target.value)}
-                disabled={!subgroupFeatureAvailable}
               />
-              <Button className="shrink-0 gap-2" onClick={createSubgroup} disabled={!subgroupFeatureAvailable}>
+              <Button className="shrink-0 gap-2" onClick={createSubgroup}>
                 <Plus className="h-4 w-4" />
                 Criar
               </Button>
             </div>
-
-            {!subgroupFeatureAvailable && (
-              <p className="mb-3 text-xs text-muted-foreground">
-                Recurso de subgrupos indisponivel porque a migration ainda nao foi aplicada no banco.
-              </p>
-            )}
 
             {subgroups.length === 0 ? (
               <p className="text-sm text-muted-foreground">Crie grupos para organizar suas contas por pessoa.</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {subgroups.map((subgroup) => {
-                  const inUse = usedSubgroupIds.has(subgroup.id);
-                  const isEditing = editingSubgroupId === subgroup.id;
+                  const inUse = usedSubgroupNames.has(subgroup.name);
+                  const isEditing = editingSubgroupId === subgroup.name;
 
                   return (
                     <div
-                      key={subgroup.id}
+                      key={subgroup.name}
                       className="flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1.5 transition-all hover:border-primary/45"
                     >
                       {isEditing ? (
@@ -344,7 +328,7 @@ const CardDetail: React.FC = () => {
                           <button
                             className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                             onClick={() => {
-                              setEditingSubgroupId(subgroup.id);
+                              setEditingSubgroupId(subgroup.name);
                               setEditingSubgroupName(subgroup.name);
                             }}
                             title="Editar subgrupo"
@@ -372,7 +356,7 @@ const CardDetail: React.FC = () => {
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancelar</AlertDialogCancel>
                                 <AlertDialogAction
-                                  onClick={() => deleteSubgroup(subgroup.id)}
+                                  onClick={() => deleteSubgroup(subgroup.name)}
                                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                 >
                                   Excluir subgrupo
@@ -462,7 +446,15 @@ const CardDetail: React.FC = () => {
             ))}
           </div>
         ) : (
-          <InstallmentList installments={installments} onUpdate={fetchData} />
+          <InstallmentList
+            installments={installments}
+            currentMonth={month}
+            userId={userId}
+            cards={allCards}
+            cardId={cardId}
+            subgroupNames={subgroups.map((s) => s.name)}
+            onUpdate={fetchData}
+          />
         )}
       </div>
     </div>

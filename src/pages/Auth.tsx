@@ -133,8 +133,8 @@ const Auth: React.FC = () => {
           <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl gradient-primary shadow-elevated">
             <CreditCard className="h-10 w-10 text-primary-foreground" />
           </div>
-          <h1 className="font-heading text-3xl font-bold text-foreground">Meu Cartãozinho</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Suas parcelas organizadas, mês a mês</p>
+          <h1 className="font-heading text-[2.15rem] font-extrabold tracking-[-0.02em] text-foreground">Meu Cartãozinho</h1>
+          <p className="mt-2 text-[0.95rem] font-semibold tracking-[0.01em] text-muted-foreground/90">Suas parcelas organizadas, mês a mês</p>
         </div>
 
         <div className="rounded-3xl border border-border/40 bg-card/90 p-6 shadow-elevated backdrop-blur-sm sm:p-8">

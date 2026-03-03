@@ -46,6 +46,11 @@ interface AddPurchaseDialogProps {
   cards: Card[];
   onPurchaseAdded: () => void;
   defaultCardId?: string;
+  forcedSubgroupId?: string;
+  forcedSubgroupName?: string;
+  forcedPersonName?: string;
+  lockCardId?: boolean;
+  disableDbSubgroups?: boolean;
   trigger?: React.ReactNode;
 }
 
@@ -54,6 +59,11 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
   cards,
   onPurchaseAdded,
   defaultCardId,
+  forcedSubgroupId,
+  forcedSubgroupName,
+  forcedPersonName,
+  lockCardId = false,
+  disableDbSubgroups = false,
   trigger,
 }) => {
   const [open, setOpen] = useState(false);
@@ -62,6 +72,7 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
   const [subgroupFeatureAvailable, setSubgroupFeatureAvailable] = useState(true);
 
   const defaultCard = cards.find((c) => c.id === defaultCardId) || cards[0];
+  const isSubgroupQuickCreate = Boolean((forcedSubgroupId || forcedPersonName) && lockCardId);
 
   const {
     register,
@@ -74,7 +85,7 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
     resolver: zodResolver(purchaseSchema),
     defaultValues: {
       card_id: defaultCardId || cards[0]?.id || "",
-      subgroup_id: "",
+      subgroup_id: forcedSubgroupId || "",
       subgroup_name: "",
       description: "",
       total_amount: 0,
@@ -95,6 +106,16 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
 
   useEffect(() => {
     if (!open || !selectedCardId) return;
+    if (disableDbSubgroups) {
+      setSubgroupFeatureAvailable(false);
+      setSubgroups([]);
+      setValue("subgroup_id", "");
+      return;
+    }
+    if (forcedSubgroupId) {
+      setValue("subgroup_id", forcedSubgroupId);
+      return;
+    }
     const loadSubgroups = async () => {
       const { data, error } = await supabase
         .from("card_subgroups")
@@ -125,7 +146,7 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
       setIsCreatingSubgroup(!first);
     };
     loadSubgroups();
-  }, [open, selectedCardId, userId, setValue]);
+  }, [open, selectedCardId, userId, setValue, forcedSubgroupId, disableDbSubgroups]);
 
   const preview = useMemo(() => {
     if (totalAmount > 0 && installmentsCount >= 1 && dueDay >= 1 && dueDay <= 28 && /^\d{4}-\d{2}$/.test(startMonth)) {
@@ -140,9 +161,10 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
   }, [totalAmount, installmentsCount, dueDay, startMonth]);
 
   const onSubmit = async (data: PurchaseForm) => {
-    let subgroupId = data.subgroup_id || "";
+    const useDbSubgroups = subgroupFeatureAvailable && !disableDbSubgroups;
+    let subgroupId = forcedSubgroupId || data.subgroup_id || "";
 
-    if (subgroupFeatureAvailable && isCreatingSubgroup) {
+    if (!forcedSubgroupId && useDbSubgroups && isCreatingSubgroup) {
       const subgroupName = data.subgroup_name?.trim();
       if (!subgroupName) {
         toast.error("Informe o nome do subgrupo");
@@ -164,7 +186,7 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
       subgroupId = subgroup.id;
     }
 
-    if (subgroupFeatureAvailable && !subgroupId) {
+    if (!forcedSubgroupId && useDbSubgroups && !subgroupId) {
       toast.error("Selecione um subgrupo");
       return;
     }
@@ -175,14 +197,14 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
       .insert({
         user_id: userId,
         card_id: data.card_id,
-        ...(subgroupFeatureAvailable ? { subgroup_id: subgroupId } : {}),
+        ...(useDbSubgroups ? { subgroup_id: subgroupId } : {}),
         description: data.description,
         total_amount: data.total_amount,
         installments_count: data.installments_count,
         due_day: data.due_day,
         start_month: data.start_month,
         notes: data.notes || null,
-        person: data.person || (!subgroupFeatureAvailable && subgroupLabel ? subgroupLabel : null),
+        person: forcedPersonName || data.person || (!useDbSubgroups && subgroupLabel ? subgroupLabel : null),
       })
       .select("id")
       .single();
@@ -253,8 +275,10 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
       </DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="font-heading">Nova compra parcelada</DialogTitle>
-          <DialogDescription>Cadastre compras parceladas e organize sua fatura por mes.</DialogDescription>
+          <DialogTitle className="font-heading">{isSubgroupQuickCreate ? "Nova conta" : "Nova compra parcelada"}</DialogTitle>
+          <DialogDescription>
+            {isSubgroupQuickCreate ? "Cadastre a conta deste usuario neste cartao." : "Cadastre compras parceladas e organize sua fatura por mes."}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {cards.length === 0 ? (
@@ -264,75 +288,84 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
             </div>
           ) : (
             <>
-              <div className="space-y-2">
-                <Label>Cartao</Label>
-                <Select
-                  value={selectedCardId}
-                  onValueChange={(val) => {
-                    setValue("card_id", val);
-                    setIsCreatingSubgroup(false);
-                    setValue("subgroup_name", "");
-                    const card = cards.find((c) => c.id === val);
-                    if (card?.default_due_day) {
-                      setValue("due_day", card.default_due_day);
-                    }
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o cartao" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {cards.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.card_id && <p className="text-sm text-destructive">{errors.card_id.message}</p>}
-              </div>
-
-              {subgroupFeatureAvailable ? (
+              {!isSubgroupQuickCreate && (
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Subgrupo</Label>
-                    <button
-                      type="button"
-                      onClick={() => setIsCreatingSubgroup((prev) => !prev)}
-                      className="text-xs font-semibold text-primary transition-colors hover:text-primary/80"
-                    >
-                      {isCreatingSubgroup ? "Usar existente" : "Criar novo"}
-                    </button>
-                  </div>
-                  {isCreatingSubgroup ? (
-                    <Input placeholder="Ex: Pai, Avo, Namorado" {...register("subgroup_name")} />
+                  <Label>Cartao</Label>
+                  {lockCardId ? (
+                    <Input value={cards.find((c) => c.id === selectedCardId)?.name || "Cartao selecionado"} disabled />
                   ) : (
-                    <Select value={selectedSubgroupId || ""} onValueChange={(val) => setValue("subgroup_id", val)}>
+                    <Select
+                      value={selectedCardId}
+                      onValueChange={(val) => {
+                        setValue("card_id", val);
+                        setIsCreatingSubgroup(false);
+                        setValue("subgroup_name", "");
+                        const card = cards.find((c) => c.id === val);
+                        if (card?.default_due_day) {
+                          setValue("due_day", card.default_due_day);
+                        }
+                      }}
+                    >
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione o subgrupo" />
+                        <SelectValue placeholder="Selecione o cartao" />
                       </SelectTrigger>
                       <SelectContent>
-                        {subgroups.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.name}
+                        {cards.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   )}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <Label>Subgrupo (temporario)</Label>
-                  <Input
-                    placeholder="Ex: Pai, Avo, Namorado"
-                    {...register("subgroup_name")}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    A tabela de subgrupos ainda nao existe no banco. O valor sera salvo em "Para quem".
-                  </p>
+                  {errors.card_id && <p className="text-sm text-destructive">{errors.card_id.message}</p>}
                 </div>
               )}
+
+              {!isSubgroupQuickCreate &&
+                (forcedSubgroupId ? (
+                  <div className="space-y-2">
+                    <Label>Quem usou o cartao</Label>
+                    <Input value={forcedSubgroupName || "Subgrupo selecionado"} disabled />
+                  </div>
+                ) : subgroupFeatureAvailable ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Subgrupo</Label>
+                      <button
+                        type="button"
+                        onClick={() => setIsCreatingSubgroup((prev) => !prev)}
+                        className="text-xs font-semibold text-primary transition-colors hover:text-primary/80"
+                      >
+                        {isCreatingSubgroup ? "Usar existente" : "Criar novo"}
+                      </button>
+                    </div>
+                    {isCreatingSubgroup ? (
+                      <Input placeholder="Ex: Pai, Avo, Namorado" {...register("subgroup_name")} />
+                    ) : (
+                      <Select value={selectedSubgroupId || ""} onValueChange={(val) => setValue("subgroup_id", val)}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o subgrupo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {subgroups.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label>Subgrupo (temporario)</Label>
+                    <Input placeholder="Ex: Pai, Avo, Namorado" {...register("subgroup_name")} />
+                    <p className="text-xs text-muted-foreground">
+                      A tabela de subgrupos ainda nao existe no banco. O valor sera salvo em "Para quem".
+                    </p>
+                  </div>
+                ))}
 
               <div className="space-y-2">
                 <Label>Descricao</Label>
@@ -340,10 +373,12 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
                 {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
               </div>
 
-              <div className="space-y-2">
-                <Label>Para quem (opcional)</Label>
-                <Input placeholder="Ex: Joao" {...register("person")} />
-              </div>
+              {!isSubgroupQuickCreate && (
+                <div className="space-y-2">
+                  <Label>Para quem (opcional)</Label>
+                  <Input placeholder="Ex: Joao" {...register("person")} />
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
@@ -399,7 +434,7 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
               )}
 
               <Button type="submit" className="w-full gradient-primary text-primary-foreground" disabled={isSubmitting || cards.length === 0}>
-                {isSubmitting ? "Salvando..." : "Salvar compra"}
+                {isSubmitting ? "Salvando..." : isSubgroupQuickCreate ? "Salvar conta" : "Salvar compra"}
               </Button>
             </>
           )}
