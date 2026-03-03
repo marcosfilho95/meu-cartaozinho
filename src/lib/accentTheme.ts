@@ -25,4 +25,3 @@ export const toggleAccentTheme = (current: AccentTheme): AccentTheme => {
   applyAccentTheme(next);
   return next;
 };
-

@@ -12,6 +12,9 @@ import { Button } from "@/components/ui/button";
 import { CreditCard, LogOut, ShoppingBag, Plus, UserCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
+import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
+import { getStoredProfile, setStoredProfile } from "@/lib/profileCache";
+import { getDashboardCache, setDashboardCache } from "@/lib/dashboardCache";
 
 interface Card {
   id: string;
@@ -45,25 +48,52 @@ const BANK_CHART_COLORS: Record<string, string> = {
 };
 const FALLBACK_CHART_COLORS = ["#FF3D81", "#3A86FF", "#FF9F1C", "#06D6A0", "#8338EC"];
 
-const Dashboard: React.FC = () => {
+interface DashboardProps {
+  initialUserId?: string;
+}
+
+const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
   const navigate = useNavigate();
-  const [userId, setUserId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(initialUserId || null);
   const [cards, setCards] = useState<Card[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [month, setMonth] = useState(getCurrentMonth());
   const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
   const [totals, setTotals] = useState<Record<string, { total: number; count: number; active: number }>>({});
   const [loading, setLoading] = useState(true);
+  const [chartVisible, setChartVisible] = useState(false);
+  const [chartAnimKey, setChartAnimKey] = useState(0);
+  const [chartIntroActive, setChartIntroActive] = useState(false);
 
   useEffect(() => {
+    if (initialUserId) {
+      setUserId(initialUserId);
+      return;
+    }
     supabase.auth.getSession().then(({ data }) => {
       setUserId(data.session?.user.id || null);
     });
-  }, []);
+  }, [initialUserId]);
+
+  useEffect(() => {
+    if (!userId) return;
+    const cached = getStoredProfile(userId);
+    if (cached) setProfile(cached);
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+    const cachedDashboard = getDashboardCache(userId, month);
+    if (!cachedDashboard) return;
+    setCards(cachedDashboard.cards);
+    setTotals(cachedDashboard.totals);
+    setLoading(false);
+  }, [userId, month]);
 
   const fetchData = useCallback(async () => {
     if (!userId) return;
-    setLoading(true);
+    const hasVisualData = Boolean(getDashboardCache(userId, month));
+    if (!hasVisualData) setLoading(true);
 
     const [{ data: cardsData }, { data: installments }, profileResult] = await Promise.all([
       supabase.from("cards").select("id, name, brand, default_due_day").eq("user_id", userId).order("created_at"),
@@ -76,15 +106,21 @@ const Dashboard: React.FC = () => {
     ]);
 
     setCards((cardsData as Card[]) || []);
+    const localAvatar = getStoredAvatarId(userId);
     let profileData: any = profileResult.data;
     if (profileResult.error) {
       const message = String(profileResult.error.message || "");
       if (profileResult.error.code === "42703" || profileResult.error.code === "PGRST204" || message.includes("avatar_id")) {
         const fallbackProfile = await supabase.from("profiles").select("name").eq("user_id", userId).maybeSingle();
-        profileData = fallbackProfile.data ? { ...fallbackProfile.data, avatar_id: null } : null;
+        profileData = fallbackProfile.data ? { ...fallbackProfile.data, avatar_id: localAvatar } : null;
       }
     }
-    setProfile((profileData as Profile | null) || null);
+    const resolvedProfile = (profileData as Profile | null) || null;
+    const resolvedAvatar = resolvedProfile?.avatar_id || localAvatar || null;
+    if (resolvedAvatar) setStoredAvatarId(userId, resolvedAvatar);
+    const mergedProfile = resolvedProfile ? { ...resolvedProfile, avatar_id: resolvedAvatar } : null;
+    if (mergedProfile) setStoredProfile(userId, mergedProfile);
+    setProfile(mergedProfile);
 
     const t: Record<string, { total: number; count: number; active: number }> = {};
     (installments || []).forEach((inst) => {
@@ -92,6 +128,15 @@ const Dashboard: React.FC = () => {
       t[inst.card_id].total += Number(inst.amount);
       t[inst.card_id].count += 1;
       if (inst.status === "pendente") t[inst.card_id].active += 1;
+    });
+    setDashboardCache(userId, month, {
+      cards: ((cardsData as Card[]) || []).map((card) => ({
+        id: card.id,
+        name: card.name,
+        brand: card.brand,
+        default_due_day: card.default_due_day,
+      })),
+      totals: t,
     });
     setTotals(t);
     setLoading(false);
@@ -118,6 +163,18 @@ const Dashboard: React.FC = () => {
   );
   const chartTotal = useMemo(() => chartData.reduce((sum, item) => sum + item.value, 0), [chartData]);
 
+  useEffect(() => {
+    setChartVisible(false);
+    setChartAnimKey((prev) => prev + 1);
+    setChartIntroActive(true);
+    const timer = window.setTimeout(() => setChartVisible(true), 70);
+    const introTimer = window.setTimeout(() => setChartIntroActive(false), 1150);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearTimeout(introTimer);
+    };
+  }, [month, chartData.length]);
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     toast.success("Sessao encerrada");
@@ -130,7 +187,7 @@ const Dashboard: React.FC = () => {
       <header className="gradient-primary px-4 pb-8 pt-6">
         <div className="container flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <UserAvatar avatarId={profile?.avatar_id} name={profile?.name} size={44} />
+            <UserAvatar avatarId={profile?.avatar_id} name={profile?.name} size={56} />
             <div>
               <p className="text-sm font-semibold text-primary-foreground/90">
                 {`Olá, ${getFirstName(profile?.name)}`}
@@ -182,15 +239,27 @@ const Dashboard: React.FC = () => {
               <p className="mt-2 text-sm text-muted-foreground">{activeInstallments} parcela(s) ativa(s) neste mês</p>
               {grandTotal === 0 && <p className="mt-2 font-semibold text-muted-foreground">Nenhuma conta para este mês</p>}
             </div>
-            <div className="rounded-2xl border border-border/70 bg-background/60 p-3">
+            <div className={`rounded-2xl border border-border/70 bg-background/60 p-4 transition-all duration-500 ${chartVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1"}`}>
               {chartData.length === 0 ? (
                 <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">Sem distribuicao no mes</div>
               ) : (
-                <div className="grid items-center gap-3 lg:grid-cols-[1.2fr_1fr]">
-                  <div className="h-56 rounded-xl border border-border/60 bg-card/50 p-2">
+                <div className="grid items-center gap-4 lg:grid-cols-[1.2fr_1.05fr]">
+                  <div className="h-64 rounded-xl border border-border/60 bg-card/50 p-3">
                     <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={chartData} dataKey="value" nameKey="name" innerRadius={56} outerRadius={90} paddingAngle={3}>
+                      <PieChart key={chartAnimKey}>
+                        <Pie
+                          data={chartData}
+                          dataKey="value"
+                          nameKey="name"
+                          className={chartIntroActive ? "chart-intro-spin" : ""}
+                          innerRadius="52%"
+                          outerRadius="82%"
+                          paddingAngle={3}
+                          isAnimationActive
+                          animationBegin={120}
+                          animationDuration={1550}
+                          animationEasing="cubic-bezier(0.22, 1, 0.36, 1)"
+                        >
                           {chartData.map((item, index) => (
                             <Cell
                               key={item.id}
@@ -214,18 +283,18 @@ const Dashboard: React.FC = () => {
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="space-y-1.5">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Legenda</p>
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Legenda</p>
                     {chartData.map((item, index) => {
                       const color = BANK_CHART_COLORS[item.brand || ""] || FALLBACK_CHART_COLORS[index % FALLBACK_CHART_COLORS.length];
                       const pct = chartTotal > 0 ? (item.value / chartTotal) * 100 : 0;
                       return (
-                        <div key={item.id} className="flex items-center justify-between rounded-md border border-border/60 bg-card/60 px-2 py-1.5">
+                        <div key={item.id} className="flex items-center justify-between rounded-lg border border-border/60 bg-card/60 px-3 py-2">
                           <div className="flex items-center gap-2">
-                            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
-                            <span className="text-[11px] text-foreground">{item.name}</span>
+                            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
+                            <span className="text-sm font-medium text-foreground whitespace-nowrap">{item.name}</span>
                           </div>
-                          <p className="text-[11px] font-semibold text-muted-foreground">{pct.toFixed(1)}%</p>
+                          <p className="text-sm font-semibold text-muted-foreground">{pct.toFixed(1)}%</p>
                         </div>
                       );
                     })}
@@ -277,7 +346,16 @@ const Dashboard: React.FC = () => {
                 count={totals[card.id]?.count || 0}
                 avatarId={profile?.avatar_id}
                 userName={profile?.name}
-                onClick={() => navigate(`/cartao/${card.id}?mes=${month}`)}
+                onClick={() =>
+                  navigate(`/cartao/${card.id}?mes=${month}`, {
+                    state: {
+                      initialUserId: userId,
+                      initialCard: card,
+                      initialCards: cards,
+                      initialProfile: profile,
+                    },
+                  })
+                }
               />
             ))}
           </section>

@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { AVATAR_OPTIONS } from "@/data/avatars";
+import { AVATAR_OPTIONS, DEFAULT_AVATAR_ID } from "@/data/avatars";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
+import { getStoredProfile, setStoredProfile } from "@/lib/profileCache";
 import { ArrowLeft, Check } from "lucide-react";
 import { toast } from "sonner";
 
@@ -12,7 +14,7 @@ const Profile: React.FC = () => {
   const navigate = useNavigate();
   const [userId, setUserId] = useState<string | null>(null);
   const [name, setName] = useState("");
-  const [avatarId, setAvatarId] = useState<string>("cat-female");
+  const [avatarId, setAvatarId] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -20,18 +22,27 @@ const Profile: React.FC = () => {
       const id = data.session?.user.id || null;
       setUserId(id);
       if (!id) return;
+      const cachedProfile = getStoredProfile(id);
+      if (cachedProfile) {
+        setName(cachedProfile.name || "");
+        setAvatarId(cachedProfile.avatar_id || "");
+      }
+      const localAvatar = getStoredAvatarId(id);
       const { data: profile, error } = await supabase.from("profiles").select("name, avatar_id").eq("user_id", id).maybeSingle();
       if (error) {
         const message = String(error.message || "");
         if (error.code === "42703" || error.code === "PGRST204" || message.includes("avatar_id")) {
           const fallback = await supabase.from("profiles").select("name").eq("user_id", id).maybeSingle();
           setName(fallback.data?.name || "");
-          setAvatarId("cat-female");
+          setAvatarId(localAvatar || DEFAULT_AVATAR_ID);
           return;
         }
       }
       setName(profile?.name || "");
-      setAvatarId(profile?.avatar_id || "cat-female");
+      const resolvedAvatar = profile?.avatar_id || localAvatar || DEFAULT_AVATAR_ID;
+      setAvatarId(resolvedAvatar);
+      setStoredAvatarId(id, resolvedAvatar);
+      setStoredProfile(id, { name: profile?.name || "", avatar_id: resolvedAvatar });
     });
   }, []);
 
@@ -41,7 +52,7 @@ const Profile: React.FC = () => {
     const payloadWithAvatar = {
       user_id: userId,
       name: name.trim(),
-      avatar_id: avatarId,
+      avatar_id: avatarId || DEFAULT_AVATAR_ID,
       updated_at: new Date().toISOString(),
     };
     let { error } = await supabase.from("profiles").upsert(payloadWithAvatar, { onConflict: "user_id" });
@@ -55,6 +66,14 @@ const Profile: React.FC = () => {
         };
         const fallback = await supabase.from("profiles").upsert(payloadWithoutAvatar, { onConflict: "user_id" });
         error = fallback.error;
+        if (!error) {
+          const resolvedAvatar = avatarId || DEFAULT_AVATAR_ID;
+          setStoredAvatarId(userId, resolvedAvatar);
+          setStoredProfile(userId, { name: name.trim(), avatar_id: resolvedAvatar });
+          toast.success("Perfil atualizado. Avatar salvo localmente neste navegador.");
+          setSaving(false);
+          return;
+        }
       }
       if (error) {
         toast.error("Erro ao salvar perfil: " + error.message);
@@ -62,6 +81,9 @@ const Profile: React.FC = () => {
         return;
       }
     }
+    const resolvedAvatar = avatarId || DEFAULT_AVATAR_ID;
+    setStoredAvatarId(userId, resolvedAvatar);
+    setStoredProfile(userId, { name: name.trim(), avatar_id: resolvedAvatar });
     toast.success("Perfil atualizado");
     setSaving(false);
   };
@@ -87,7 +109,7 @@ const Profile: React.FC = () => {
       <div className="container -mt-4 space-y-4">
         <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-card">
           <div className="mb-4 flex items-center gap-3">
-            <UserAvatar avatarId={avatarId} name={name} size={60} />
+            <UserAvatar avatarId={avatarId} name={name} size={84} />
             <div>
               <p className="text-sm text-muted-foreground">Preview</p>
               <p className="font-heading text-lg font-bold text-foreground">{name || "Seu nome"}</p>
@@ -99,8 +121,8 @@ const Profile: React.FC = () => {
 
         <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-card">
           <h2 className="font-heading text-lg font-bold text-foreground">Escolha seu avatar</h2>
-          <p className="mb-3 text-sm text-muted-foreground">Escolha entre gato fêmea e gato macho.</p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <p className="mb-3 text-sm text-muted-foreground">Escolha entre Gatinha e Gatinho.</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {AVATAR_OPTIONS.map((avatar) => {
               const selected = avatar.id === avatarId;
               return (
@@ -112,8 +134,9 @@ const Profile: React.FC = () => {
                     selected ? "border-primary shadow-card" : "border-border hover:border-primary/40"
                   }`}
                 >
-                  <img src={avatar.src} alt={avatar.label} className="h-20 w-full rounded-lg object-cover" />
-                  <p className="mt-1 text-xs font-semibold text-foreground">{avatar.label}</p>
+                  <div className="rounded-lg bg-muted/40 p-2">
+                    <img src={avatar.src} alt={avatar.label} className="h-36 w-full rounded-lg object-contain sm:h-40" />
+                  </div>
                   {selected && (
                     <span className="absolute right-2 top-2 rounded-full bg-primary p-1 text-primary-foreground">
                       <Check className="h-3 w-3" />
@@ -134,3 +157,4 @@ const Profile: React.FC = () => {
 };
 
 export default Profile;
+

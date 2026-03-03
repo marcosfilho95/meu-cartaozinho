@@ -2,9 +2,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { applyAccentTheme, getStoredAccentTheme } from "@/lib/accentTheme";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
@@ -17,6 +18,11 @@ const queryClient = new QueryClient();
 
 const AppRoutes = () => {
   const [session, setSession] = useState<any>(undefined);
+  const location = useLocation();
+
+  useLayoutEffect(() => {
+    applyAccentTheme(getStoredAccentTheme());
+  }, [location.pathname]);
 
   useEffect(() => {
     const {
@@ -46,9 +52,9 @@ const AppRoutes = () => {
 
   return (
     <Routes>
-      <Route path="/" element={<Dashboard />} />
+      <Route path="/" element={<Dashboard initialUserId={session?.user?.id} />} />
       <Route path="/cartao/:cardId" element={<CardDetail />} />
-      <Route path="/compras" element={<Purchases />} />
+      <Route path="/compras" element={<Purchases initialUserId={session?.user?.id} />} />
       <Route path="/perfil" element={<Profile />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
@@ -71,4 +77,3 @@ const App = () => (
 );
 
 export default App;
-
