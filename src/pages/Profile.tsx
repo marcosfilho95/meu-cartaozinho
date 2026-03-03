@@ -10,6 +10,13 @@ import { getStoredProfile, setStoredProfile } from "@/lib/profileCache";
 import { ArrowLeft, Check } from "lucide-react";
 import { toast } from "sonner";
 
+const PROFILE_AVATAR_COLUMN_MISSING_KEY = "profiles:avatar_id_missing";
+const isMissingAvatarColumnError = (error: { code?: string; message?: string } | null) => {
+  if (!error) return false;
+  const message = String(error.message || "");
+  return error.code === "42703" || error.code === "PGRST204" || message.includes("avatar_id");
+};
+
 const Profile: React.FC = () => {
   const navigate = useNavigate();
   const [userId, setUserId] = useState<string | null>(null);
@@ -28,10 +35,14 @@ const Profile: React.FC = () => {
         setAvatarId(cachedProfile.avatar_id || "");
       }
       const localAvatar = getStoredAvatarId(id);
-      const { data: profile, error } = await supabase.from("profiles").select("name, avatar_id").eq("user_id", id).maybeSingle();
+      const skipAvatarColumn = localStorage.getItem(PROFILE_AVATAR_COLUMN_MISSING_KEY) === "1";
+      const profileQuery = skipAvatarColumn
+        ? supabase.from("profiles").select("name").eq("user_id", id).maybeSingle()
+        : supabase.from("profiles").select("name, avatar_id").eq("user_id", id).maybeSingle();
+      const { data: profile, error } = await profileQuery;
       if (error) {
-        const message = String(error.message || "");
-        if (error.code === "42703" || error.code === "PGRST204" || message.includes("avatar_id")) {
+        if (isMissingAvatarColumnError(error)) {
+          localStorage.setItem(PROFILE_AVATAR_COLUMN_MISSING_KEY, "1");
           const fallback = await supabase.from("profiles").select("name").eq("user_id", id).maybeSingle();
           setName(fallback.data?.name || "");
           setAvatarId(localAvatar || DEFAULT_AVATAR_ID);
@@ -49,21 +60,24 @@ const Profile: React.FC = () => {
   const saveProfile = async () => {
     if (!userId) return;
     setSaving(true);
+    const skipAvatarColumn = localStorage.getItem(PROFILE_AVATAR_COLUMN_MISSING_KEY) === "1";
     const payloadWithAvatar = {
       user_id: userId,
       name: name.trim(),
       avatar_id: avatarId || DEFAULT_AVATAR_ID,
       updated_at: new Date().toISOString(),
     };
-    let { error } = await supabase.from("profiles").upsert(payloadWithAvatar, { onConflict: "user_id" });
+    const payloadWithoutAvatar = {
+      user_id: userId,
+      name: name.trim(),
+      updated_at: new Date().toISOString(),
+    };
+    let { error } = await supabase
+      .from("profiles")
+      .upsert(skipAvatarColumn ? payloadWithoutAvatar : payloadWithAvatar, { onConflict: "user_id" });
     if (error) {
-      const message = String(error.message || "");
-      if (error.code === "42703" || error.code === "PGRST204" || message.includes("avatar_id")) {
-        const payloadWithoutAvatar = {
-          user_id: userId,
-          name: name.trim(),
-          updated_at: new Date().toISOString(),
-        };
+      if (isMissingAvatarColumnError(error)) {
+        localStorage.setItem(PROFILE_AVATAR_COLUMN_MISSING_KEY, "1");
         const fallback = await supabase.from("profiles").upsert(payloadWithoutAvatar, { onConflict: "user_id" });
         error = fallback.error;
         if (!error) {
@@ -121,7 +135,6 @@ const Profile: React.FC = () => {
 
         <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-card">
           <h2 className="font-heading text-lg font-bold text-foreground">Escolha seu avatar</h2>
-          <p className="mb-3 text-sm text-muted-foreground">Escolha entre Gatinha e Gatinho.</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {AVATAR_OPTIONS.map((avatar) => {
               const selected = avatar.id === avatarId;
@@ -157,4 +170,3 @@ const Profile: React.FC = () => {
 };
 
 export default Profile;
-

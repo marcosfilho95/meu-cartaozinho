@@ -13,25 +13,25 @@ export const MonthNavigator: React.FC<MonthNavigatorProps> = ({
   onMonthChange,
 }) => {
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2 sm:gap-3">
       <Button
         variant="ghost"
         size="icon"
         onClick={() => onMonthChange(addMonths(currentMonth, -1))}
-        className="rounded-full"
+        className="h-9 w-9 rounded-full sm:h-10 sm:w-10"
       >
-        <ChevronLeft className="h-5 w-5" />
+        <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
       </Button>
-      <span className="min-w-[160px] text-center font-heading text-lg font-semibold text-foreground">
+      <span className="min-w-[120px] text-center font-heading text-base font-semibold text-foreground sm:min-w-[160px] sm:text-lg">
         {formatMonth(currentMonth)}
       </span>
       <Button
         variant="ghost"
         size="icon"
         onClick={() => onMonthChange(addMonths(currentMonth, 1))}
-        className="rounded-full"
+        className="h-9 w-9 rounded-full sm:h-10 sm:w-10"
       >
-        <ChevronRight className="h-5 w-5" />
+        <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
       </Button>
     </div>
   );

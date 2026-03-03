@@ -6,12 +6,13 @@ import { MonthNavigator } from "@/components/MonthNavigator";
 import { InstallmentList } from "@/components/InstallmentList";
 import { BankLogo } from "@/components/BankLogo";
 import { UserAvatar } from "@/components/UserAvatar";
-import { formatCurrency, getCurrentMonth } from "@/lib/installments";
+import { formatCurrency, getCurrentMonth, getMonthPaymentStatus } from "@/lib/installments";
 import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
 import { getStoredProfile, setStoredProfile } from "@/lib/profileCache";
 import { getCardDetailCache, setCardDetailCache } from "@/lib/cardDetailCache";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -51,6 +52,12 @@ interface CardDetailNavState {
 
 const SUBGROUP_CHART_COLORS = ["#FF3D81", "#3A86FF", "#FF9F1C", "#06D6A0", "#8338EC", "#E71D36", "#118AB2"];
 const getManualSubgroupsKey = (userId: string, cardId: string) => `manual-subgroups:${userId}:${cardId}`;
+const PROFILE_AVATAR_COLUMN_MISSING_KEY = "profiles:avatar_id_missing";
+const isMissingAvatarColumnError = (error: { code?: string; message?: string } | null) => {
+  if (!error) return false;
+  const message = String(error.message || "");
+  return error.code === "42703" || error.code === "PGRST204" || message.includes("avatar_id");
+};
 
 const CardDetail: React.FC = () => {
   const { cardId } = useParams<{ cardId: string }>();
@@ -66,8 +73,6 @@ const CardDetail: React.FC = () => {
   const [manualSubgroupNames, setManualSubgroupNames] = useState<string[]>([]);
   const [profile, setProfile] = useState<Profile | null>(navState.initialProfile || null);
   const [loading, setLoading] = useState(true);
-  const [chartVisible, setChartVisible] = useState(false);
-  const [chartAnimKey, setChartAnimKey] = useState(0);
   const [newSubgroupName, setNewSubgroupName] = useState("");
   const [editingSubgroupId, setEditingSubgroupId] = useState<string | null>(null);
   const [editingSubgroupName, setEditingSubgroupName] = useState("");
@@ -116,6 +121,11 @@ const CardDetail: React.FC = () => {
     const hasCache = Boolean(getCardDetailCache(userId, cardId, month));
     if (!hasCache) setLoading(true);
 
+    const skipAvatarColumn = localStorage.getItem(PROFILE_AVATAR_COLUMN_MISSING_KEY) === "1";
+    const profilePromise = skipAvatarColumn
+      ? supabase.from("profiles").select("name").eq("user_id", userId).maybeSingle()
+      : supabase.from("profiles").select("name, avatar_id").eq("user_id", userId).maybeSingle();
+
     const [{ data: cardData }, { data: cardsData }, instResult, profileResult] = await Promise.all([
       supabase.from("cards").select("id, name, brand, default_due_day").eq("id", cardId).single(),
       supabase.from("cards").select("id, name, brand, default_due_day").eq("user_id", userId).order("created_at"),
@@ -126,7 +136,7 @@ const CardDetail: React.FC = () => {
         .or(`ref_month.eq.${month},and(ref_month.lt.${month},status.eq.pendente)`)
         .order("due_day")
         .order("installment_number"),
-      supabase.from("profiles").select("name, avatar_id").eq("user_id", userId).maybeSingle(),
+      profilePromise,
     ]);
 
     let instData: any[] = instResult.data || [];
@@ -138,8 +148,8 @@ const CardDetail: React.FC = () => {
     }
 
     if (profileResult.error) {
-      const message = String(profileResult.error.message || "");
-      if (profileResult.error.code === "42703" || profileResult.error.code === "PGRST204" || message.includes("avatar_id")) {
+      if (isMissingAvatarColumnError(profileResult.error)) {
+        localStorage.setItem(PROFILE_AVATAR_COLUMN_MISSING_KEY, "1");
         const fallbackProfile = await supabase.from("profiles").select("name").eq("user_id", userId).maybeSingle();
         profileData = fallbackProfile.data ? { ...fallbackProfile.data, avatar_id: localAvatar } : null;
       }
@@ -263,16 +273,16 @@ const CardDetail: React.FC = () => {
     return Object.values(map).sort((a, b) => b.value - a.value);
   }, [installments]);
   const subgroupTotal = useMemo(() => subgroupChartData.reduce((sum, item) => sum + item.value, 0), [subgroupChartData]);
-
-  useEffect(() => {
-    setChartVisible(false);
-    const showTimer = window.setTimeout(() => {
-      setChartVisible(true);
-      // Remount after container is visible so the pie animation is not hidden.
-      setChartAnimKey((prev) => prev + 1);
-    }, 35);
-    return () => window.clearTimeout(showTimer);
-  }, [month, subgroupChartData.length]);
+  const monthStatusUI = useMemo(() => {
+    const status = getMonthPaymentStatus(installments, month);
+    if (status === "paid") {
+      return { label: "Pago", className: "border-success/30 bg-success/10 text-success" };
+    }
+    if (status === "open") {
+      return { label: "Em aberto", className: "border-warning/35 bg-warning/15 text-[hsl(var(--warning-foreground))]" };
+    }
+    return { label: "Sem lancamentos", className: "border-border bg-secondary text-secondary-foreground" };
+  }, [installments, month]);
 
   if (!userId) return null;
 
@@ -305,7 +315,12 @@ const CardDetail: React.FC = () => {
         {card ? (
         <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-elevated animate-fade-in">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <MonthNavigator currentMonth={month} onMonthChange={setMonth} />
+            <div className="flex flex-wrap items-center gap-2">
+              <MonthNavigator currentMonth={month} onMonthChange={setMonth} />
+              <Badge variant="outline" className={monthStatusUI.className}>
+                {monthStatusUI.label}
+              </Badge>
+            </div>
             <div className="flex gap-2">
               <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -336,8 +351,8 @@ const CardDetail: React.FC = () => {
           <div className="h-20 animate-pulse rounded-2xl bg-muted" />
         )}
 
-        <div className="grid grid-cols-2 items-start gap-4">
-          <section className="order-2 h-full rounded-2xl border border-border/70 bg-card p-4 shadow-card animate-fade-in">
+        <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
+          <section className="order-2 h-full rounded-2xl border border-border/70 bg-card p-4 shadow-card animate-fade-in xl:order-2">
             <div className="mb-3 flex w-full items-center justify-between gap-3">
               <div>
                 <h2 className="font-heading text-lg font-bold text-foreground">Quem usou o cartão ?</h2>
@@ -435,26 +450,26 @@ const CardDetail: React.FC = () => {
             )}
           </section>
 
-          <section className="order-1 h-full rounded-2xl border border-border/70 bg-card p-4 shadow-card animate-fade-in">
+          <section className="order-1 h-full rounded-2xl border border-border/70 bg-card p-4 shadow-card animate-fade-in xl:order-1">
             <h2 className="font-heading text-lg font-bold text-foreground">Divisão de Gastos</h2>
 
             {subgroupChartData.length === 0 ? (
               <p className="mt-2 text-sm text-muted-foreground">Nenhuma conta para este mes.</p>
             ) : (
-              <div className={`mt-3 grid gap-4 transition-all duration-500 ease-out sm:grid-cols-[260px_1fr] ${chartVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1"}`}>
-                <div className="h-52 rounded-xl border border-border/70 bg-background/50 p-2">
+              <div className="mt-3 grid gap-4 lg:grid-cols-[260px_1fr]">
+                <div className="h-60 rounded-xl border border-border/70 bg-background/50 p-2 sm:h-64 lg:h-52">
                   <ResponsiveContainer width="100%" height="100%">
-                      <PieChart key={chartAnimKey}>
+                      <PieChart>
                         <Pie
                           data={subgroupChartData}
                           dataKey="value"
                           nameKey="name"
-                          innerRadius={46}
-                          outerRadius={74}
+                          innerRadius={52}
+                          outerRadius={82}
                           paddingAngle={3}
                           isAnimationActive
                           animationBegin={0}
-                          animationDuration={680}
+                          animationDuration={360}
                           animationEasing="ease-out"
                         >
                         {subgroupChartData.map((item, index) => (
@@ -487,12 +502,12 @@ const CardDetail: React.FC = () => {
                         key={item.name}
                         className="flex items-center justify-between rounded-lg border border-border/70 bg-background/50 px-3 py-2"
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
                           <span
                             className="h-3 w-3 rounded-full"
                             style={{ backgroundColor: SUBGROUP_CHART_COLORS[index % SUBGROUP_CHART_COLORS.length] }}
                           />
-                          <span className="text-sm font-medium text-foreground">{item.name}</span>
+                          <span className="truncate text-sm font-medium text-foreground">{item.name}</span>
                         </div>
 
                         <p className="text-xs font-semibold text-muted-foreground">{pct.toFixed(1)}%</p>
@@ -520,6 +535,7 @@ const CardDetail: React.FC = () => {
             cardId={cardId}
             subgroupNames={subgroups.map((s) => s.name)}
             onUpdate={fetchData}
+            onInstallmentsChange={setInstallments}
           />
         )}
       </div>

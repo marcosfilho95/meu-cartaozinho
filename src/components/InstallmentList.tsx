@@ -44,6 +44,7 @@ interface InstallmentListProps {
   cardId: string;
   subgroupNames: string[];
   onUpdate: () => void;
+  onInstallmentsChange?: (items: (Installment & { purchases: PurchaseInfo | null })[]) => void;
 }
 
 export const InstallmentList: React.FC<InstallmentListProps> = ({
@@ -54,6 +55,7 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
   cardId,
   subgroupNames,
   onUpdate,
+  onInstallmentsChange,
 }) => {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [localInstallments, setLocalInstallments] = useState(installments);
@@ -76,13 +78,15 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
       toast.error("Erro ao atualizar parcela: " + error.message);
       return;
     }
-    setLocalInstallments((prev) =>
-      prev.map((item) =>
+    setLocalInstallments((prev) => {
+      const next = prev.map((item) =>
         item.id === inst.id
           ? { ...item, status: newStatus }
           : item,
-      ),
-    );
+      );
+      onInstallmentsChange?.(next);
+      return next;
+    });
   };
 
   const setGroupStatus = async (groupItems: (Installment & { purchases: PurchaseInfo | null })[], status: "pago" | "pendente") => {
@@ -99,13 +103,15 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
       toast.error("Erro ao atualizar subgrupo: " + error.message);
       return;
     }
-    setLocalInstallments((prev) =>
-      prev.map((item) =>
+    setLocalInstallments((prev) => {
+      const next = prev.map((item) =>
         ids.includes(item.id)
           ? { ...item, status }
           : item,
-      ),
-    );
+      );
+      onInstallmentsChange?.(next);
+      return next;
+    });
   };
 
   const deletePurchase = async (purchaseId: string, description: string) => {
@@ -193,17 +199,25 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
           <section key={group.subgroupId} className="overflow-hidden rounded-xl border border-border bg-card shadow-card">
             <div
               role="button"
-              className="flex w-full items-center justify-between gap-3 bg-accent/35 px-4 py-3 text-left transition-colors hover:bg-accent/55"
+              className="flex w-full flex-col gap-3 bg-accent/35 px-4 py-3 text-left transition-colors hover:bg-accent/55 sm:flex-row sm:items-center sm:justify-between"
               onClick={() => setCollapsedGroups((prev) => ({ ...prev, [group.subgroupId]: !isCollapsed }))}
             >
-              <div>
-                <h3 className="font-heading text-base font-bold text-foreground">{group.subgroupName}</h3>
-                <p className="text-xs text-muted-foreground">
-                  {group.purchases.length} compra(s) - subtotal {formatCurrency(group.subtotal)}
-                  {group.overdueCount > 0 ? ` - ${group.overdueCount} atrasada(s)` : ""}
-                </p>
+              <div className="flex min-w-0 items-start gap-2">
+                <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background/80">
+                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-300 ${isCollapsed ? "-rotate-90" : "rotate-0"}`} />
+                </span>
+                <div className="min-w-0">
+                  <h3 className="font-heading text-base font-bold text-foreground">{group.subgroupName}</h3>
+                  <p className="text-xs text-muted-foreground">
+                    {group.purchases.length} compra(s) - subtotal {formatCurrency(group.subtotal)}
+                    {group.overdueCount > 0 ? ` - ${group.overdueCount} atrasada(s)` : ""}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground/80">
+                    {isCollapsed ? "Toque para expandir" : "Toque para recolher"}
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
                 {group.subgroupId !== "sem-subgrupo" && (
                   <AddPurchaseDialog
                     userId={userId}
@@ -216,7 +230,7 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
                     trigger={
                       <Button
                         size="sm"
-                        className="h-9 rounded-xl gradient-primary px-4 text-sm font-extrabold text-primary-foreground shadow-lg shadow-primary/45 ring-2 ring-primary/25 transition-all hover:-translate-y-0.5 hover:brightness-105"
+                        className="h-8 rounded-xl gradient-primary px-3 text-xs font-bold text-primary-foreground shadow-lg shadow-primary/45 ring-2 ring-primary/25 transition-all hover:-translate-y-0.5 hover:brightness-105 sm:h-9 sm:px-4 sm:text-sm sm:font-extrabold"
                       >
                         + Nova conta
                       </Button>
@@ -226,7 +240,7 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
                 <Button
                   size="sm"
                   variant="secondary"
-                  className="h-7 text-xs"
+                  className="h-8 text-xs sm:h-7"
                   disabled={group.items.length === 0}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -238,7 +252,7 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 text-xs"
+                  className="h-8 text-xs sm:h-7"
                   disabled={group.items.length === 0}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -247,7 +261,6 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
                 >
                   Desfazer
                 </Button>
-                <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform duration-300 ${isCollapsed ? "" : "rotate-180"}`} />
               </div>
             </div>
 

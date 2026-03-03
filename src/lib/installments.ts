@@ -66,3 +66,15 @@ export function formatCurrency(value: number): string {
     currency: "BRL",
   }).format(value);
 }
+
+export type MonthPaymentStatus = "paid" | "open" | "empty";
+
+export function getMonthPaymentStatus(
+  installments: Array<{ ref_month?: string | null; status?: string | null }>,
+  month: string,
+): MonthPaymentStatus {
+  const monthRows = installments.filter((item) => item.ref_month === month);
+  if (monthRows.length === 0) return "empty";
+  const hasPending = monthRows.some((item) => item.status === "pendente");
+  return hasPending ? "open" : "paid";
+}
