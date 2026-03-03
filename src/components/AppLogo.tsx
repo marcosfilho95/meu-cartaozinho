@@ -20,4 +20,3 @@ export const AppLogo: React.FC<AppLogoProps> = ({ size = "md", className }) => {
     </div>
   );
 };
-

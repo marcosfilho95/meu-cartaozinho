@@ -165,7 +165,13 @@ const Auth: React.FC = () => {
         }
         throw error;
       }
-      toast.success("Conta criada com sucesso");
+      setName("");
+      setUsername("");
+      setSignupEmail("");
+      setPassword("");
+      setConfirmPassword("");
+      setView("login");
+      toast.success("Cadastro realizado. Confira seu e-mail para confirmar a conta antes de entrar.");
     } catch (err: any) {
       toast.error(err.message || "Ocorreu um erro");
     } finally {
@@ -282,7 +288,6 @@ const Auth: React.FC = () => {
                       className={`${inputClasses} placeholder:text-[0.92rem] sm:placeholder:text-base`}
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground">Você pode entrar com seu @usuário ou com seu e-mail</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="password">PIN (6 digitos)</Label>
@@ -370,11 +375,7 @@ const Auth: React.FC = () => {
                       className={inputClasses}
                     />
                   </div>
-                  {signupEmailError ? (
-                    <p className="text-xs text-destructive">{signupEmailError}</p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">Aceitamos: gmail, hotmail, outlook, live, yahoo, icloud, bol e uol.</p>
-                  )}
+                  {signupEmailError && <p className="text-xs text-destructive">{signupEmailError}</p>}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-password">PIN (6 digitos)</Label>
@@ -421,7 +422,11 @@ const Auth: React.FC = () => {
                   {passwordsMismatch && <p className="text-xs text-destructive">PIN inválido.</p>}
                   {passwordsMatch && <p className="text-xs text-green-600">PIN confirmado</p>}
                 </div>
-                <Button type="submit" className="h-12 w-full rounded-xl gradient-primary text-base font-semibold text-primary-foreground" disabled={loading || !canSubmitSignup}>
+                <Button
+                  type="submit"
+                  className="h-12 w-full rounded-xl gradient-primary text-base font-semibold text-primary-foreground"
+                  disabled={loading || !canSubmitSignup}
+                >
                   {loading ? (
                     <span className="flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin" />
