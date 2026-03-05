@@ -10,9 +10,37 @@ createRoot(document.getElementById("root")!).render(<App />);
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     if (import.meta.env.PROD) {
-      navigator.serviceWorker.register("/service-worker.js").catch(() => {
-        // Silent fail: app should still work without offline cache.
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
       });
+
+      navigator.serviceWorker
+        .register("/service-worker.js")
+        .then((registration) => {
+          const activateUpdate = () => {
+            registration.waiting?.postMessage({ type: "SKIP_WAITING" });
+          };
+
+          if (registration.waiting) {
+            activateUpdate();
+          }
+
+          registration.addEventListener("updatefound", () => {
+            const newWorker = registration.installing;
+            if (!newWorker) return;
+            newWorker.addEventListener("statechange", () => {
+              if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+                activateUpdate();
+              }
+            });
+          });
+        })
+        .catch(() => {
+          // Silent fail: app should still work without offline cache.
+        });
       return;
     }
 
