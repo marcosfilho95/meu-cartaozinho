@@ -267,6 +267,7 @@ const CardDetail: React.FC = () => {
     navigate("/");
   };
 
+  const usedSubgroupNames = useMemo(() => new Set(installments.map((inst) => inst.purchases?.person).filter(Boolean)), [installments]);
   const subgroupChartData = useMemo(() => {
     const map: Record<string, { name: string; value: number }> = {};
     installments.forEach((inst) => {
@@ -365,7 +366,7 @@ const CardDetail: React.FC = () => {
         )}
 
         <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
-          <section className="order-2 h-full rounded-2xl border border-border/70 bg-card p-4 shadow-card animate-fade-in xl:order-2">
+          <section className="order-2 flex h-full flex-col rounded-2xl border border-border/70 bg-card p-4 shadow-card animate-fade-in xl:order-2">
             <div className="mb-3 flex w-full items-center justify-between gap-3">
               <div>
                 <h2 className="font-heading text-lg font-bold text-foreground">Quem usou o cartão ?</h2>
@@ -392,6 +393,7 @@ const CardDetail: React.FC = () => {
             ) : (
               <div className="flex flex-wrap gap-2">
                 {subgroups.map((subgroup) => {
+                  const inUse = usedSubgroupNames.has(subgroup.name);
                   const isEditing = editingSubgroupId === subgroup.name;
 
                   return (
@@ -424,11 +426,55 @@ const CardDetail: React.FC = () => {
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </button>
+
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <button
+                                className="rounded p-1 text-destructive transition-colors hover:bg-destructive/10"
+                                title={`Excluir ${subgroup.name}`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Excluir pessoa "{subgroup.name}"?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Todas as compras e parcelas dessa pessoa neste cartao serao excluidas.
+                                  {inUse ? " Existem parcelas no mes atual." : ""}
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => deleteSubgroup(subgroup.name)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Sim, excluir pessoa
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </>
                       )}
                     </div>
                   );
                 })}
+              </div>
+            )}
+            {subgroups.length > 0 && (
+              <div className="mt-auto text-xs text-muted-foreground">
+                <p className="mb-0.5 font-semibold text-foreground">Legendas</p>
+                <div className="border-t border-border/60 pt-3">
+                <p className="flex items-center gap-1.5">
+                  <Pencil className="h-3.5 w-3.5" />
+                  <span>Editar nome do contato</span>
+                </p>
+                <p className="mt-1 flex items-center gap-1.5">
+                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                  <span>Apagar pessoa</span>
+                </p>
+                </div>
               </div>
             )}
           </section>
@@ -519,7 +565,6 @@ const CardDetail: React.FC = () => {
             subgroupNames={subgroups.map((s) => s.name)}
             onUpdate={fetchData}
             onInstallmentsChange={setInstallments}
-            onDeleteSubgroup={deleteSubgroup}
           />
         )}
       </div>
