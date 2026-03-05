@@ -1,5 +1,4 @@
 import React from "react";
-import { CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface AppLogoProps {
@@ -16,7 +15,9 @@ const SIZE_CLASSES: Record<NonNullable<AppLogoProps["size"]>, string> = {
 export const AppLogo: React.FC<AppLogoProps> = ({ size = "md", className }) => {
   return (
     <div className={cn("flex items-center justify-center gradient-primary shadow-elevated", SIZE_CLASSES[size], className)}>
-      <CreditCard className={cn("text-primary-foreground", size === "sm" ? "h-5 w-5" : size === "md" ? "h-7 w-7" : "h-10 w-10")} />
+      <span className={cn("font-heading font-extrabold tracking-tight text-primary-foreground", size === "sm" ? "text-sm" : size === "md" ? "text-lg" : "text-2xl")}>
+        MC
+      </span>
     </div>
   );
 };

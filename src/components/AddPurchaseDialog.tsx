@@ -11,14 +11,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { AlertCircle, Plus } from "lucide-react";
-import { generateInstallments, formatMonth, formatCurrency, getCurrentMonth } from "@/lib/installments";
+import { addMonths, generateInstallments, formatMonth, formatCurrency, getCurrentMonth } from "@/lib/installments";
 
 const purchaseSchema = z.object({
   card_id: z.string().uuid("Selecione um cartao"),
   subgroup_id: z.string().optional(),
   subgroup_name: z.string().trim().max(50).optional(),
   description: z.string().trim().min(1, "Descricao obrigatoria").max(100),
-  total_amount: z.coerce.number().positive("Valor deve ser maior que zero"),
+  installment_amount: z.coerce.number().positive("Valor deve ser maior que zero"),
   installments_count: z.coerce.number().int().min(1, "Minimo 1 parcela").max(60, "Maximo 60 parcelas"),
   due_day: z.coerce.number().int().min(1, "Dia minimo: 1").max(28, "Dia maximo: 28"),
   start_month: z.string().regex(/^\d{4}-\d{2}$/, "Formato YYYY-MM"),
@@ -88,7 +88,7 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
       subgroup_id: forcedSubgroupId || "",
       subgroup_name: "",
       description: "",
-      total_amount: 0,
+      installment_amount: 0,
       installments_count: 1,
       due_day: defaultCard?.default_due_day || 5,
       start_month: getCurrentMonth(),
@@ -99,10 +99,16 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
 
   const selectedCardId = watch("card_id");
   const selectedSubgroupId = watch("subgroup_id");
-  const totalAmount = watch("total_amount");
+  const installmentAmount = watch("installment_amount");
   const installmentsCount = watch("installments_count");
   const dueDay = watch("due_day");
   const startMonth = watch("start_month");
+  const currentMonth = useMemo(() => getCurrentMonth(), []);
+  const nextMonth = useMemo(() => addMonths(currentMonth, 1), [currentMonth]);
+  const totalAmount = useMemo(
+    () => Math.round(Number(installmentAmount || 0) * Number(installmentsCount || 0) * 100) / 100,
+    [installmentAmount, installmentsCount],
+  );
 
   useEffect(() => {
     if (!open || !selectedCardId) return;
@@ -199,7 +205,7 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
         card_id: data.card_id,
         ...(useDbSubgroups ? { subgroup_id: subgroupId } : {}),
         description: data.description,
-        total_amount: data.total_amount,
+        total_amount: totalAmount,
         installments_count: data.installments_count,
         due_day: data.due_day,
         start_month: data.start_month,
@@ -221,7 +227,7 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
     }
 
     const installments = generateInstallments({
-      totalAmount: data.total_amount,
+      totalAmount,
       installmentsCount: data.installments_count,
       dueDay: data.due_day,
       startMonth: data.start_month,
@@ -251,7 +257,7 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
       subgroup_id: subgroupId,
       subgroup_name: "",
       description: "",
-      total_amount: 0,
+      installment_amount: 0,
       installments_count: 1,
       due_day: data.due_day,
       start_month: getCurrentMonth(),
@@ -382,9 +388,9 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label>Valor total (R$)</Label>
-                  <Input type="number" step="0.01" min="0.01" placeholder="1500.00" {...register("total_amount")} />
-                  {errors.total_amount && <p className="text-sm text-destructive">{errors.total_amount.message}</p>}
+                  <Label>Valor da parcela (R$)</Label>
+                  <Input type="number" step="0.01" min="0.01" placeholder="150.00" {...register("installment_amount")} />
+                  {errors.installment_amount && <p className="text-sm text-destructive">{errors.installment_amount.message}</p>}
                 </div>
                 <div className="space-y-2">
                   <Label>Parcelas</Label>
@@ -400,8 +406,16 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
                   {errors.due_day && <p className="text-sm text-destructive">{errors.due_day.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label>Mes inicial</Label>
+                  <Label>Primeiro vencimento</Label>
                   <Input type="month" {...register("start_month")} />
+                  <div className="flex gap-2">
+                    <Button type="button" variant="outline" size="sm" className="h-8 px-2 text-xs" onClick={() => setValue("start_month", currentMonth)}>
+                      Este mes
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" className="h-8 px-2 text-xs" onClick={() => setValue("start_month", nextMonth)}>
+                      Proximo mes
+                    </Button>
+                  </div>
                   {errors.start_month && <p className="text-sm text-destructive">{errors.start_month.message}</p>}
                 </div>
               </div>

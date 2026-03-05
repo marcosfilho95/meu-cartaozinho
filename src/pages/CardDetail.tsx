@@ -267,7 +267,6 @@ const CardDetail: React.FC = () => {
     navigate("/");
   };
 
-  const usedSubgroupNames = useMemo(() => new Set(installments.map((inst) => inst.purchases?.person).filter(Boolean)), [installments]);
   const subgroupChartData = useMemo(() => {
     const map: Record<string, { name: string; value: number }> = {};
     installments.forEach((inst) => {
@@ -393,7 +392,6 @@ const CardDetail: React.FC = () => {
             ) : (
               <div className="flex flex-wrap gap-2">
                 {subgroups.map((subgroup) => {
-                  const inUse = usedSubgroupNames.has(subgroup.name);
                   const isEditing = editingSubgroupId === subgroup.name;
 
                   return (
@@ -426,35 +424,6 @@ const CardDetail: React.FC = () => {
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </button>
-
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <button
-                                className="rounded p-1 text-destructive transition-colors hover:bg-destructive/10"
-                                title="Excluir subgrupo"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Excluir subgrupo "{subgroup.name}"?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Todas as compras e parcelas vinculadas serao excluidas imediatamente.{" "}
-                                  {inUse ? "Este subgrupo possui parcelas no mes atual." : ""}
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => deleteSubgroup(subgroup.name)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
-                                  Excluir subgrupo
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
                         </>
                       )}
                     </div>
@@ -550,6 +519,7 @@ const CardDetail: React.FC = () => {
             subgroupNames={subgroups.map((s) => s.name)}
             onUpdate={fetchData}
             onInstallmentsChange={setInstallments}
+            onDeleteSubgroup={deleteSubgroup}
           />
         )}
       </div>

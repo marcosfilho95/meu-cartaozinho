@@ -45,6 +45,7 @@ interface InstallmentListProps {
   subgroupNames: string[];
   onUpdate: () => void;
   onInstallmentsChange?: (items: (Installment & { purchases: PurchaseInfo | null })[]) => void;
+  onDeleteSubgroup?: (subgroupName: string) => Promise<void> | void;
 }
 
 export const InstallmentList: React.FC<InstallmentListProps> = ({
@@ -56,6 +57,7 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
   subgroupNames,
   onUpdate,
   onInstallmentsChange,
+  onDeleteSubgroup,
 }) => {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [localInstallments, setLocalInstallments] = useState(installments);
@@ -287,6 +289,38 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
                 >
                   Desfazer
                 </Button>
+                {group.subgroupId !== "sem-subgrupo" && onDeleteSubgroup && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="h-8 rounded-xl px-3 text-xs font-semibold sm:h-9 sm:px-3.5 sm:text-sm"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Excluir pessoa
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir "{group.subgroupName}"?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Essa acao exclui todas as compras e parcelas dessa pessoa neste cartao.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => onDeleteSubgroup(group.subgroupName)}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Excluir pessoa
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
               </div>
             </div>
 
