@@ -17,6 +17,13 @@ const syncPwaTheme = (theme: AccentTheme) => {
   const colors = THEME_META_COLORS[theme];
   const themeMeta = document.querySelector('meta[name="theme-color"]');
   if (themeMeta) themeMeta.setAttribute("content", colors.theme);
+  const faviconLink = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
+  if (faviconLink) {
+    faviconLink.setAttribute("href", `/icons/icon-${theme}.svg`);
+    faviconLink.setAttribute("type", "image/svg+xml");
+  }
+  const appleTouchIcon = document.querySelector('link[rel="apple-touch-icon"]') as HTMLLinkElement | null;
+  if (appleTouchIcon) appleTouchIcon.setAttribute("href", `/icons/icon-${theme}-192x192.png`);
 
   // Keep development manifest static to avoid browser warnings with blob manifest URLs.
   if (!import.meta.env.PROD) return;
@@ -61,6 +68,7 @@ export const applyAccentTheme = (theme: AccentTheme) => {
     themeAnimationTimer = null;
   }, THEME_ANIMATION_MS);
   syncPwaTheme(theme);
+  window.dispatchEvent(new CustomEvent<AccentTheme>("accent-theme-change", { detail: theme }));
 };
 
 export const getStoredAccentTheme = (): AccentTheme => {
