@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -394,18 +395,29 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const expenseTxCurrent = useMemo(() => currentMonthTx.filter((tx) => tx.type === "expense" && tx.status !== "canceled"), [currentMonthTx]);
   const expenseTxCurrentForVisual = useMemo(() => expenseTxCurrent, [expenseTxCurrent]);
 
+  // Build a stable color map: category_id -> resolved color (same everywhere)
+  const categoryColorMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    categories.forEach((cat: any) => {
+      const label = String(cat.name || "");
+      const baseColor = cat.color || "#AEB6BF";
+      map[cat.id] = resolveBankCategoryColor(label, baseColor);
+    });
+    map["uncategorized"] = "#AEB6BF";
+    return map;
+  }, [categories]);
+
   const categoryDistribution = useMemo(() => {
     const grouped: Record<string, { label: string; value: number; color: string }> = {};
-    expenseTxCurrentForVisual.forEach((tx, index) => {
+    expenseTxCurrentForVisual.forEach((tx) => {
       const id = tx.category_id || "uncategorized";
       const label = tx.categories?.name || "Sem categoria";
-      const baseColor = tx.categories?.color || CATEGORY_COLORS[index % CATEGORY_COLORS.length];
-      const color = resolveBankCategoryColor(label, baseColor);
+      const color = categoryColorMap[id] || "#AEB6BF";
       if (!grouped[id]) grouped[id] = { label, value: 0, color };
       grouped[id].value += Number(tx.amount);
     });
     return buildDistribution(Object.entries(grouped).map(([key, data]) => ({ key, ...data })));
-  }, [expenseTxCurrentForVisual]);
+  }, [expenseTxCurrentForVisual, categoryColorMap]);
 
   const paymentDistribution = useMemo(() => {
     const grouped: Record<string, { label: string; value: number; color: string }> = {};
@@ -433,37 +445,35 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     });
 
     const currentTotal = Object.values(currentMap).reduce((sum, value) => sum + value, 0);
-    return Object.entries(currentMap).map(([id, currentValue], index) => {
+    return Object.entries(currentMap).map(([id, currentValue]) => {
       const category = categories.find((item: any) => item.id === id);
       const previousValue = previousMap[id] || 0;
       const delta = currentValue - previousValue;
       const label = category?.name || "Sem categoria";
-      const baseColor = category?.color || CATEGORY_COLORS[index % CATEGORY_COLORS.length];
       return {
         id,
         label,
-        color: resolveBankCategoryColor(label, baseColor),
+        color: categoryColorMap[id] || "#AEB6BF",
         currentValue,
         percentage: currentTotal > 0 ? (currentValue / currentTotal) * 100 : 0,
         delta,
         trend: trendFromDelta(delta),
       };
     }).sort((a, b) => b.currentValue - a.currentValue);
-  }, [currentMonthTx, previousMonthTx, categories]);
+  }, [currentMonthTx, previousMonthTx, categories, categoryColorMap]);
 
   const totalNetWorth = useMemo(() => accounts.reduce((sum, account) => sum + (account.include_in_net_worth ? Number(account.current_balance) : 0), 0), [accounts]);
   const paymentOptions = useMemo(() => Array.from(new Set(transactions.map((tx) => getPaymentKey(tx)))), [transactions]);
 
   const topExpenseCategories = useMemo(() => {
     const byCategory: Record<string, { label: string; color: string; total: number }> = {};
-    dimensionalFilteredTx.forEach((tx, index) => {
+    dimensionalFilteredTx.forEach((tx) => {
       const key = tx.transaction_date.slice(0, 7);
       if (!evolutionKeys.includes(key)) return;
       if (tx.type !== "expense" || tx.status === "canceled") return;
       const id = tx.category_id || "uncategorized";
       const label = tx.categories?.name || "Sem categoria";
-      const baseColor = tx.categories?.color || CATEGORY_COLORS[index % CATEGORY_COLORS.length];
-      const color = resolveBankCategoryColor(label, baseColor);
+      const color = categoryColorMap[id] || "#AEB6BF";
       if (!byCategory[id]) byCategory[id] = { label, color, total: 0 };
       byCategory[id].total += Number(tx.amount);
     });
@@ -472,7 +482,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       .sort((a, b) => b[1].total - a[1].total)
       .slice(0, 4)
       .map(([id, meta]) => ({ id, ...meta }));
-  }, [dimensionalFilteredTx, evolutionKeys]);
+  }, [dimensionalFilteredTx, evolutionKeys, categoryColorMap]);
 
   const stackedExpenseData = useMemo(() => {
     const byMonth: Record<string, any> = {};
@@ -504,6 +514,23 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   // Pending + recent transactions for dashboard
   const pendingTx = useMemo(() => currentMonthTx.filter((tx) => tx.status === "pending" || tx.status === "overdue").sort((a, b) => a.transaction_date.localeCompare(b.transaction_date)), [currentMonthTx]);
   const recentTx = useMemo(() => [...currentMonthTx].sort((a, b) => b.transaction_date.localeCompare(a.transaction_date)).slice(0, 8), [currentMonthTx]);
+  const [bulkPaying, setBulkPaying] = useState(false);
+
+  const handleBulkPayAll = async () => {
+    if (pendingTx.length === 0) return;
+    setBulkPaying(true);
+    try {
+      const ids = pendingTx.map((tx) => tx.id);
+      const { error } = await supabase.from("transactions").update({ status: "paid" as const }).in("id", ids);
+      if (error) throw error;
+      toast.success(`✅ ${ids.length} contas confirmadas!`);
+      await fetchData();
+    } catch (err: any) {
+      toast.error("Erro: " + (err?.message || "falha"));
+    } finally {
+      setBulkPaying(false);
+    }
+  };
 
   const handleToggleStatus = async (tx: FinanceTx) => {
     const newStatus = tx.status === "paid" ? "pending" : "paid";
@@ -511,7 +538,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     try {
       const { error } = await supabase.from("transactions").update({ status: newStatus }).eq("id", tx.id);
       if (error) throw error;
-      toast.success(newStatus === "paid" ? "✅ Marcado como pago!" : "Voltou para pendente");
+      toast.success(newStatus === "paid" ? "✅ Confirmado!" : "Voltou para pendente");
       await fetchData();
     } catch (err: any) {
       toast.error("Erro: " + (err?.message || "falha"));
@@ -734,6 +761,18 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
                 <h2 className="font-heading text-sm font-bold">Contas pendentes</h2>
                 <Badge variant="outline" className="text-[10px] ml-auto">{pendingTx.length}</Badge>
               </div>
+              {pendingTx.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={bulkPaying}
+                  onClick={handleBulkPayAll}
+                  className="h-8 gap-1.5 rounded-xl border-success/40 text-xs font-semibold text-success hover:bg-success/10 hover:text-success w-full"
+                >
+                  {bulkPaying ? <Loader2Icon className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                  Confirmar tudo ({formatCurrency(pendingTx.reduce((s, tx) => s + Number(tx.amount), 0))})
+                </Button>
+              )}
               {pendingTx.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-2">Tudo pago neste mês.</p>
               ) : (
