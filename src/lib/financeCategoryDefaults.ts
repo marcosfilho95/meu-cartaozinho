@@ -56,10 +56,13 @@ export const ensureDefaultCategories = async (userId: string) => {
   if (error) throw error;
 
   const rows = existing || [];
+  const normalize = (s: string) =>
+    s.trim().toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const hasByName = (name: string, kind: CategoryKind, parentId: string | null) =>
     rows.some(
       (row: any) =>
-        String(row.name || "").trim().toLowerCase() === name.toLowerCase() &&
+        normalize(String(row.name || "")) === normalize(name) &&
         row.kind === kind &&
         (row.parent_id || null) === parentId,
     );
@@ -90,14 +93,14 @@ export const ensureDefaultCategories = async (userId: string) => {
   const parentIdByName = new Map<string, string>();
   current
     .filter((row: any) => !row.parent_id)
-    .forEach((row: any) => parentIdByName.set(`${row.kind}:${String(row.name || "").toLowerCase()}`, row.id));
+    .forEach((row: any) => parentIdByName.set(`${row.kind}:${normalize(String(row.name || ""))}`, row.id));
 
   const childMissing = CHILDREN.filter((child) => {
-    const parentId = parentIdByName.get(`${child.kind}:${child.parent.toLowerCase()}`);
+    const parentId = parentIdByName.get(`${child.kind}:${normalize(child.parent)}`);
     if (!parentId) return false;
     return !current.some(
       (row: any) =>
-        String(row.name || "").trim().toLowerCase() === child.name.toLowerCase() &&
+        normalize(String(row.name || "")) === normalize(child.name) &&
         row.kind === child.kind &&
         row.parent_id === parentId,
     );
@@ -107,7 +110,7 @@ export const ensureDefaultCategories = async (userId: string) => {
 
   const payload = childMissing
     .map((child) => {
-      const parentId = parentIdByName.get(`${child.kind}:${child.parent.toLowerCase()}`);
+      const parentId = parentIdByName.get(`${child.kind}:${normalize(child.parent)}`);
       if (!parentId) return null;
       return {
         user_id: userId,

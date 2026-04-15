@@ -70,9 +70,25 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
     setDialogOpen(true);
   };
 
+  const normalize = (s: string) =>
+    s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
   const handleSave = async () => {
     if (!name.trim()) {
       toast.error("Informe o nome");
+      return;
+    }
+
+    // Check for duplicates client-side
+    const normalizedInput = normalize(name);
+    const duplicate = categories.find(
+      (c: any) =>
+        normalize(c.name) === normalizedInput &&
+        c.kind === kind &&
+        (!editing || c.id !== editing.id)
+    );
+    if (duplicate) {
+      toast.error(`Já existe a categoria "${duplicate.name}". Escolha outro nome.`);
       return;
     }
 
@@ -82,7 +98,10 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
     if (editing) {
       const { error } = await supabase.from("categories").update(payload).eq("id", editing.id);
       if (error) {
-        toast.error(error.message);
+        const msg = error.message.includes("idx_categories_unique_normalized")
+          ? "Já existe uma categoria com esse nome."
+          : error.message;
+        toast.error(msg);
         setSaving(false);
         return;
       }
@@ -90,7 +109,10 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
     } else {
       const { error } = await supabase.from("categories").insert(payload);
       if (error) {
-        toast.error(error.message);
+        const msg = error.message.includes("idx_categories_unique_normalized")
+          ? "Já existe uma categoria com esse nome."
+          : error.message;
+        toast.error(msg);
         setSaving(false);
         return;
       }
