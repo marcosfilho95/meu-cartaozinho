@@ -19,6 +19,7 @@ import FinanceDashboard from "./pages/finance/FinanceDashboard";
 import AccountsPage from "./pages/finance/AccountsPage";
 import CategoriesPage from "./pages/finance/CategoriesPage";
 import TransactionsPage from "./pages/finance/TransactionsPage";
+import BudgetPage from "./pages/finance/BudgetPage";
 import { FinanceLayout } from "./components/finance/FinanceLayout";
 
 const queryClient = new QueryClient();
@@ -100,6 +101,7 @@ const AppRoutes = () => {
           <Route path="contas" element={<AccountsPage userId={session?.user?.id} />} />
           <Route path="categorias" element={<CategoriesPage userId={session?.user?.id} />} />
           <Route path="transacoes" element={<TransactionsPage userId={session?.user?.id} />} />
+          <Route path="orcamento" element={<BudgetPage userId={session?.user?.id} />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>

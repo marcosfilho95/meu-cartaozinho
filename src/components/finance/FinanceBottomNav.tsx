@@ -1,9 +1,10 @@
 import React from "react";
 import { NavLink } from "@/components/NavLink";
-import { LayoutDashboard, ArrowLeftRight, Wallet, FolderOpen } from "lucide-react";
+import { LayoutDashboard, ArrowLeftRight, Wallet, FolderOpen, Target } from "lucide-react";
 
 const NAV_ITEMS = [
   { to: "/financas", icon: LayoutDashboard, label: "Início" },
+  { to: "/financas/orcamento", icon: Target, label: "Orçamento" },
   { to: "/financas/transacoes", icon: ArrowLeftRight, label: "Transações" },
   { to: "/financas/contas", icon: Wallet, label: "Contas" },
   { to: "/financas/categorias", icon: FolderOpen, label: "Categorias" },

@@ -1,10 +1,11 @@
 import React from "react";
 import { useLocation } from "react-router-dom";
-import { LayoutDashboard, ArrowLeftRight, Wallet, FolderOpen } from "lucide-react";
+import { LayoutDashboard, ArrowLeftRight, Wallet, FolderOpen, Target } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 
 const NAV_ITEMS = [
   { to: "/financas", icon: LayoutDashboard, label: "Resumo" },
+  { to: "/financas/orcamento", icon: Target, label: "Orçamento" },
   { to: "/financas/transacoes", icon: ArrowLeftRight, label: "Transações" },
   { to: "/financas/contas", icon: Wallet, label: "Contas" },
   { to: "/financas/categorias", icon: FolderOpen, label: "Categorias" },
@@ -16,9 +17,10 @@ export const FinanceTopNav: React.FC = () => {
   const [indicatorIndex, setIndicatorIndex] = React.useState(0);
   const activeIndex = React.useMemo(() => {
     const pathname = location.pathname;
-    if (pathname.startsWith("/financas/transacoes")) return 1;
-    if (pathname.startsWith("/financas/contas")) return 2;
-    if (pathname.startsWith("/financas/categorias")) return 3;
+    if (pathname.startsWith("/financas/orcamento")) return 1;
+    if (pathname.startsWith("/financas/transacoes")) return 2;
+    if (pathname.startsWith("/financas/contas")) return 3;
+    if (pathname.startsWith("/financas/categorias")) return 4;
     return 0;
   }, [location.pathname]);
 
@@ -41,12 +43,12 @@ export const FinanceTopNav: React.FC = () => {
 
   return (
     <nav className="sticky top-0 z-30 mx-auto mb-5 mt-[-0.5rem] max-w-5xl px-4">
-      <div className="relative grid grid-cols-4 rounded-2xl border border-border/60 bg-card/95 p-1 shadow-card backdrop-blur-md">
+      <div className="relative grid grid-cols-5 rounded-2xl border border-border/60 bg-card/95 p-1 shadow-card backdrop-blur-md">
         <span
           aria-hidden
           className={`pointer-events-none absolute bottom-1 left-1 top-1 rounded-xl gradient-primary shadow-sm transition-transform duration-300 ease-out ${switching ? "finance-tab-indicator-pop" : ""}`}
           style={{
-            width: "calc((100% - 0.5rem) / 4)",
+            width: "calc((100% - 0.5rem) / 5)",
             transform: `translateX(${indicatorIndex * 100}%)`,
           }}
         />
