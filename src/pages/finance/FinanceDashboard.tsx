@@ -15,14 +15,20 @@ import { cn } from "@/lib/utils";
 import { ensureDefaultAccounts } from "@/lib/financeDefaults";
 import { ensureDefaultCategories } from "@/lib/financeCategoryDefaults";
 import {
+  AlertCircle,
   ArrowDownCircle,
   ArrowUpCircle,
+  Check,
+  Clock,
   LineChart as LineChartIcon,
+  Loader2 as Loader2Icon,
   PieChart as PieChartIcon,
+  Plus,
   Target,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
+import { AddGoalDialog } from "@/components/finance/AddGoalDialog";
 import {
   Area,
   AreaChart,
