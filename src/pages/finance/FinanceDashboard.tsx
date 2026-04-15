@@ -522,6 +522,26 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
 
   const isSimple = viewMode === "simple";
 
+  if (loading && transactions.length === 0) {
+    return (
+      <div className="mx-auto max-w-6xl space-y-5 px-4 animate-pulse">
+        <div className="rounded-2xl bg-card/80 border border-border/30 p-4 space-y-3">
+          <div className="h-5 w-32 rounded-lg bg-muted" />
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {[1,2,3].map(i => <div key={i} className="h-9 rounded-xl bg-muted" />)}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+          {[1,2,3,4,5,6].map(i => <div key={i} className="h-24 rounded-2xl bg-card border border-border/30" />)}
+        </div>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <div className="h-72 rounded-2xl bg-card border border-border/30" />
+          <div className="h-72 rounded-2xl bg-card border border-border/30" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="mx-auto max-w-6xl space-y-5 px-4">
