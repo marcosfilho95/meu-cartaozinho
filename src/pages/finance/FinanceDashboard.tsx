@@ -642,50 +642,13 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
           </CardContent></Card>
         </section>
 
-        <section>
-          <Card className="border-0 shadow-card"><CardContent className="space-y-4 p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2"><Target className="h-4 w-4 text-primary" /><h2 className="font-heading text-sm font-bold">Reservas, metas e destino do saldo</h2></div>
-              <Button variant="outline" size="sm" className="gap-1.5 rounded-xl text-xs" onClick={() => setGoalDialogOpen(true)}><Plus className="h-3.5 w-3.5" />Nova meta</Button>
-            </div>
-            {goals.length > 0 && (
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {goals.map((goal) => {
-                  const progress = goal.target_amount > 0 ? Math.min((Number(goal.current_amount) / Number(goal.target_amount)) * 100, 100) : 0;
-                  return (
-                    <div key={goal.id} className="rounded-xl border border-border p-3 space-y-2">
-                      <div className="flex items-center justify-between"><p className="text-sm font-semibold truncate">{goal.name}</p>{goal.is_completed && <span className="text-[10px] font-bold text-success">✅</span>}</div>
-                      <div className="flex h-2 overflow-hidden rounded-full bg-muted"><div className="rounded-full bg-primary transition-all" style={{ width: `${progress}%` }} /></div>
-                      <div className="flex justify-between text-[11px] text-muted-foreground"><span>{formatCurrency(Number(goal.current_amount))}</span><span>{formatCurrency(Number(goal.target_amount))}</span></div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            {goals.length === 0 && (
-              <div className="rounded-xl border-2 border-dashed border-border p-4 text-center">
-                <p className="text-sm text-muted-foreground">Nenhuma meta criada.</p>
-                <Button variant="outline" size="sm" className="mt-2 gap-1.5 text-xs" onClick={() => setGoalDialogOpen(true)}><Plus className="h-3.5 w-3.5" />Criar meta</Button>
-              </div>
-            )}
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <div className="rounded-xl border border-border p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Saldo do mês</p><p className={cn("mt-1 text-lg font-extrabold", monthBalance >= 0 ? "text-success" : "text-destructive")}>{formatCurrency(monthBalance)}</p></div>
-              <div className="rounded-xl border border-border p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Já alocado</p><p className="mt-1 text-lg font-extrabold text-foreground">{formatCurrency(monthAllocated)}</p></div>
-              <div className="rounded-xl border border-border p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Saldo livre</p><p className={cn("mt-1 text-lg font-extrabold", freeSurplus >= 0 ? "text-success" : "text-destructive")}>{formatCurrency(freeSurplus)}</p></div>
-            </div>
-            {!allocationSupport && <div className="rounded-xl border border-warning/40 bg-warning/15 px-3 py-2 text-xs text-[hsl(var(--warning-foreground))]">Histórico de alocações indisponível. Aplique a migration para habilitar persistência completa.</div>}
-
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
-              <div className="md:col-span-2"><Label className="text-[11px] text-muted-foreground">Valor para alocar</Label><Input value={allocationAmount} onChange={(event) => setAllocationAmount(event.target.value)} placeholder="0,00" /></div>
-              <div><Label className="text-[11px] text-muted-foreground">Destino</Label><Select value={destinationType} onValueChange={(value) => setDestinationType(value as DestinationType)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="free">Deixar livre</SelectItem><SelectItem value="reserve">Reserva emergência</SelectItem><SelectItem value="goal">Meta</SelectItem><SelectItem value="account">Conta específica</SelectItem></SelectContent></Select></div>
-              <div><Label className="text-[11px] text-muted-foreground">Meta</Label><Select value={destinationGoalId} onValueChange={setDestinationGoalId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Selecione</SelectItem>{goals.map((goal) => (<SelectItem key={goal.id} value={goal.id}>{goal.name}</SelectItem>))}</SelectContent></Select></div>
-              <div><Label className="text-[11px] text-muted-foreground">Conta</Label><Select value={destinationAccountId} onValueChange={setDestinationAccountId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Selecione</SelectItem>{accounts.map((account) => (<SelectItem key={account.id} value={account.id}>{account.name}</SelectItem>))}</SelectContent></Select></div>
-            </div>
-
-            <Button className="gradient-primary text-primary-foreground" onClick={handleAllocateSurplus} disabled={allocationSaving}>{allocationSaving ? "Salvando..." : "Alocar saldo"}</Button>
-            {allocations.length > 0 && <div className="space-y-2"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Alocacoes do mes</p>{allocations.map((allocation: any) => (<div key={allocation.id} className="flex items-center justify-between rounded-xl border border-border/70 px-3 py-2 text-sm"><span>{allocation.label || allocation.destination_type}</span><span className="font-bold">{formatCurrency(Number(allocation.amount || 0))}</span></div>))}</div>}
-          </CardContent></Card>
-        </section>
+        <GoalsSection
+          userId={userId}
+          goals={goals}
+          totalBalance={totalNetWorth}
+          monthBalance={monthBalance}
+          onReload={loadData}
+        />
 
         <section>
           <div className="flex items-center justify-between">
@@ -698,7 +661,6 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
           </div>
         </section>
       </div>
-      <AddGoalDialog open={goalDialogOpen} onOpenChange={setGoalDialogOpen} userId={userId} onCreated={loadData} />
     </>
   );
 };
