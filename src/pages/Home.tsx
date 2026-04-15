@@ -254,6 +254,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
               <CardContent className="p-3.5">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Total em cartões</p>
                 <p className="mt-1 text-base font-extrabold text-foreground">{formatCurrency(stats.cardTotal)}</p>
+                <p className="text-[10px] text-muted-foreground">{new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-card">
