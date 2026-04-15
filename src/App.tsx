@@ -9,6 +9,7 @@ import { applyAccentTheme, getStoredAccentTheme } from "@/lib/accentTheme";
 import { FirstLoginTour } from "@/components/FirstLoginTour";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
+import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import CardDetail from "./pages/CardDetail";
 import Purchases from "./pages/Purchases";
