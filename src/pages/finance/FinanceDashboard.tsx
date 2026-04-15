@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowDownCircle, ArrowUpCircle, Wallet, AlertTriangle, TrendingUp, TrendingDown, ChevronRight } from "lucide-react";
 import { formatCurrency } from "@/lib/constants";
-import { FinanceBottomNav } from "@/components/finance/FinanceBottomNav";
+import { FinanceTopNav } from "@/components/finance/FinanceTopNav";
 import { QuickTransactionFab } from "@/components/finance/QuickTransactionFab";
 import { ExpenseDistributionBar } from "@/components/finance/ExpenseDistributionBar";
 import { CategoryTable } from "@/components/finance/CategoryTable";
@@ -174,7 +174,9 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
         </div>
       </AppHeader>
 
-      <div className="mx-auto max-w-lg px-4 -mt-4 space-y-5 animate-fade-in">
+      <FinanceTopNav />
+
+      <div className="mx-auto max-w-lg px-4 space-y-5 animate-fade-in">
         {/* Summary row */}
         <div className="grid grid-cols-3 gap-3">
           <Card className="border-0 shadow-card overflow-hidden">
@@ -414,7 +416,6 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       </div>
 
       <QuickTransactionFab userId={userId} />
-      <FinanceBottomNav />
     </div>
   );
 };

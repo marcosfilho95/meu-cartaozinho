@@ -48,7 +48,7 @@ const APP_MODULES = [
     description: "Cartões, faturas e parcelas",
     icon: CreditCard,
     route: "/cards",
-    gradient: "from-[hsl(215,80%,55%)] to-[hsl(200,85%,60%)]",
+    gradient: "gradient-primary",
   },
   {
     id: "financas",
@@ -215,7 +215,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
                 onClick={() => navigate(mod.route)}
                 className="group relative w-full overflow-hidden rounded-2xl text-left transition-all duration-200 hover:scale-[1.02] active:scale-[0.97] focus:outline-none focus:ring-2 focus:ring-primary/40"
               >
-                <div className={cn("bg-gradient-to-br p-5 text-white shadow-elevated", mod.gradient)}>
+                <div className={cn("p-5 text-white shadow-elevated", mod.gradient === "gradient-primary" ? "gradient-primary" : `bg-gradient-to-br ${mod.gradient}`)}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm">

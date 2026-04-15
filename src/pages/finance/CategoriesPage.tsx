@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FinanceBottomNav } from "@/components/finance/FinanceBottomNav";
+import { FinanceTopNav } from "@/components/finance/FinanceTopNav";
 import { Plus, Pencil, Trash2, Loader2, FolderOpen } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
@@ -99,7 +99,9 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
         </div>
       </AppHeader>
 
-      <div className="mx-auto max-w-lg px-4 -mt-4 animate-fade-in">
+      <FinanceTopNav />
+
+      <div className="mx-auto max-w-lg px-4 animate-fade-in">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-2 mb-4 rounded-xl">
             <TabsTrigger value="expense" className="rounded-lg">Despesas</TabsTrigger>
@@ -175,7 +177,6 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
         </DialogContent>
       </Dialog>
 
-      <FinanceBottomNav />
     </div>
   );
 };

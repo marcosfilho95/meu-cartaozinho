@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FinanceBottomNav } from "@/components/finance/FinanceBottomNav";
+import { FinanceTopNav } from "@/components/finance/FinanceTopNav";
 import { QuickTransactionFab } from "@/components/finance/QuickTransactionFab";
 import { Plus, Pencil, Trash2, Wallet, Building2, PiggyBank, CreditCard, TrendingUp, HandCoins, Loader2 } from "lucide-react";
 import { ACCOUNT_TYPE_LABELS } from "@/lib/constants";
@@ -138,7 +138,9 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
         </div>
       </AppHeader>
 
-      <div className="mx-auto max-w-lg px-4 -mt-4 space-y-2 animate-fade-in">
+      <FinanceTopNav />
+
+      <div className="mx-auto max-w-lg px-4 space-y-2 animate-fade-in">
         {loading ? (
           <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
         ) : accounts.length === 0 ? (
@@ -251,7 +253,6 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
       </Dialog>
 
       <QuickTransactionFab userId={userId} />
-      <FinanceBottomNav />
     </div>
   );
 };
