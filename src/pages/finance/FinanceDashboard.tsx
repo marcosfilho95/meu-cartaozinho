@@ -683,14 +683,14 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
             )}
           </CardContent></Card>
         </section>
-        <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <section className="space-y-4">
           <Card className="border-0 shadow-card">
             <CardContent className="space-y-3 p-4">
               <h2 className="font-heading text-sm font-bold">Histórico de despesas</h2>
               {topExpenseCategories.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Sem despesas para montar o gráfico por categoria.</p>
               ) : (
-                <div className="h-64">
+                <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={stackedExpenseData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />

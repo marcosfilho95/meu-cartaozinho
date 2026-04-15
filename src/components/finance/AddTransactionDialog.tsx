@@ -276,21 +276,36 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
   const perInstallment = mode === "installment" && numAmount > 0 ? numAmount : 0;
   const projectedTotal = mode === "installment" && numAmount > 0 ? numAmount * installmentCount : 0;
 
-  const resolveCategoryIdForSave = useCallback(async () => {
+  const resolveCategoryIdForSave = useCallback(async (): Promise<string | null> => {
+    // For card-based expenses, ALWAYS auto-categorize by bank
     if (!(type === "expense" && needsCard && selectedCardMeta)) {
       return categoryId || null;
     }
 
     const targetName = selectedCardCategoryLabel || selectedCardMeta.label;
+    if (!targetName) return categoryId || null;
+
     const normalizedTarget = normalize(targetName);
     const expenseCategories = categories.filter((c: any) => c.kind === "expense");
 
-    const existing = expenseCategories.find((cat: any) => normalize(String(cat.name || "")) === normalizedTarget);
+    // Search by normalized name across ALL expense categories
+    const existing = expenseCategories.find((cat: any) => {
+      const catNormalized = normalize(String(cat.name || ""));
+      return catNormalized === normalizedTarget;
+    });
     if (existing?.id) return existing.id as string;
 
+    // Also try matching by brand directly
+    const brandNormalized = normalize(selectedCardMeta.brand || "");
+    if (brandNormalized) {
+      const byBrand = expenseCategories.find((cat: any) => normalize(String(cat.name || "")) === brandNormalized);
+      if (byBrand?.id) return byBrand.id as string;
+    }
+
+    // Not found — create under "Cartões" parent
     const cardsParent =
       expenseCategories.find((cat: any) => !cat.parent_id && normalize(String(cat.name || "")) === "cartoes") ||
-      expenseCategories.find((cat: any) => !cat.parent_id && normalize(String(cat.name || "")) === "cartão");
+      expenseCategories.find((cat: any) => !cat.parent_id && normalize(String(cat.name || "")).includes("cartao"));
 
     let parentId = cardsParent?.id || null;
     if (!parentId) {
@@ -313,7 +328,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
 
     const brandColor =
       BANK_COLORS[normalize(selectedCardMeta.brand || "")] ||
-      BANK_COLORS[normalize(targetName)] ||
+      BANK_COLORS[normalizedTarget] ||
       "#7C3AED";
 
     const { data: childInsert, error: childError } = await supabase
@@ -371,6 +386,13 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
 
     try {
       const resolvedCategoryId = await resolveCategoryIdForSave();
+      // Build source: include bank name for card expenses
+      const bankLabel = needsCard && selectedCardMeta ? (selectedCardCategoryLabel || selectedCardMeta.label) : "";
+      const buildSource = (desc: string, suffix?: string) => {
+        const base = bankLabel ? `${desc} — ${bankLabel}` : desc;
+        return suffix ? `${base} ${suffix}` : base;
+      };
+
       if (mode === "installment" && type === "expense") {
         const rows = [];
         for (let i = 0; i < installmentCount; i += 1) {
@@ -389,7 +411,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
             transaction_date: dueStr,
             due_date: dueStr,
             status: i === 0 ? status : "pending",
-            source: `${description.trim()} (${i + 1}/${installmentCount})`,
+            source: buildSource(description.trim(), `(${i + 1}/${installmentCount})`),
             payment_method: paymentMethod,
             notes: null,
           });
@@ -397,6 +419,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
         const { error } = await supabase.from("transactions").insert(rows);
         if (error) throw error;
       } else if (mode === "recurrence") {
+        const sourceText = buildSource(description.trim());
         const { error: recError } = await supabase.from("recurrences").insert({
           user_id: userId,
           frequency: recurrenceFreq,
@@ -408,7 +431,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
             category_id: resolvedCategoryId,
             type,
             amount: numAmount,
-            source: description.trim(),
+            source: sourceText,
             payment_method: paymentMethod,
             due_date: transactionDate,
           },
@@ -424,7 +447,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
           transaction_date: transactionDate,
           due_date: transactionDate,
           status,
-          source: description.trim(),
+          source: sourceText,
           payment_method: paymentMethod,
           notes: null,
         });
@@ -439,7 +462,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
           transaction_date: transactionDate,
           due_date: transactionDate,
           status,
-          source: description.trim(),
+          source: buildSource(description.trim()),
           payment_method: paymentMethod,
           notes: null,
         });
