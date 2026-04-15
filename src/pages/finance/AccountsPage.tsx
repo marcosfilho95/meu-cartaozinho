@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FinanceBottomNav } from "@/components/finance/FinanceBottomNav";
+import { FinanceTopNav } from "@/components/finance/FinanceTopNav";
 import { QuickTransactionFab } from "@/components/finance/QuickTransactionFab";
 import { Plus, Pencil, Trash2, Wallet, Building2, PiggyBank, CreditCard, TrendingUp, HandCoins, Loader2 } from "lucide-react";
 import { ACCOUNT_TYPE_LABELS } from "@/lib/constants";

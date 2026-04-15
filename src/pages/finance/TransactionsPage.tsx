@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FinanceBottomNav } from "@/components/finance/FinanceBottomNav";
+import { FinanceTopNav } from "@/components/finance/FinanceTopNav";
 import { QuickTransactionFab } from "@/components/finance/QuickTransactionFab";
 import { ArrowDownCircle, ArrowUpCircle, Loader2, Search, Trash2 } from "lucide-react";
 import { formatCurrency } from "@/lib/constants";
