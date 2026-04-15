@@ -162,7 +162,12 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
                           {tx.categories && (
                             <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium">{tx.categories.name}</span>
                           )}
-                          {tx.accounts && <span className="text-[10px] text-muted-foreground">{tx.accounts.name}</span>}
+                          {(tx as any).payment_method && (
+                            <span className="text-[10px] text-muted-foreground capitalize">{(tx as any).payment_method}</span>
+                          )}
+                          {!(tx as any).payment_method && tx.accounts && (
+                            <span className="text-[10px] text-muted-foreground">{tx.accounts.name}</span>
+                          )}
                         </div>
                       </div>
                       <div className="shrink-0 text-right">
