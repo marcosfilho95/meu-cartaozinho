@@ -703,10 +703,10 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
           <Card className="border-0 shadow-card"><CardContent className="space-y-3 p-4">
             <div className="flex items-center gap-2"><PieChartIcon className="h-4 w-4 text-primary" /><h2 className="font-heading text-sm font-bold">Categorias do mês</h2></div>
             {categoryDistribution.length === 0 ? (<p className="text-sm text-muted-foreground">Sem despesas no mês para exibir.</p>) : (
-              <>
-                <div className="h-60"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={categoryDistribution} dataKey="value" nameKey="label" innerRadius="48%" outerRadius="78%" paddingAngle={2}>{categoryDistribution.map((item) => (<Cell key={item.key} fill={item.color} />))}</Pie><Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ borderRadius: "12px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} /></PieChart></ResponsiveContainer></div>
-                <div className="space-y-1.5">{categoryDistribution.slice(0, 6).map((item) => (<div key={item.key} className="flex items-center justify-between rounded-lg border border-border/70 px-2.5 py-1.5 text-xs"><div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} /><span className="font-medium">{item.label}</span></div><span className="font-semibold">{item.percentage.toFixed(1)}%</span></div>))}</div>
-              </>
+              <div className="flex items-center gap-4">
+                <div className="h-52 w-52 shrink-0"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={categoryDistribution} dataKey="value" nameKey="label" innerRadius="45%" outerRadius="78%" paddingAngle={2}>{categoryDistribution.map((item) => (<Cell key={item.key} fill={item.color} />))}</Pie><Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ borderRadius: "12px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} /></PieChart></ResponsiveContainer></div>
+                <div className="flex-1 space-y-1.5">{categoryDistribution.slice(0, 8).map((item) => (<div key={item.key} className="flex items-center justify-between rounded-lg border border-border/70 px-2.5 py-1.5 text-xs"><div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} /><span className="font-medium">{item.label}</span></div><span className="font-semibold">{item.percentage.toFixed(1)}%</span></div>))}</div>
+              </div>
             )}
           </CardContent></Card>
         </section>
@@ -731,16 +731,17 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
                         }}
                         contentStyle={{ borderRadius: "12px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }}
                       />
+                      {topExpenseCategories.map((cat) => (
+                        <Bar key={cat.id} dataKey={`cat_${cat.id}`} stackId="expense" fill={cat.color} radius={[2, 2, 0, 0]} />
+                      ))}
+                      <Line type="monotone" dataKey="totalDespesas" stroke="#111827" strokeWidth={2.5} dot={{ r: 3 }} />
                       <Legend
+                        verticalAlign="bottom"
                         formatter={(value) => {
                           const found = topExpenseCategories.find((cat) => `cat_${cat.id}` === value);
                           return found ? found.label : "Total despesas";
                         }}
                       />
-                      {topExpenseCategories.map((cat) => (
-                        <Bar key={cat.id} dataKey={`cat_${cat.id}`} stackId="expense" fill={cat.color} radius={[2, 2, 0, 0]} />
-                      ))}
-                      <Line type="monotone" dataKey="totalDespesas" stroke="#111827" strokeWidth={2.5} dot={{ r: 3 }} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
