@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-import { ArrowDownCircle, ArrowUpCircle, Check, Clock, Loader2, Search, Trash2 } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, Check, CheckCircle2, Clock, Loader2, Search, Trash2 } from "lucide-react";
 import { formatCurrency, TRANSACTION_STATUS_COLORS, TRANSACTION_STATUS_LABELS } from "@/lib/constants";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -45,6 +45,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [viewMode, setViewMode] = useState<"billing" | "calendar">("billing");
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [bulkPayingCategory, setBulkPayingCategory] = useState<string | null>(null);
 
   const cachedTransactions = userId ? getFinanceTransactionsCache<any[]>(userId) || [] : [];
   const currentMonth = monthKey(new Date());
@@ -64,13 +65,13 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
       return data || [];
     },
     enabled: !!userId,
-    initialData: cachedTransactions,
+    initialData: cachedTransactions.length > 0 ? cachedTransactions : undefined,
     refetchOnWindowFocus: false,
     staleTime: 45_000,
   });
 
   React.useEffect(() => {
-    if (!userId || !transactions) return;
+    if (!userId || !transactions || transactions.length === 0) return;
     setFinanceTransactionsCache(userId, transactions);
   }, [userId, transactions]);
 
@@ -89,7 +90,6 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
     if (viewMode === "calendar") {
       return transactions.filter((tx: any) => tx.transaction_date?.startsWith(currentMonth));
     }
-
     return transactions.filter((tx: any) => {
       if (tx.type === "income") return String(tx.transaction_date || "").slice(0, 7) === currentMonth;
       return isExpenseInDynamicCycle(tx, currentMonth, todayDay);
@@ -101,9 +101,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
     const totalIncome = monthTx.filter((tx: any) => tx.type === "income").reduce((s: number, tx: any) => s + Number(tx.amount), 0);
     const totalExpense = monthTx.filter((tx: any) => tx.type === "expense").reduce((s: number, tx: any) => s + Number(tx.amount), 0);
     const paidExpense = monthTx.filter((tx: any) => tx.type === "expense" && tx.status === "paid").reduce((s: number, tx: any) => s + Number(tx.amount), 0);
-    const pendingExpense = monthTx.filter((tx: any) => tx.type === "expense" && tx.status === "pending").reduce((s: number, tx: any) => s + Number(tx.amount), 0);
-    const overdueExpense = monthTx.filter((tx: any) => tx.type === "expense" && tx.status === "overdue").reduce((s: number, tx: any) => s + Number(tx.amount), 0);
-    return { totalIncome, totalExpense, paidExpense, pendingExpense, overdueExpense, balance: totalIncome - totalExpense };
+    const pendingExpense = monthTx.filter((tx: any) => tx.type === "expense" && (tx.status === "pending" || tx.status === "overdue")).reduce((s: number, tx: any) => s + Number(tx.amount), 0);
+    return { totalIncome, totalExpense, paidExpense, pendingExpense, balance: totalIncome - totalExpense };
   }, [scopedTransactions]);
 
   const filtered = useMemo(
@@ -123,45 +122,62 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
   const handleToggleStatus = async (tx: any) => {
     const newStatus = tx.status === "paid" ? "pending" : "paid";
     setTogglingId(tx.id);
-    
     try {
-      const updatePayload: any = { status: newStatus };
-      if (newStatus === "paid") {
-        updatePayload.notes = tx.notes ? tx.notes : null;
-      }
-      
-      const { error } = await supabase
-        .from("transactions")
-        .update(updatePayload)
-        .eq("id", tx.id);
+      const { error } = await supabase.from("transactions").update({ status: newStatus }).eq("id", tx.id);
       if (error) throw error;
 
-      // Update account balance
       if (tx.accounts) {
         const currentBalance = Number(tx.accounts.current_balance || 0);
         const amount = Number(tx.amount);
-        let balanceChange = 0;
-        
-        if (newStatus === "paid") {
-          balanceChange = tx.type === "income" ? amount : -amount;
-        } else {
-          // Reverting: undo the balance change
-          balanceChange = tx.type === "income" ? -amount : amount;
-        }
-        
-        await supabase
-          .from("accounts")
-          .update({ current_balance: currentBalance + balanceChange })
-          .eq("id", tx.account_id);
+        const balanceChange = newStatus === "paid"
+          ? (tx.type === "income" ? amount : -amount)
+          : (tx.type === "income" ? -amount : amount);
+        await supabase.from("accounts").update({ current_balance: currentBalance + balanceChange }).eq("id", tx.account_id);
       }
 
-      toast.success(newStatus === "paid" ? "✅ Marcado como pago!" : "Marcado como pendente");
+      toast.success(newStatus === "paid" ? "✅ Confirmado!" : "Voltou para pendente");
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId } }));
     } catch (err: any) {
       toast.error("Erro: " + (err?.message || "falha ao atualizar"));
     } finally {
       setTogglingId(null);
+    }
+  };
+
+  const handleBulkPay = async (categoryName: string, txs: any[]) => {
+    const pending = txs.filter((tx: any) => tx.status === "pending" || tx.status === "overdue");
+    if (pending.length === 0) return;
+    setBulkPayingCategory(categoryName);
+    try {
+      const ids = pending.map((tx: any) => tx.id);
+      const { error } = await supabase.from("transactions").update({ status: "paid" as const }).in("id", ids);
+      if (error) throw error;
+
+      // Update account balances
+      const accountUpdates: Record<string, number> = {};
+      pending.forEach((tx: any) => {
+        if (tx.account_id) {
+          const change = tx.type === "income" ? Number(tx.amount) : -Number(tx.amount);
+          accountUpdates[tx.account_id] = (accountUpdates[tx.account_id] || 0) + change;
+        }
+      });
+      for (const [accId, change] of Object.entries(accountUpdates)) {
+        const acc = pending.find((tx: any) => tx.account_id === accId)?.accounts;
+        if (acc) {
+          await supabase.from("accounts").update({ current_balance: Number(acc.current_balance || 0) + change }).eq("id", accId);
+        }
+      }
+
+      toast.success(`✅ ${pending.length} transações confirmadas!`);
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId } }));
+    } catch (err: any) {
+      toast.error("Erro: " + (err?.message || "falha"));
+    } finally {
+      setBulkPayingCategory(null);
     }
   };
 
@@ -170,28 +186,32 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
       .from("transactions")
       .update({ deleted_at: new Date().toISOString() })
       .eq("id", id);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
+    if (error) { toast.error(error.message); return; }
     toast.success("Transação removida");
     queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId } }));
   };
 
-  const grouped = useMemo(() => {
-    const groups: Record<string, any[]> = {};
+  // Group by category
+  const groupedByCategory = useMemo(() => {
+    const groups: Record<string, { name: string; color: string; txs: any[] }> = {};
     filtered.forEach((tx: any) => {
-      const date = tx.transaction_date;
-      if (!groups[date]) groups[date] = [];
-      groups[date].push(tx);
+      const catName = tx.categories?.name || "Sem categoria";
+      const catColor = tx.categories?.color || "#AEB6BF";
+      if (!groups[catName]) groups[catName] = { name: catName, color: catColor, txs: [] };
+      groups[catName].txs.push(tx);
     });
-    return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
+    return Object.values(groups).sort((a, b) => {
+      const aPending = a.txs.filter((t) => t.status === "pending" || t.status === "overdue").length;
+      const bPending = b.txs.filter((t) => t.status === "pending" || t.status === "overdue").length;
+      return bPending - aPending || b.txs.length - a.txs.length;
+    });
   }, [filtered]);
 
   const monthLabel =
     viewMode === "billing"
-      ? "Ciclo de fatura por cartão (dinâmico)"
-      : `Calendário: ${new Date(`${currentMonth}-15T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}`;
+      ? "Ciclo de fatura (dinâmico)"
+      : `${new Date(`${currentMonth}-15T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}`;
 
   return (
     <>
@@ -200,53 +220,33 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground capitalize">{monthLabel}</p>
           <div className="flex items-center gap-1 rounded-xl border border-border/70 bg-card p-1">
-            <button
-              type="button"
-              onClick={() => setViewMode("billing")}
-              className={cn(
-                "rounded-lg px-2.5 py-1 text-[11px] font-semibold",
-                viewMode === "billing" ? "gradient-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
+            <button type="button" onClick={() => setViewMode("billing")}
+              className={cn("rounded-lg px-2.5 py-1 text-[11px] font-semibold", viewMode === "billing" ? "gradient-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
               Ciclo de fatura
             </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("calendar")}
-              className={cn(
-                "rounded-lg px-2.5 py-1 text-[11px] font-semibold",
-                viewMode === "calendar" ? "gradient-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
+            <button type="button" onClick={() => setViewMode("calendar")}
+              className={cn("rounded-lg px-2.5 py-1 text-[11px] font-semibold", viewMode === "calendar" ? "gradient-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
               Calendário
             </button>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Card className="border-0 shadow-card">
-            <CardContent className="p-3 text-center">
-              <p className="text-[10px] text-muted-foreground">Receitas</p>
-              <p className="text-sm font-bold text-success">{formatCurrency(monthSummary.totalIncome)}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-card">
-            <CardContent className="p-3 text-center">
-              <p className="text-[10px] text-muted-foreground">Despesas</p>
-              <p className="text-sm font-bold text-destructive">{formatCurrency(monthSummary.totalExpense)}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-card">
-            <CardContent className="p-3 text-center">
-              <p className="text-[10px] text-muted-foreground flex items-center justify-center gap-1"><Check className="h-3 w-3 text-success" />Pago</p>
-              <p className="text-sm font-bold text-success">{formatCurrency(monthSummary.paidExpense)}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-card">
-            <CardContent className="p-3 text-center">
-              <p className="text-[10px] text-muted-foreground flex items-center justify-center gap-1"><Clock className="h-3 w-3 text-warning" />Pendente</p>
-              <p className="text-sm font-bold text-warning">{formatCurrency(monthSummary.pendingExpense + monthSummary.overdueExpense)}</p>
-            </CardContent>
-          </Card>
+          <Card className="border-0 shadow-card"><CardContent className="p-3 text-center">
+            <p className="text-[10px] text-muted-foreground">Receitas</p>
+            <p className="text-sm font-bold text-success">{formatCurrency(monthSummary.totalIncome)}</p>
+          </CardContent></Card>
+          <Card className="border-0 shadow-card"><CardContent className="p-3 text-center">
+            <p className="text-[10px] text-muted-foreground">Despesas</p>
+            <p className="text-sm font-bold text-destructive">{formatCurrency(monthSummary.totalExpense)}</p>
+          </CardContent></Card>
+          <Card className="border-0 shadow-card"><CardContent className="p-3 text-center">
+            <p className="text-[10px] text-muted-foreground flex items-center justify-center gap-1"><Check className="h-3 w-3 text-success" />Pago</p>
+            <p className="text-sm font-bold text-success">{formatCurrency(monthSummary.paidExpense)}</p>
+          </CardContent></Card>
+          <Card className="border-0 shadow-card"><CardContent className="p-3 text-center">
+            <p className="text-[10px] text-muted-foreground flex items-center justify-center gap-1"><Clock className="h-3 w-3 text-warning" />Pendente</p>
+            <p className="text-sm font-bold text-warning">{formatCurrency(monthSummary.pendingExpense)}</p>
+          </CardContent></Card>
         </div>
       </div>
 
@@ -255,17 +255,10 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
         <div className="mx-auto flex max-w-5xl gap-2 px-4 py-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Buscar..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-9 rounded-xl pl-9 text-sm"
-            />
+            <Input placeholder="Buscar..." value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 rounded-xl pl-9 text-sm" />
           </div>
           <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="h-9 w-[90px] rounded-xl text-xs">
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger className="h-9 w-[90px] rounded-xl text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos</SelectItem>
               <SelectItem value="expense">Despesas</SelectItem>
@@ -273,9 +266,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-9 w-[100px] rounded-xl text-xs">
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger className="h-9 w-[100px] rounded-xl text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos</SelectItem>
               <SelectItem value="paid">Pagos</SelectItem>
@@ -286,7 +277,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
         </div>
       </div>
 
-      {/* Transaction list */}
+      {/* Transaction list grouped by category */}
       <div className="mx-auto max-w-5xl space-y-4 px-4 py-4">
         {isLoading && transactions.length === 0 ? (
           <div className="space-y-2 py-2">
@@ -295,113 +286,113 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
             <div className="h-16 animate-pulse rounded-xl bg-muted/70" />
             <p className="pt-1 text-center text-xs text-muted-foreground">Carregando transações...</p>
           </div>
-        ) : grouped.length === 0 ? (
+        ) : groupedByCategory.length === 0 ? (
           <div className="py-12 text-center text-muted-foreground">
             <p className="text-sm">Nenhuma transação encontrada.</p>
           </div>
         ) : (
-          grouped.map(([date, txs]) => (
-            <div key={date}>
-              <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {new Date(date + "T12:00:00").toLocaleDateString("pt-BR", {
-                  weekday: "short",
-                  day: "numeric",
-                  month: "short",
-                })}
-              </p>
-              <div className="space-y-1.5">
-                {txs.map((tx: any) => {
-                  const isPaid = tx.status === "paid";
-                  const isToggling = togglingId === tx.id;
+          groupedByCategory.map((group) => {
+            const pendingCount = group.txs.filter((tx: any) => tx.status === "pending" || tx.status === "overdue").length;
+            const pendingTotal = group.txs.filter((tx: any) => tx.status === "pending" || tx.status === "overdue").reduce((s: number, tx: any) => s + Number(tx.amount), 0);
+            const isBulking = bulkPayingCategory === group.name;
 
-                  return (
-                    <Card
-                      key={tx.id}
-                      className={cn(
-                        "border-0 shadow-card transition-all hover:shadow-elevated",
-                        isPaid && "opacity-80"
-                      )}
+            return (
+              <div key={group.name}>
+                <div className="mb-2 flex items-center justify-between px-1">
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: group.color }} />
+                    <p className="text-[12px] font-bold uppercase tracking-wider text-foreground">
+                      {group.name}
+                    </p>
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">{group.txs.length}</Badge>
+                  </div>
+                  {pendingCount > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isBulking}
+                      onClick={() => handleBulkPay(group.name, group.txs)}
+                      className="h-7 gap-1.5 rounded-xl border-success/40 text-[11px] font-semibold text-success hover:bg-success/10 hover:text-success"
                     >
-                      <CardContent className="flex items-center gap-2 p-3">
-                        {/* Status toggle button */}
-                        <button
-                          type="button"
-                          disabled={isToggling}
-                          onClick={() => handleToggleStatus(tx)}
-                          className={cn(
-                            "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 transition-all",
-                            isPaid
-                              ? "border-success bg-success/15 text-success"
-                              : "border-muted-foreground/30 text-muted-foreground hover:border-success hover:text-success"
-                          )}
-                          title={isPaid ? "Marcar como pendente" : "Marcar como pago"}
-                        >
-                          {isToggling ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : isPaid ? (
-                            <Check className="h-4 w-4" />
-                          ) : null}
-                        </button>
+                      {isBulking ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      )}
+                      Confirmar tudo ({formatCurrency(pendingTotal)})
+                    </Button>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  {group.txs.map((tx: any) => {
+                    const isPaid = tx.status === "paid";
+                    const isToggling = togglingId === tx.id;
 
-                        {/* Type icon */}
-                        <div
-                          className={cn(
-                            "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl",
-                            tx.type === "income" ? "bg-success/10" : "bg-destructive/10",
-                          )}
-                        >
-                          {tx.type === "income" ? (
-                            <ArrowUpCircle className="h-4 w-4 text-success" />
-                          ) : (
-                            <ArrowDownCircle className="h-4 w-4 text-destructive" />
-                          )}
-                        </div>
+                    return (
+                      <Card key={tx.id} className={cn("border-0 shadow-card transition-all hover:shadow-elevated", isPaid && "opacity-75")}>
+                        <CardContent className="flex items-center gap-2 p-3">
+                          {/* Confirmar button */}
+                          <button
+                            type="button"
+                            disabled={isToggling}
+                            onClick={() => handleToggleStatus(tx)}
+                            className={cn(
+                              "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 transition-all",
+                              isPaid
+                                ? "border-success bg-success/15 text-success"
+                                : "border-primary/40 text-primary/60 hover:border-success hover:bg-success/10 hover:text-success"
+                            )}
+                            title={isPaid ? "Desfazer" : "Confirmar pagamento"}
+                          >
+                            {isToggling ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : isPaid ? (
+                              <Check className="h-4 w-4" />
+                            ) : (
+                              <Check className="h-3.5 w-3.5 opacity-40" />
+                            )}
+                          </button>
 
-                        {/* Details */}
-                        <div className="min-w-0 flex-1">
-                          <p className={cn("truncate text-sm font-medium", isPaid && "line-through text-muted-foreground")}>
-                            {tx.source || "Sem descrição"}
-                          </p>
-                          <div className="mt-0.5 flex items-center gap-1.5">
-                            {tx.categories && (
-                              <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium">{tx.categories.name}</span>
-                            )}
-                            {tx.payment_method && (
-                              <span className="text-[10px] text-muted-foreground capitalize">{tx.payment_method}</span>
-                            )}
-                            {!tx.payment_method && tx.accounts && (
-                              <span className="text-[10px] text-muted-foreground">{tx.accounts.name}</span>
-                            )}
+                          {/* Type icon */}
+                          <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-xl", tx.type === "income" ? "bg-success/10" : "bg-destructive/10")}>
+                            {tx.type === "income" ? <ArrowUpCircle className="h-4 w-4 text-success" /> : <ArrowDownCircle className="h-4 w-4 text-destructive" />}
                           </div>
-                        </div>
 
-                        {/* Amount + status */}
-                        <div className="shrink-0 text-right">
-                          <p className={cn("text-sm font-bold", tx.type === "income" ? "text-success" : "text-foreground")}>
-                            {tx.type === "income" ? "+" : "-"}
-                            {formatCurrency(Number(tx.amount))}
-                          </p>
-                          <Badge variant="outline" className={cn("px-1 py-0 text-[9px]", TRANSACTION_STATUS_COLORS[tx.status])}>
-                            {TRANSACTION_STATUS_LABELS[tx.status]}
-                          </Badge>
-                        </div>
+                          {/* Details */}
+                          <div className="min-w-0 flex-1">
+                            <p className={cn("truncate text-sm font-medium", isPaid && "line-through text-muted-foreground")}>{tx.source || "Sem descrição"}</p>
+                            <div className="mt-0.5 flex items-center gap-1.5">
+                              {tx.payment_method && (
+                                <span className="text-[10px] text-muted-foreground capitalize">{tx.payment_method === "credit" ? "Crédito" : tx.payment_method === "debit" ? "Débito" : tx.payment_method}</span>
+                              )}
+                              {!tx.payment_method && tx.accounts && (
+                                <span className="text-[10px] text-muted-foreground">{tx.accounts.name}</span>
+                              )}
+                            </div>
+                          </div>
 
-                        {/* Delete */}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 shrink-0 rounded-lg text-muted-foreground hover:text-destructive"
-                          onClick={() => handleDelete(tx.id)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+                          {/* Amount + status */}
+                          <div className="shrink-0 text-right">
+                            <p className={cn("text-sm font-bold", tx.type === "income" ? "text-success" : "text-foreground")}>
+                              {tx.type === "income" ? "+" : "-"}{formatCurrency(Number(tx.amount))}
+                            </p>
+                            <Badge variant="outline" className={cn("px-1 py-0 text-[9px]", TRANSACTION_STATUS_COLORS[tx.status])}>
+                              {TRANSACTION_STATUS_LABELS[tx.status]}
+                            </Badge>
+                          </div>
+
+                          {/* Delete */}
+                          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 rounded-lg text-muted-foreground hover:text-destructive" onClick={() => handleDelete(tx.id)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </>
