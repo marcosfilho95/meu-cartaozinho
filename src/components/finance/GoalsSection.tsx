@@ -93,10 +93,16 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
     load();
   }, [expandedGoalId]);
 
+  // Find primary account to deduct from
+  const primaryAccount = useMemo(() => {
+    return accounts.find((a: any) => a.type === "checking") || accounts[0] || null;
+  }, [accounts]);
+
   const handleAllocate = async () => {
     const amount = parseFloat(allocAmount.replace(",", "."));
     if (!amount || amount <= 0) { toast.error("Informe um valor válido."); return; }
     if (!selectedGoalId) { toast.error("Selecione uma meta."); return; }
+    if (!primaryAccount) { toast.error("Nenhuma conta disponível para debitar."); return; }
     if (amount > Math.max(availableBalance, 0)) {
       toast.error("Saldo disponível insuficiente.");
       return;
@@ -114,6 +120,13 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
         .eq("id", selectedGoalId);
       if (gErr) throw gErr;
 
+      // Deduct from primary account
+      const { error: aErr } = await supabase
+        .from("accounts")
+        .update({ current_balance: Number(primaryAccount.current_balance || 0) - amount })
+        .eq("id", primaryAccount.id);
+      if (aErr) throw aErr;
+
       // Record in goal_transactions
       const { error: tErr } = await (supabase as any)
         .from("goal_transactions")
@@ -122,7 +135,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
           goal_id: selectedGoalId,
           amount,
           type: "deposit",
-          description: "Reserva manual",
+          description: `Reserva de ${primaryAccount.name}`,
         });
       if (tErr) throw tErr;
 
