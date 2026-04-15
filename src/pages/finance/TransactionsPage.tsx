@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
-import { getFinanceTransactionsCache, setFinanceTransactionsCache } from "@/lib/financePageCache";
+import { buildCategoryColorMap } from "@/lib/categoryColors";
 
 interface TransactionsPageProps {
   userId: string;
@@ -38,6 +38,73 @@ const isExpenseInDynamicCycle = (tx: any, currentMonth: string, todayDay: number
   return month === activeMonth || carry;
 };
 
+const PAGE_SIZE = 50;
+
+const TransactionRow = React.memo(({ tx, togglingId, onToggle, onDelete, colorMap }: {
+  tx: any; togglingId: string | null; onToggle: (tx: any) => void; onDelete: (id: string) => void; colorMap: Record<string, string>;
+}) => {
+  const isPaid = tx.status === "paid";
+  const isToggling = togglingId === tx.id;
+  const catColor = colorMap[tx.category_id] || "#AEB6BF";
+
+  return (
+    <Card className={cn("border-0 shadow-card transition-all hover:shadow-elevated", isPaid && "opacity-75")}>
+      <CardContent className="flex items-center gap-2 p-3">
+        <button
+          type="button"
+          disabled={isToggling}
+          onClick={() => onToggle(tx)}
+          className={cn(
+            "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 transition-all",
+            isPaid
+              ? "border-success bg-success/15 text-success"
+              : "border-primary/40 text-primary/60 hover:border-success hover:bg-success/10 hover:text-success"
+          )}
+          title={isPaid ? "Desfazer" : "Confirmar pagamento"}
+        >
+          {isToggling ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : isPaid ? (
+            <Check className="h-4 w-4" />
+          ) : (
+            <Check className="h-3.5 w-3.5 opacity-40" />
+          )}
+        </button>
+
+        <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-xl", tx.type === "income" ? "bg-success/10" : "bg-destructive/10")}>
+          {tx.type === "income" ? <ArrowUpCircle className="h-4 w-4 text-success" /> : <ArrowDownCircle className="h-4 w-4 text-destructive" />}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p className={cn("truncate text-sm font-medium", isPaid && "line-through text-muted-foreground")}>{tx.source || "Sem descrição"}</p>
+          <div className="mt-0.5 flex items-center gap-1.5">
+            {tx.payment_method && (
+              <span className="text-[10px] text-muted-foreground capitalize">{tx.payment_method === "credit" ? "Crédito" : tx.payment_method === "debit" ? "Débito" : tx.payment_method}</span>
+            )}
+            {!tx.payment_method && tx.accounts && (
+              <span className="text-[10px] text-muted-foreground">{tx.accounts.name}</span>
+            )}
+          </div>
+        </div>
+
+        <div className="shrink-0 text-right">
+          <p className={cn("text-sm font-bold", tx.type === "income" ? "text-success" : "text-foreground")}>
+            {tx.type === "income" ? "+" : "-"}{formatCurrency(Number(tx.amount))}
+          </p>
+          <Badge variant="outline" className={cn("px-1 py-0 text-[9px]", TRANSACTION_STATUS_COLORS[tx.status])}>
+            {TRANSACTION_STATUS_LABELS[tx.status]}
+          </Badge>
+        </div>
+
+        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 rounded-lg text-muted-foreground hover:text-destructive" onClick={() => onDelete(tx.id)}>
+          <Trash2 className="h-3 w-3" />
+        </Button>
+      </CardContent>
+    </Card>
+  );
+});
+TransactionRow.displayName = "TransactionRow";
+
 const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -46,45 +113,47 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
   const [viewMode, setViewMode] = useState<"billing" | "calendar">("billing");
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [bulkPayingCategory, setBulkPayingCategory] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
-  const cachedTransactions = userId ? getFinanceTransactionsCache<any[]>(userId) || [] : [];
   const currentMonth = monthKey(new Date());
   const todayDay = new Date().getDate();
 
-  const { data: transactions = [], isLoading, refetch } = useQuery({
+  const { data: rawData, isLoading, refetch } = useQuery({
     queryKey: ["transactions", userId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("transactions")
-        .select("*, accounts!transactions_account_id_fkey(name, type, due_day, current_balance), categories(name, color)")
-        .eq("user_id", userId)
-        .is("deleted_at", null)
-        .order("transaction_date", { ascending: false })
-        .limit(200);
-      if (error) throw error;
-      return data || [];
+      const [txRes, catRes] = await Promise.all([
+        supabase
+          .from("transactions")
+          .select("id, amount, type, status, transaction_date, due_date, account_id, category_id, source, notes, payment_method, accounts!transactions_account_id_fkey(name, type, due_day, current_balance), categories(id, name, color)")
+          .eq("user_id", userId)
+          .is("deleted_at", null)
+          .order("transaction_date", { ascending: false })
+          .limit(500),
+        supabase.from("categories").select("id, name, color").eq("user_id", userId),
+      ]);
+      if (txRes.error) throw txRes.error;
+      return { transactions: txRes.data || [], categories: catRes.data || [] };
     },
     enabled: !!userId,
-    initialData: cachedTransactions.length > 0 ? cachedTransactions : undefined,
     refetchOnWindowFocus: false,
-    staleTime: 45_000,
+    staleTime: 30_000,
   });
 
-  React.useEffect(() => {
-    if (!userId || !transactions || transactions.length === 0) return;
-    setFinanceTransactionsCache(userId, transactions);
-  }, [userId, transactions]);
+  const transactions = rawData?.transactions || [];
+  const categoryColorMap = useMemo(
+    () => buildCategoryColorMap(rawData?.categories || []),
+    [rawData?.categories],
+  );
 
   React.useEffect(() => {
     const onFinanceSync = (event: Event) => {
       const custom = event as CustomEvent<{ userId?: string }>;
       if (custom.detail?.userId && custom.detail.userId !== userId) return;
       queryClient.invalidateQueries({ queryKey: ["transactions", userId] });
-      refetch();
     };
     window.addEventListener("finance-sync-updated", onFinanceSync as EventListener);
     return () => window.removeEventListener("finance-sync-updated", onFinanceSync as EventListener);
-  }, [queryClient, refetch, userId]);
+  }, [queryClient, userId]);
 
   const scopedTransactions = useMemo(() => {
     if (viewMode === "calendar") {
@@ -119,7 +188,10 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
     [scopedTransactions, typeFilter, statusFilter, search],
   );
 
-  const handleToggleStatus = async (tx: any) => {
+  // Reset visible count when filters change
+  React.useEffect(() => { setVisibleCount(PAGE_SIZE); }, [typeFilter, statusFilter, search, viewMode]);
+
+  const handleToggleStatus = useCallback(async (tx: any) => {
     const newStatus = tx.status === "paid" ? "pending" : "paid";
     setTogglingId(tx.id);
     try {
@@ -144,9 +216,9 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
     } finally {
       setTogglingId(null);
     }
-  };
+  }, [queryClient, userId]);
 
-  const handleBulkPay = async (categoryName: string, txs: any[]) => {
+  const handleBulkPay = useCallback(async (categoryName: string, txs: any[]) => {
     const pending = txs.filter((tx: any) => tx.status === "pending" || tx.status === "overdue");
     if (pending.length === 0) return;
     setBulkPayingCategory(categoryName);
@@ -155,7 +227,6 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
       const { error } = await supabase.from("transactions").update({ status: "paid" as const }).in("id", ids);
       if (error) throw error;
 
-      // Update account balances
       const accountUpdates: Record<string, number> = {};
       pending.forEach((tx: any) => {
         if (tx.account_id) {
@@ -179,9 +250,9 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
     } finally {
       setBulkPayingCategory(null);
     }
-  };
+  }, [queryClient, userId]);
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = useCallback(async (id: string) => {
     const { error } = await supabase
       .from("transactions")
       .update({ deleted_at: new Date().toISOString() })
@@ -190,14 +261,14 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
     toast.success("Transação removida");
     queryClient.invalidateQueries({ queryKey: ["transactions"] });
     window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId } }));
-  };
+  }, [queryClient, userId]);
 
-  // Group by category
+  // Group by category using centralized color map
   const groupedByCategory = useMemo(() => {
     const groups: Record<string, { name: string; color: string; txs: any[] }> = {};
     filtered.forEach((tx: any) => {
       const catName = tx.categories?.name || "Sem categoria";
-      const catColor = tx.categories?.color || "#AEB6BF";
+      const catColor = categoryColorMap[tx.category_id] || "#AEB6BF";
       if (!groups[catName]) groups[catName] = { name: catName, color: catColor, txs: [] };
       groups[catName].txs.push(tx);
     });
@@ -206,7 +277,22 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
       const bPending = b.txs.filter((t) => t.status === "pending" || t.status === "overdue").length;
       return bPending - aPending || b.txs.length - a.txs.length;
     });
-  }, [filtered]);
+  }, [filtered, categoryColorMap]);
+
+  // Flatten for pagination
+  const allGroupsWithPagination = useMemo(() => {
+    let totalShown = 0;
+    return groupedByCategory.map((group) => {
+      const remaining = visibleCount - totalShown;
+      if (remaining <= 0) return { ...group, visibleTxs: [] };
+      const visibleTxs = group.txs.slice(0, remaining);
+      totalShown += visibleTxs.length;
+      return { ...group, visibleTxs };
+    }).filter((g) => g.visibleTxs.length > 0);
+  }, [groupedByCategory, visibleCount]);
+
+  const totalItems = filtered.length;
+  const hasMore = visibleCount < totalItems;
 
   const monthLabel =
     viewMode === "billing"
@@ -286,113 +372,72 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
             <div className="h-16 animate-pulse rounded-xl bg-muted/70" />
             <p className="pt-1 text-center text-xs text-muted-foreground">Carregando transações...</p>
           </div>
-        ) : groupedByCategory.length === 0 ? (
+        ) : allGroupsWithPagination.length === 0 ? (
           <div className="py-12 text-center text-muted-foreground">
             <p className="text-sm">Nenhuma transação encontrada.</p>
           </div>
         ) : (
-          groupedByCategory.map((group) => {
-            const pendingCount = group.txs.filter((tx: any) => tx.status === "pending" || tx.status === "overdue").length;
-            const pendingTotal = group.txs.filter((tx: any) => tx.status === "pending" || tx.status === "overdue").reduce((s: number, tx: any) => s + Number(tx.amount), 0);
-            const isBulking = bulkPayingCategory === group.name;
+          <>
+            {allGroupsWithPagination.map((group) => {
+              const pendingCount = group.txs.filter((tx: any) => tx.status === "pending" || tx.status === "overdue").length;
+              const pendingTotal = group.txs.filter((tx: any) => tx.status === "pending" || tx.status === "overdue").reduce((s: number, tx: any) => s + Number(tx.amount), 0);
+              const isBulking = bulkPayingCategory === group.name;
 
-            return (
-              <div key={group.name}>
-                <div className="mb-2 flex items-center justify-between px-1">
-                  <div className="flex items-center gap-2">
-                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: group.color }} />
-                    <p className="text-[12px] font-bold uppercase tracking-wider text-foreground">
-                      {group.name}
-                    </p>
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">{group.txs.length}</Badge>
+              return (
+                <div key={group.name}>
+                  <div className="mb-2 flex items-center justify-between px-1">
+                    <div className="flex items-center gap-2">
+                      <span className="h-3 w-3 rounded-full" style={{ backgroundColor: group.color }} />
+                      <p className="text-[12px] font-bold uppercase tracking-wider text-foreground">
+                        {group.name}
+                      </p>
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">{group.txs.length}</Badge>
+                    </div>
+                    {pendingCount > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={isBulking}
+                        onClick={() => handleBulkPay(group.name, group.txs)}
+                        className="h-7 gap-1.5 rounded-xl border-success/40 text-[11px] font-semibold text-success hover:bg-success/10 hover:text-success"
+                      >
+                        {isBulking ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        )}
+                        Confirmar tudo ({formatCurrency(pendingTotal)})
+                      </Button>
+                    )}
                   </div>
-                  {pendingCount > 0 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={isBulking}
-                      onClick={() => handleBulkPay(group.name, group.txs)}
-                      className="h-7 gap-1.5 rounded-xl border-success/40 text-[11px] font-semibold text-success hover:bg-success/10 hover:text-success"
-                    >
-                      {isBulking ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                      )}
-                      Confirmar tudo ({formatCurrency(pendingTotal)})
-                    </Button>
-                  )}
+                  <div className="space-y-1.5">
+                    {group.visibleTxs.map((tx: any) => (
+                      <TransactionRow
+                        key={tx.id}
+                        tx={tx}
+                        togglingId={togglingId}
+                        onToggle={handleToggleStatus}
+                        onDelete={handleDelete}
+                        colorMap={categoryColorMap}
+                      />
+                    ))}
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  {group.txs.map((tx: any) => {
-                    const isPaid = tx.status === "paid";
-                    const isToggling = togglingId === tx.id;
-
-                    return (
-                      <Card key={tx.id} className={cn("border-0 shadow-card transition-all hover:shadow-elevated", isPaid && "opacity-75")}>
-                        <CardContent className="flex items-center gap-2 p-3">
-                          {/* Confirmar button */}
-                          <button
-                            type="button"
-                            disabled={isToggling}
-                            onClick={() => handleToggleStatus(tx)}
-                            className={cn(
-                              "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 transition-all",
-                              isPaid
-                                ? "border-success bg-success/15 text-success"
-                                : "border-primary/40 text-primary/60 hover:border-success hover:bg-success/10 hover:text-success"
-                            )}
-                            title={isPaid ? "Desfazer" : "Confirmar pagamento"}
-                          >
-                            {isToggling ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : isPaid ? (
-                              <Check className="h-4 w-4" />
-                            ) : (
-                              <Check className="h-3.5 w-3.5 opacity-40" />
-                            )}
-                          </button>
-
-                          {/* Type icon */}
-                          <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-xl", tx.type === "income" ? "bg-success/10" : "bg-destructive/10")}>
-                            {tx.type === "income" ? <ArrowUpCircle className="h-4 w-4 text-success" /> : <ArrowDownCircle className="h-4 w-4 text-destructive" />}
-                          </div>
-
-                          {/* Details */}
-                          <div className="min-w-0 flex-1">
-                            <p className={cn("truncate text-sm font-medium", isPaid && "line-through text-muted-foreground")}>{tx.source || "Sem descrição"}</p>
-                            <div className="mt-0.5 flex items-center gap-1.5">
-                              {tx.payment_method && (
-                                <span className="text-[10px] text-muted-foreground capitalize">{tx.payment_method === "credit" ? "Crédito" : tx.payment_method === "debit" ? "Débito" : tx.payment_method}</span>
-                              )}
-                              {!tx.payment_method && tx.accounts && (
-                                <span className="text-[10px] text-muted-foreground">{tx.accounts.name}</span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Amount + status */}
-                          <div className="shrink-0 text-right">
-                            <p className={cn("text-sm font-bold", tx.type === "income" ? "text-success" : "text-foreground")}>
-                              {tx.type === "income" ? "+" : "-"}{formatCurrency(Number(tx.amount))}
-                            </p>
-                            <Badge variant="outline" className={cn("px-1 py-0 text-[9px]", TRANSACTION_STATUS_COLORS[tx.status])}>
-                              {TRANSACTION_STATUS_LABELS[tx.status]}
-                            </Badge>
-                          </div>
-
-                          {/* Delete */}
-                          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 rounded-lg text-muted-foreground hover:text-destructive" onClick={() => handleDelete(tx.id)}>
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
+              );
+            })}
+            {hasMore && (
+              <div className="flex justify-center pt-2 pb-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
+                  className="rounded-xl text-xs"
+                >
+                  Carregar mais ({totalItems - visibleCount} restantes)
+                </Button>
               </div>
-            );
-          })
+            )}
+          </>
         )}
       </div>
     </>
