@@ -337,64 +337,6 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const freeSurplus = monthBalance - monthAllocated;
   const paymentOptions = useMemo(() => Array.from(new Set(transactions.map((tx) => getPaymentKey(tx)))), [transactions]);
 
-  const handleAllocateSurplus = async () => {
-    const amount = Number(allocationAmount.replace(",", "."));
-    if (!amount || amount <= 0) return toast.error("Informe um valor válido para alocar.");
-    if (amount > Math.max(freeSurplus, 0)) return toast.error("O valor excede o saldo livre do mês.");
-    if (destinationType === "goal" && destinationGoalId === "all") return toast.error("Selecione uma meta.");
-    if (destinationType === "account" && destinationAccountId === "all") return toast.error("Selecione uma conta de destino.");
-
-    setAllocationSaving(true);
-    try {
-      let finalGoalId: string | null = null;
-      let finalAccountId: string | null = null;
-      let label = "Livre";
-
-      if (destinationType === "goal") {
-        finalGoalId = destinationGoalId;
-        const goal = goals.find((item) => item.id === destinationGoalId);
-        label = goal?.name || "Meta";
-        const { error } = await supabase.from("goals").update({ current_amount: Number(goal?.current_amount || 0) + amount }).eq("id", destinationGoalId);
-        if (error) throw error;
-      }
-
-      if (destinationType === "reserve") {
-        let reserveGoal = goals.find((goal) => String(goal.name || "").toLowerCase().includes("reserva"));
-        if (!reserveGoal) {
-          const insert = await supabase.from("goals").insert({ user_id: userId, name: "Reserva de emergência", target_amount: amount * 6, current_amount: 0 }).select("id, name, current_amount").single();
-          if (insert.error) throw insert.error;
-          reserveGoal = insert.data;
-        }
-        finalGoalId = reserveGoal.id;
-        label = reserveGoal.name;
-        const { error } = await supabase.from("goals").update({ current_amount: Number(reserveGoal.current_amount || 0) + amount }).eq("id", reserveGoal.id);
-        if (error) throw error;
-      }
-
-      if (destinationType === "account") {
-        finalAccountId = destinationAccountId;
-        const account = accounts.find((item) => item.id === destinationAccountId);
-        label = account?.name || "Conta";
-        const { error } = await supabase.from("accounts").update({ current_balance: Number(account?.current_balance || 0) + amount }).eq("id", destinationAccountId);
-        if (error) throw error;
-      }
-
-      if (allocationSupport) {
-        const supabaseAny = supabase as any;
-        const { error } = await supabaseAny.from("monthly_surplus_allocations").insert({ user_id: userId, ref_month: currentMonth, amount, destination_type: destinationType, goal_id: finalGoalId, account_id: finalAccountId, label });
-        if (error) throw error;
-      }
-
-      toast.success("Saldo alocado com sucesso.");
-      setAllocationAmount("");
-      await loadData();
-    } catch (error: any) {
-      toast.error(error?.message || "Não foi possível salvar a alocação.");
-    } finally {
-      setAllocationSaving(false);
-    }
-  };
-
   // Pending + recent transactions for dashboard
   const pendingTx = useMemo(() => currentMonthTx.filter((tx) => tx.status === "pending" || tx.status === "overdue").sort((a, b) => a.transaction_date.localeCompare(b.transaction_date)), [currentMonthTx]);
   const recentTx = useMemo(() => [...currentMonthTx].sort((a, b) => b.transaction_date.localeCompare(a.transaction_date)).slice(0, 8), [currentMonthTx]);
