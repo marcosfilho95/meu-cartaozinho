@@ -299,6 +299,16 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
             <Button
               variant="ghost"
               size="icon"
+              onClick={() => navigate("/financas")}
+              className="h-12 w-full rounded-xl border border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20 sm:h-11 sm:w-11"
+              aria-label="Finanças"
+              title="Organizador Financeiro"
+            >
+              <Wallet className="h-6 w-6" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => navigate("/compras")}
               className="h-12 w-full rounded-xl border border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20 sm:h-11 sm:w-11"
               aria-label="Compras"
