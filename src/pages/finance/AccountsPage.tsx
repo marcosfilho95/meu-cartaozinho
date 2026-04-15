@@ -195,18 +195,9 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      <AppHeader
-        containerClassName="max-w-5xl"
-        title="Contas"
-        greeting={headerProfile.greeting}
-        userName={headerProfile.firstName}
-        avatarId={headerProfile.avatarId}
-        showBack
-        backTo="/financas"
-        accentTheme={accentTheme}
-        onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
-      >
+    <FinanceLayout
+      userId={userId}
+      headerChildren={
         <div className="mt-3 flex items-center justify-between">
           <div>
             <p className="text-primary-foreground/70 text-xs">Saldo total</p>
@@ -216,10 +207,8 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
             <Plus className="h-4 w-4" /> Nova
           </Button>
         </div>
-      </AppHeader>
-
-      <FinanceTopNav />
-
+      }
+    >
       <div className="mx-auto max-w-5xl px-4 space-y-3">
         {loading && accounts.length === 0 ? (
           <div className="flex justify-center py-12">
@@ -336,9 +325,7 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
           </div>
         </DialogContent>
       </Dialog>
-
-      <QuickTransactionFab userId={userId} />
-    </div>
+    </FinanceLayout>
   );
 };
 

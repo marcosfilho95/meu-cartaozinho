@@ -92,21 +92,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
   }, [filtered]);
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      <AppHeader
-        containerClassName="max-w-5xl"
-        title="Transações"
-        greeting={headerProfile.greeting}
-        userName={headerProfile.firstName}
-        avatarId={headerProfile.avatarId}
-        showBack
-        backTo="/financas"
-        accentTheme={accentTheme}
-        onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
-      />
-
-      <FinanceTopNav />
-
+    <FinanceLayout userId={userId}>
       <div className="sticky top-0 z-30 border-b border-border/40 bg-background/95 backdrop-blur-md">
         <div className="mx-auto flex max-w-5xl gap-2 px-4 py-3">
           <div className="relative flex-1">
@@ -211,9 +197,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
           ))
         )}
       </div>
-
-      <QuickTransactionFab userId={userId} />
-    </div>
+    </FinanceLayout>
   );
 };
 

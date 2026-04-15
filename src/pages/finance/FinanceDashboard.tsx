@@ -399,26 +399,15 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      <AppHeader
-        containerClassName="max-w-6xl"
-        title="Organizador Financeiro"
-        greeting={headerProfile.greeting}
-        userName={headerProfile.firstName}
-        avatarId={headerProfile.avatarId}
-        showBack
-        backTo="/"
-        accentTheme={accentTheme}
-        onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
-      >
+    <FinanceLayout
+      userId={userId}
+      headerChildren={
         <div className="mt-4">
           <p className="text-xs font-medium text-primary-foreground/70">Patrimônio total</p>
           <p className="font-heading text-3xl font-extrabold text-primary-foreground">{formatCurrency(totalNetWorth)}</p>
         </div>
-      </AppHeader>
-
-      <FinanceTopNav />
-
+      }
+    >
       <div className="mx-auto max-w-6xl space-y-5 px-4">
         <Card className="border-0 shadow-elevated">
           <CardContent className="space-y-4 p-4">
@@ -584,9 +573,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
           </div>
         </section>
       </div>
-
-      <QuickTransactionFab userId={userId} />
-    </div>
+    </FinanceLayout>
   );
 };
 
