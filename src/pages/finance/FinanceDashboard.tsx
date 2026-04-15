@@ -512,7 +512,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       const { error } = await supabase.from("transactions").update({ status: newStatus }).eq("id", tx.id);
       if (error) throw error;
       toast.success(newStatus === "paid" ? "✅ Marcado como pago!" : "Voltou para pendente");
-      await loadData();
+      await fetchData();
     } catch (err: any) {
       toast.error("Erro: " + (err?.message || "falha"));
     } finally {
