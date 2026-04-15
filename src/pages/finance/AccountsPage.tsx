@@ -6,8 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FinanceTopNav } from "@/components/finance/FinanceTopNav";
-import { QuickTransactionFab } from "@/components/finance/QuickTransactionFab";
+import { FinanceLayout } from "@/components/finance/FinanceLayout";
 import {
   Plus,
   Pencil,

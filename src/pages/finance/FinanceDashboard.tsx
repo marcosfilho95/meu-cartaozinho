@@ -2,9 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { AppHeader } from "@/components/AppHeader";
-import { FinanceTopNav } from "@/components/finance/FinanceTopNav";
-import { QuickTransactionFab } from "@/components/finance/QuickTransactionFab";
+import { FinanceLayout } from "@/components/finance/FinanceLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
