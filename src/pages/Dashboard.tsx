@@ -11,7 +11,7 @@ import { AppFooter } from "@/components/AppFooter";
 import { getCurrentMonth, formatCurrency, getMonthPaymentStatus, isInstallmentOpen, MonthPaymentStatus } from "@/lib/installments";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CreditCard, LogOut, ShoppingBag, Plus, UserCircle2 } from "lucide-react";
+import { CreditCard, LogOut, ShoppingBag, Plus, UserCircle2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
 import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
