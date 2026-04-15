@@ -56,10 +56,13 @@ export const ensureDefaultCategories = async (userId: string) => {
   if (error) throw error;
 
   const rows = existing || [];
+  const normalize = (s: string) =>
+    s.trim().toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const hasByName = (name: string, kind: CategoryKind, parentId: string | null) =>
     rows.some(
       (row: any) =>
-        String(row.name || "").trim().toLowerCase() === name.toLowerCase() &&
+        normalize(String(row.name || "")) === normalize(name) &&
         row.kind === kind &&
         (row.parent_id || null) === parentId,
     );
