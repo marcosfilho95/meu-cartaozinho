@@ -175,7 +175,7 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
         </DialogContent>
       </Dialog>
 
-      <FinanceBottomNav />
+      <FinanceTopNav />
     </div>
   );
 };

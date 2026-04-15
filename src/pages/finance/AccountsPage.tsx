@@ -251,7 +251,7 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
       </Dialog>
 
       <QuickTransactionFab userId={userId} />
-      <FinanceBottomNav />
+      <FinanceTopNav />
     </div>
   );
 };

@@ -182,7 +182,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
       </div>
 
       <QuickTransactionFab userId={userId} />
-      <FinanceBottomNav />
+      <FinanceTopNav />
     </div>
   );
 };
