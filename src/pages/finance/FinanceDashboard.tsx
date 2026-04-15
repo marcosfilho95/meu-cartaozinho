@@ -444,23 +444,22 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     });
 
     const currentTotal = Object.values(currentMap).reduce((sum, value) => sum + value, 0);
-    return Object.entries(currentMap).map(([id, currentValue], index) => {
+    return Object.entries(currentMap).map(([id, currentValue]) => {
       const category = categories.find((item: any) => item.id === id);
       const previousValue = previousMap[id] || 0;
       const delta = currentValue - previousValue;
       const label = category?.name || "Sem categoria";
-      const baseColor = category?.color || CATEGORY_COLORS[index % CATEGORY_COLORS.length];
       return {
         id,
         label,
-        color: resolveBankCategoryColor(label, baseColor),
+        color: categoryColorMap[id] || "#AEB6BF",
         currentValue,
         percentage: currentTotal > 0 ? (currentValue / currentTotal) * 100 : 0,
         delta,
         trend: trendFromDelta(delta),
       };
     }).sort((a, b) => b.currentValue - a.currentValue);
-  }, [currentMonthTx, previousMonthTx, categories]);
+  }, [currentMonthTx, previousMonthTx, categories, categoryColorMap]);
 
   const totalNetWorth = useMemo(() => accounts.reduce((sum, account) => sum + (account.include_in_net_worth ? Number(account.current_balance) : 0), 0), [accounts]);
   const paymentOptions = useMemo(() => Array.from(new Set(transactions.map((tx) => getPaymentKey(tx)))), [transactions]);
