@@ -14,6 +14,10 @@ import CardDetail from "./pages/CardDetail";
 import Purchases from "./pages/Purchases";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
+import FinanceDashboard from "./pages/finance/FinanceDashboard";
+import AccountsPage from "./pages/finance/AccountsPage";
+import CategoriesPage from "./pages/finance/CategoriesPage";
+import TransactionsPage from "./pages/finance/TransactionsPage";
 
 const queryClient = new QueryClient();
 
