@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { DEFAULT_AVATAR_ID } from "@/data/avatars";
 import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
@@ -15,7 +15,7 @@ const getGreeting = () => {
 
 const getFirstName = (name: string) => {
   const firstName = name.trim().split(/\s+/)[0];
-  return firstName || "Usuario";
+  return firstName || "Usuário";
 };
 
 type HeaderProfile = {
@@ -79,4 +79,5 @@ export const useUserHeaderProfile = (userId: string | null | undefined): HeaderP
     [avatarId, name],
   );
 };
+
 

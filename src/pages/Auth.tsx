@@ -69,6 +69,22 @@ const getPinValidationError = (value: string) => {
   return "";
 };
 
+const isUsernameTaken = async (candidate: string) => {
+  const normalized = normalizeUsername(candidate);
+  if (!normalized || !USERNAME_REGEX.test(normalized)) return false;
+
+  const { data, error } = await supabase.rpc("get_login_email_by_username", {
+    p_username: normalized,
+  });
+
+  if (error) {
+    if (isMissingUsernameRpc(error)) return false;
+    throw error;
+  }
+
+  return !!data;
+};
+
 const Auth: React.FC = () => {
   const navigate = useNavigate();
   const [view, setView] = useState<View>("login");
@@ -177,12 +193,17 @@ const Auth: React.FC = () => {
 
     setLoading(true);
     try {
+      const normalizedUsername = normalizeUsername(username);
+      if (await isUsernameTaken(normalizedUsername)) {
+        throw new Error("Esse nome de usuário já está em uso.");
+      }
+
       const { error } = await supabase.auth.signUp({
         email: normalizeEmail(signupEmail),
         password,
         options: {
           emailRedirectTo: window.location.origin,
-          data: { name: name.trim(), username: normalizeUsername(username) },
+          data: { name: name.trim(), username: normalizedUsername },
         },
       });
 

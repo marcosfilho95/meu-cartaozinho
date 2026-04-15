@@ -52,7 +52,7 @@ const AppRoutes = () => {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (event === "SIGNED_OUT") {
-        console.info("[Auth] Usuario deslogado");
+        console.info("[Auth] Usuário deslogado");
       }
       if (event === "PASSWORD_RECOVERY" && pathnameRef.current !== "/reset-password") {
         navigate("/reset-password", { replace: true });
@@ -126,3 +126,4 @@ const App = () => (
 );
 
 export default App;
+

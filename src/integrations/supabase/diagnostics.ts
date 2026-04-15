@@ -10,7 +10,7 @@ export const checkSupabaseConnection = async (): Promise<SupabaseConnectionCheck
   if (!SUPABASE_ENV.isConfigured || !SUPABASE_ENV.url || !SUPABASE_ENV.key) {
     return {
       ok: false,
-      message: "Configuração de Supabase ausente ou inválida no .env.",
+      message: "Supabase config missing or invalid in .env.",
     };
   }
 
@@ -25,27 +25,28 @@ export const checkSupabaseConnection = async (): Promise<SupabaseConnectionCheck
     });
 
     if (response.ok) {
-      return { ok: true, message: "Conexão com Supabase OK.", status: response.status };
+      return { ok: true, message: "Supabase connection OK.", status: response.status };
     }
 
     if (response.status === 401 || response.status === 403) {
+      const source = SUPABASE_ENV.keyName ? ` (source: ${SUPABASE_ENV.keyName})` : "";
       return {
         ok: false,
         status: response.status,
-        message: "Chave de API inválida para o projeto informado.",
+        message: `Invalid API key for the configured project${source}.`,
       };
     }
 
     return {
       ok: false,
       status: response.status,
-      message: "Supabase respondeu com erro. Verifique URL, status do projeto e chaves.",
+      message: "Supabase returned an error. Check URL, project status and keys.",
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro desconhecido de rede.";
+    const message = error instanceof Error ? error.message : "Unknown network error.";
     return {
       ok: false,
-      message: `Falha de conexão com Supabase: ${message}`,
+      message: `Supabase connection failed: ${message}`,
     };
   }
 };

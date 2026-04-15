@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { AVATAR_OPTIONS, DEFAULT_AVATAR_ID } from "@/data/avatars";
@@ -19,22 +19,33 @@ const isMissingAvatarColumnError = (error: { code?: string; message?: string } |
   const message = String(error.message || "");
   return error.code === "42703" || error.code === "PGRST204" || message.includes("avatar_id");
 };
+const isMissingUsernameRpc = (error: { code?: string; message?: string } | null) => {
+  if (!error) return false;
+  const text = String(error.message || "");
+  return error.code === "PGRST202" || text.includes("get_login_email_by_username");
+};
 
 const USERNAME_REGEX = /^[a-z0-9._-]{3,20}$/;
 
 const Profile: React.FC = () => {
   const navigate = useNavigate();
   const [userId, setUserId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState("");
+  const [accountCreatedAt, setAccountCreatedAt] = useState("");
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
+  const [initialUsername, setInitialUsername] = useState("");
   const [avatarId, setAvatarId] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
-      const id = data.session?.user.id || null;
+      const sessionUser = data.session?.user || null;
+      const id = sessionUser?.id || null;
       setUserId(id);
+      setUserEmail(sessionUser?.email || "");
+      setAccountCreatedAt(sessionUser?.created_at || "");
       if (!id) return;
       const cachedProfile = getStoredProfile(id);
       if (cachedProfile) {
@@ -53,11 +64,14 @@ const Profile: React.FC = () => {
           const fallback = await supabase.from("profiles").select("name").eq("user_id", id).maybeSingle();
           setName(fallback.data?.name || "");
           setAvatarId(localAvatar || DEFAULT_AVATAR_ID);
+          setInitialUsername("");
           return;
         }
       }
       setName(profile?.name || "");
-      setUsername((profile as any)?.username || "");
+      const loadedUsername = ((profile as any)?.username || "").toLowerCase();
+      setUsername(loadedUsername);
+      setInitialUsername(loadedUsername);
       const resolvedAvatar = profile?.avatar_id || localAvatar || DEFAULT_AVATAR_ID;
       setAvatarId(resolvedAvatar);
       setStoredAvatarId(id, resolvedAvatar);
@@ -68,6 +82,7 @@ const Profile: React.FC = () => {
   const usernameError = username.trim() && !USERNAME_REGEX.test(username.trim().toLowerCase())
     ? "Use 3-20 caracteres: letras minúsculas, números, ponto, underline ou hífen."
     : "";
+  const usernameLocked = !!initialUsername;
 
   const saveProfile = async () => {
     if (!userId) return;
@@ -78,13 +93,32 @@ const Profile: React.FC = () => {
       avatar_id: avatarId || DEFAULT_AVATAR_ID,
       updated_at: new Date().toISOString(),
     };
-    if (username.trim() && !usernameError) {
-      payload.username = username.trim().toLowerCase();
+    const normalizedUsername = username.trim().toLowerCase();
+    if (!usernameLocked && normalizedUsername && !usernameError) {
+      const { data: existingEmail, error: usernameLookupError } = await supabase.rpc("get_login_email_by_username", {
+        p_username: normalizedUsername,
+      });
+      if (usernameLookupError && !isMissingUsernameRpc(usernameLookupError as any)) {
+        toast.error("Erro ao validar nome de usuário.");
+        setSaving(false);
+        return;
+      }
+      if (existingEmail && existingEmail !== userEmail) {
+        toast.error("Esse nome de usuário já está em uso.");
+        setSaving(false);
+        return;
+      }
+      payload.username = normalizedUsername;
     }
     let { error } = await supabase
       .from("profiles")
       .upsert(payload, { onConflict: "user_id" });
     if (error) {
+      if (error.message?.toLowerCase().includes("cannot be changed")) {
+        toast.error("O nome de usuário só pode ser definido uma única vez.");
+        setSaving(false);
+        return;
+      }
       if (error.message?.toLowerCase().includes("username")) {
         toast.error("Esse nome de usuário já está em uso.");
         setSaving(false);
@@ -112,6 +146,10 @@ const Profile: React.FC = () => {
     const resolvedAvatar = avatarId || DEFAULT_AVATAR_ID;
     setStoredAvatarId(userId, resolvedAvatar);
     setStoredProfile(userId, { name: name.trim(), avatar_id: resolvedAvatar });
+    if (!usernameLocked && normalizedUsername) {
+      setInitialUsername(normalizedUsername);
+      setUsername(normalizedUsername);
+    }
     toast.success("Perfil atualizado");
     setSaving(false);
   };
@@ -121,7 +159,7 @@ const Profile: React.FC = () => {
       <AppHeader
         title="Perfil"
         subtitle="Personalize sua conta"
-        userName={name || "Usuario"}
+        userName={name || "Usuário"}
         avatarId={avatarId}
         showBack
         preferHistoryBack
@@ -152,11 +190,40 @@ const Profile: React.FC = () => {
             onChange={(e) => setUsername(e.target.value.toLowerCase())}
             placeholder="ex: marcosfilho"
             maxLength={20}
+            disabled={usernameLocked}
           />
           {usernameError && <p className="text-xs text-destructive mt-1">{usernameError}</p>}
           <p className="text-[10px] text-muted-foreground mt-1">
-            Cadastre um nome de usuário para fazer login sem precisar do e-mail.
+            {usernameLocked
+              ? "Nome de usuário já definido. Por segurança, não pode ser alterado."
+              : "Defina uma única vez para fazer login sem precisar do e-mail."}
           </p>
+        </section>
+
+        <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-card animate-fade-in">
+          <h2 className="font-heading text-base font-bold text-foreground mb-3">Dados da conta</h2>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2">
+              <p className="text-[11px] text-muted-foreground">E-mail</p>
+              <p className="text-sm font-semibold text-foreground break-all">{userEmail || "—"}</p>
+            </div>
+            <div className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2">
+              <p className="text-[11px] text-muted-foreground">Usuário</p>
+              <p className="text-sm font-semibold text-foreground">{username ? `@${username}` : "Não definido"}</p>
+            </div>
+            <div className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2 sm:col-span-2">
+              <p className="text-[11px] text-muted-foreground">Cadastro</p>
+              <p className="text-sm font-semibold text-foreground">
+                {accountCreatedAt
+                  ? new Date(accountCreatedAt).toLocaleDateString("pt-BR", {
+                      day: "2-digit",
+                      month: "long",
+                      year: "numeric",
+                    })
+                  : "—"}
+              </p>
+            </div>
+          </div>
         </section>
 
         <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-card animate-fade-in">
@@ -197,3 +264,4 @@ const Profile: React.FC = () => {
 };
 
 export default Profile;
+

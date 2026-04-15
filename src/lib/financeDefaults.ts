@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+﻿import { supabase } from "@/integrations/supabase/client";
 
 type DefaultAccount = {
   name: string;
@@ -25,7 +25,8 @@ const DEFAULT_ACCOUNTS: DefaultAccount[] = [
   },
   { name: "Reserva de Emergencia", type: "investment", scope: "personal", include_in_net_worth: true },
   { name: "Casa", type: "checking", scope: "personal", include_in_net_worth: true },
-  { name: "Alimentacao", type: "checking", scope: "personal", include_in_net_worth: true },
+  { name: "Escola", type: "checking", scope: "personal", include_in_net_worth: true },
+  { name: "Alimentação", type: "checking", scope: "personal", include_in_net_worth: true },
   { name: "Transporte", type: "checking", scope: "personal", include_in_net_worth: true },
   { name: "Saude", type: "checking", scope: "personal", include_in_net_worth: true },
   { name: "Lazer", type: "checking", scope: "personal", include_in_net_worth: true },
@@ -59,4 +60,5 @@ export const ensureDefaultAccounts = async (userId: string) => {
   if (error) throw error;
   return true;
 };
+
 

@@ -27,3 +27,12 @@ export const setFinanceCategoriesCache = <T,>(userId: string, value: T) => write
 export const getFinanceTransactionsCache = <T,>(userId: string) => read<T>("transactions", userId);
 export const setFinanceTransactionsCache = <T,>(userId: string, value: T) => write("transactions", userId, value);
 
+export const clearFinancePageCaches = (userId: string) => {
+  try {
+    ["accounts", "categories", "transactions"].forEach((kind) => {
+      sessionStorage.removeItem(keyFor(kind, userId));
+    });
+  } catch {
+    // ignore cache clear failures
+  }
+};

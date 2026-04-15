@@ -24,6 +24,8 @@ import {
   HeartPulse,
   PartyPopper,
   Shield,
+  GraduationCap,
+  Info,
 } from "lucide-react";
 import { ACCOUNT_TYPE_LABELS, formatCurrency } from "@/lib/constants";
 import { toast } from "sonner";
@@ -43,6 +45,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
 
 const ACCOUNT_NAME_ICON_MAP: Array<{ pattern: RegExp; icon: React.ElementType }> = [
   { pattern: /casa|moradia|aluguel/i, icon: House },
+  { pattern: /escola|faculdade|curso|educa/i, icon: GraduationCap },
   { pattern: /transporte|carro|combust/i, icon: Car },
   { pattern: /aliment|mercado|delivery|restaurante/i, icon: UtensilsCrossed },
   { pattern: /saude|saúde|medic|farmac/i, icon: HeartPulse },
@@ -76,6 +79,7 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
   const [closingDay, setClosingDay] = useState("");
   const [dueDay, setDueDay] = useState("");
   const [creditLimit, setCreditLimit] = useState("");
+  const quickAccountSuggestions = ["Escola", "Faculdade", "Internet", "Luz", "Água", "Telefone", "Academia"];
 
   const loadAccounts = async () => {
     setLoading(accounts.length === 0);
@@ -191,6 +195,23 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
   return (
     <>
       <div className="mx-auto max-w-5xl px-4 space-y-3">
+        <Card className="border-0 shadow-card">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <div className="space-y-1">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Saldo em contas</p>
+              <p className={cn("text-xl font-bold", totalBalance >= 0 ? "text-success" : "text-destructive")}>{formatCurrency(totalBalance)}</p>
+              <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Info className="h-3.5 w-3.5" />
+                Aqui é saldo por conta. Despesas do mês aparecem no Resumo.
+              </p>
+            </div>
+            <Button onClick={openCreate} className="gradient-primary text-primary-foreground">
+              <Plus className="mr-1 h-4 w-4" />
+              Nova conta
+            </Button>
+          </CardContent>
+        </Card>
+
         {loading && accounts.length === 0 ? (
           <div className="flex justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -252,6 +273,18 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
               <Label className="text-xs text-muted-foreground">Nome</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Casa, Alimentação, Nubank..." className="mt-1" />
               <p className="mt-1 text-[11px] text-muted-foreground">Aqui você pode colocar: Casa, Alimentação, Transporte, Lazer, etc.</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {quickAccountSuggestions.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => setName(item)}
+                    className="rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

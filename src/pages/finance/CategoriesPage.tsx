@@ -72,6 +72,10 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
 
   const normalize = (s: string) =>
     s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const isGenericCardCategory = (name?: string | null) => {
+    const n = normalize(String(name || ""));
+    return n === "cartao" || n === "cartoes";
+  };
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -135,7 +139,7 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
     load();
   };
 
-  const filtered = categories.filter((category) => category.kind === activeTab);
+  const filtered = categories.filter((category) => category.kind === activeTab && !isGenericCardCategory(category.name));
   const parentOptions = categories.filter((category) => category.kind === kind && !category.parent_id && (!editing || category.id !== editing.id));
 
   return (

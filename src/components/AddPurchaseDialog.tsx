@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { toast } from "sonner";
 import { AlertCircle, Plus } from "lucide-react";
 import { addMonths, generateInstallments, formatMonth, formatCurrency, getCurrentMonth } from "@/lib/installments";
+import { syncPurchasesToFinanceByIds } from "@/lib/financeCardSync";
 
 const purchaseSchema = z.object({
   card_id: z.string().uuid("Selecione um cartao"),
@@ -219,7 +220,7 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
       const message = String(purchaseError?.message || "");
       if (purchaseError?.code === "42703" && message.includes("subgroup_id")) {
         setSubgroupFeatureAvailable(false);
-        toast.error("Subgrupos ainda nao foram criados no banco. Rode a migration para habilitar.");
+        toast.error("Subgrupos ainda não foram criados no banco. Rode a migration para habilitar.");
         return;
       }
       toast.error("Erro ao salvar compra: " + (purchaseError?.message || "Erro desconhecido"));
@@ -249,6 +250,13 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
     if (instError) {
       toast.error("Erro ao gerar parcelas: " + instError.message);
       return;
+    }
+
+    try {
+      await syncPurchasesToFinanceByIds(userId, [purchase.id]);
+    } catch (syncError: any) {
+      console.error("[FinanceSync] Falha ao sincronizar compra com Organizador", syncError);
+      toast.error("Compra salva, mas houve falha ao sincronizar no Organizador Financeiro.");
     }
 
     toast.success(`Compra salva com ${data.installments_count} parcela(s)`);
@@ -283,7 +291,7 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
         <DialogHeader>
           <DialogTitle className="font-heading">{isSubgroupQuickCreate ? "Nova conta" : "Nova compra parcelada"}</DialogTitle>
           <DialogDescription>
-            {isSubgroupQuickCreate ? "Cadastre a conta deste usuario neste cartao." : "Cadastre compras parceladas e organize sua fatura por mes."}
+            {isSubgroupQuickCreate ? "Cadastre a conta deste Usuário neste cartao." : "Cadastre compras parceladas e organize sua fatura por mes."}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -368,7 +376,7 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
                     <Label>Subgrupo (temporario)</Label>
                     <Input placeholder="Ex: Pai, Avo, Namorado" {...register("subgroup_name")} />
                     <p className="text-xs text-muted-foreground">
-                      A tabela de subgrupos ainda nao existe no banco. O valor sera salvo em "Para quem".
+                      A tabela de subgrupos ainda não existe no banco. O valor sera salvo em "Para quem".
                     </p>
                   </div>
                 ))}
@@ -457,3 +465,4 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
     </Dialog>
   );
 };
+

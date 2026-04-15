@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { AddPurchaseDialog } from "@/components/AddPurchaseDialog";
+import { deleteSyncedFinanceTransactionsByPurchaseIds, syncPurchasesToFinanceByIds } from "@/lib/financeCardSync";
 
 interface Installment {
   id: string;
@@ -91,6 +92,11 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
       toast.error("Erro ao atualizar parcela: " + error.message);
       return;
     }
+    try {
+      await syncPurchasesToFinanceByIds(userId, [inst.purchase_id]);
+    } catch (syncError) {
+      console.error("[FinanceSync] Falha ao sincronizar status da parcela", syncError);
+    }
     setLocalInstallments((prev) => {
       const next = prev.map((item) =>
         item.id === inst.id
@@ -116,6 +122,14 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
       toast.error("Erro ao atualizar subgrupo: " + error.message);
       return;
     }
+    try {
+      await syncPurchasesToFinanceByIds(
+        userId,
+        Array.from(new Set(groupItems.map((item) => item.purchase_id))),
+      );
+    } catch (syncError) {
+      console.error("[FinanceSync] Falha ao sincronizar subgrupo", syncError);
+    }
     setLocalInstallments((prev) => {
       const next = prev.map((item) =>
         ids.includes(item.id)
@@ -128,6 +142,11 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
   };
 
   const deletePurchase = async (purchaseId: string, description: string) => {
+    try {
+      await deleteSyncedFinanceTransactionsByPurchaseIds(userId, [purchaseId]);
+    } catch (syncError) {
+      console.error("[FinanceSync] Falha ao remover transacoes sincronizadas", syncError);
+    }
     const { error } = await supabase.from("purchases").delete().eq("id", purchaseId);
     if (error) {
       toast.error("Erro ao excluir compra: " + error.message);
@@ -295,7 +314,7 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
                 <div className="space-y-3 p-3">
                   {group.purchases.length === 0 ? (
                     <div className="rounded-lg border border-dashed border-border/80 bg-background/40 p-4 text-sm text-muted-foreground">
-                      Nenhuma conta neste usuario ainda. Clique em <span className="font-semibold text-foreground">+ Nova conta</span> para cadastrar.
+                      Nenhuma conta neste Usuário ainda. Clique em <span className="font-semibold text-foreground">+ Nova conta</span> para cadastrar.
                     </div>
                   ) : (
                     group.purchases.map((purchase) => (
@@ -316,7 +335,7 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
                           <AlertDialogContent>
                             <AlertDialogHeader>
                               <AlertDialogTitle>Excluir compra?</AlertDialogTitle>
-                              <AlertDialogDescription>Essa acao exclui a compra e todas as parcelas restantes imediatamente.</AlertDialogDescription>
+                              <AlertDialogDescription>Essa ação exclui a compra e todas as parcelas restantes imediatamente.</AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancelar</AlertDialogCancel>
@@ -409,4 +428,5 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
     </div>
   );
 };
+
 

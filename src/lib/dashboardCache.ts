@@ -37,3 +37,17 @@ export const setDashboardCache = (userId: string, month: string, data: Dashboard
     // ignore localStorage failures
   }
 };
+
+export const clearDashboardCache = (userId: string) => {
+  try {
+    const prefix = `dashboard-cache:${userId}:`;
+    for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(prefix)) {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // ignore localStorage failures
+  }
+};

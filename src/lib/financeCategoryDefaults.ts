@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+﻿import { supabase } from "@/integrations/supabase/client";
 
 type CategoryKind = "expense" | "income" | "transfer";
 type ParentDef = { name: string; kind: CategoryKind; color: string; icon: string };
@@ -6,46 +6,46 @@ type ChildDef = { name: string; kind: CategoryKind; parent: string; color: strin
 
 const PARENTS: ParentDef[] = [
   { name: "Casa", kind: "expense", color: "#5B8DEF", icon: "home" },
-  { name: "Alimentação", kind: "expense", color: "#E85D75", icon: "utensils" },
+  { name: "AlimentaÃ§Ã£o", kind: "expense", color: "#E85D75", icon: "utensils" },
   { name: "Transporte", kind: "expense", color: "#F0A030", icon: "car" },
-  { name: "Saúde", kind: "expense", color: "#43B89C", icon: "heart" },
-  { name: "Educação", kind: "expense", color: "#A78BFA", icon: "book-open" },
+  { name: "SaÃºde", kind: "expense", color: "#43B89C", icon: "heart" },
+  { name: "EducaÃ§Ã£o", kind: "expense", color: "#A78BFA", icon: "book-open" },
   { name: "Lazer", kind: "expense", color: "#EC6FCF", icon: "gamepad-2" },
   { name: "Assinaturas", kind: "expense", color: "#6DAFDB", icon: "repeat" },
   { name: "Impostos", kind: "expense", color: "#D4915E", icon: "tag" },
   { name: "Outros", kind: "expense", color: "#94A3B8", icon: "ellipsis" },
-  { name: "Salário", kind: "income", color: "#34D399", icon: "banknote" },
+  { name: "SalÃ¡rio", kind: "income", color: "#34D399", icon: "banknote" },
   { name: "Renda Extra", kind: "income", color: "#FBBF24", icon: "briefcase" },
   { name: "Investimentos", kind: "income", color: "#38BDF8", icon: "trending-up" },
-  { name: "Transferências", kind: "transfer", color: "#78839B", icon: "arrow-right-left" },
+  { name: "TransferÃªncias", kind: "transfer", color: "#78839B", icon: "arrow-right-left" },
 ];
 
 const CHILDREN: ChildDef[] = [
   { name: "Aluguel", kind: "expense", parent: "Casa", color: "#4A7FDB", icon: "home" },
-  { name: "Condomínio", kind: "expense", parent: "Casa", color: "#6B9BF0", icon: "home" },
+  { name: "CondomÃ­nio", kind: "expense", parent: "Casa", color: "#6B9BF0", icon: "home" },
   { name: "Energia", kind: "expense", parent: "Casa", color: "#EAB308", icon: "sparkles" },
-  { name: "Água", kind: "expense", parent: "Casa", color: "#22D3EE", icon: "sparkles" },
+  { name: "Ãgua", kind: "expense", parent: "Casa", color: "#22D3EE", icon: "sparkles" },
   { name: "Internet", kind: "expense", parent: "Casa", color: "#818CF8", icon: "wifi" },
-  { name: "Mercado", kind: "expense", parent: "Alimentação", color: "#F87171", icon: "shopping-cart" },
-  { name: "Restaurante", kind: "expense", parent: "Alimentação", color: "#D946A8", icon: "utensils" },
-  { name: "Delivery", kind: "expense", parent: "Alimentação", color: "#FB923C", icon: "coffee" },
+  { name: "Mercado", kind: "expense", parent: "AlimentaÃ§Ã£o", color: "#F87171", icon: "shopping-cart" },
+  { name: "Restaurante", kind: "expense", parent: "AlimentaÃ§Ã£o", color: "#D946A8", icon: "utensils" },
+  { name: "Delivery", kind: "expense", parent: "AlimentaÃ§Ã£o", color: "#FB923C", icon: "coffee" },
   { name: "Gasolina", kind: "expense", parent: "Transporte", color: "#E0A020", icon: "car" },
-  { name: "Uber e Táxi", kind: "expense", parent: "Transporte", color: "#F59E42", icon: "car" },
-  { name: "Transporte Público", kind: "expense", parent: "Transporte", color: "#10B981", icon: "car" },
-  { name: "Farmácia", kind: "expense", parent: "Saúde", color: "#14B8A6", icon: "heart" },
-  { name: "Consultas", kind: "expense", parent: "Saúde", color: "#6EE7B7", icon: "heart" },
-  { name: "Exames", kind: "expense", parent: "Saúde", color: "#2DD4BF", icon: "heart" },
-  { name: "Cursos", kind: "expense", parent: "Educação", color: "#C084FC", icon: "book-open" },
-  { name: "Livros", kind: "expense", parent: "Educação", color: "#8B5CF6", icon: "book-open" },
+  { name: "Uber e TÃ¡xi", kind: "expense", parent: "Transporte", color: "#F59E42", icon: "car" },
+  { name: "Transporte PÃºblico", kind: "expense", parent: "Transporte", color: "#10B981", icon: "car" },
+  { name: "FarmÃ¡cia", kind: "expense", parent: "SaÃºde", color: "#14B8A6", icon: "heart" },
+  { name: "Consultas", kind: "expense", parent: "SaÃºde", color: "#6EE7B7", icon: "heart" },
+  { name: "Exames", kind: "expense", parent: "SaÃºde", color: "#2DD4BF", icon: "heart" },
+  { name: "Cursos", kind: "expense", parent: "EducaÃ§Ã£o", color: "#C084FC", icon: "book-open" },
+  { name: "Livros", kind: "expense", parent: "EducaÃ§Ã£o", color: "#8B5CF6", icon: "book-open" },
   { name: "Viagens", kind: "expense", parent: "Lazer", color: "#F472B6", icon: "plane" },
   { name: "Streaming", kind: "expense", parent: "Assinaturas", color: "#60A5FA", icon: "phone" },
   { name: "IPTU", kind: "expense", parent: "Impostos", color: "#CD8A4E", icon: "tag" },
   { name: "IPVA", kind: "expense", parent: "Impostos", color: "#B07D4F", icon: "tag" },
   { name: "Freelance", kind: "income", parent: "Renda Extra", color: "#F59E0B", icon: "briefcase" },
-  { name: "Bônus", kind: "income", parent: "Renda Extra", color: "#A3E635", icon: "sparkles" },
+  { name: "BÃ´nus", kind: "income", parent: "Renda Extra", color: "#A3E635", icon: "sparkles" },
   { name: "Dividendos", kind: "income", parent: "Investimentos", color: "#06B6D4", icon: "trending-up" },
   { name: "Rendimentos", kind: "income", parent: "Investimentos", color: "#67E8F9", icon: "trending-up" },
-  { name: "Entre Contas", kind: "transfer", parent: "Transferências", color: "#78839B", icon: "arrow-right-left" },
+  { name: "Entre Contas", kind: "transfer", parent: "TransferÃªncias", color: "#78839B", icon: "arrow-right-left" },
 ];
 
 export const ensureDefaultCategories = async (userId: string) => {

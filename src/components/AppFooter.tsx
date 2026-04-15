@@ -1,8 +1,8 @@
-import React from "react";
+﻿import React from "react";
 import { Github, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const REPO_URL = "https://github.com/marcosfilho95/meu-cartaozinho";
+const REPO_URL = "https://github.com/marcosfilho95/meu-Cartãozinho";
 
 interface AppFooterProps {
   useContainer?: boolean;
@@ -36,10 +36,11 @@ export const AppFooter: React.FC<AppFooterProps> = ({ useContainer = true, class
             rel="noopener noreferrer"
             className="font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           >
-            Repositorio no GitHub
+            Repositório no GitHub
           </a>
         </p>
       </div>
     </footer>
   );
 };
+

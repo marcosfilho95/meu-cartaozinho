@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
@@ -16,8 +16,8 @@ const STEPS: TourStep[] = [
   {
     id: "welcome",
     route: "/",
-    title: "Bem-vindo ao Meu Cartaozinho",
-    description: "Este guia rapido mostra as principais funcoes. Leva menos de 1 minuto.",
+    title: "Bem-vindo ao Meu Cartãozinho",
+    description: "Este guia rápido mostra as principais funções. Leva menos de 1 minuto.",
   },
   {
     id: "theme",
@@ -45,7 +45,7 @@ const STEPS: TourStep[] = [
     route: "/perfil",
     selector: '[data-tour="profile-title"]',
     title: "Tela de perfil",
-    description: "Aqui voce ajusta seus dados e salva com o botao ao final da pagina.",
+    description: "Aqui voce ajusta seus dados e salva com o botao ao final da página.",
   },
   {
     id: "purchases-nav",
@@ -59,7 +59,7 @@ const STEPS: TourStep[] = [
     route: "/compras",
     selector: '[data-tour="purchases-title"]',
     title: "Tela Minhas Compras",
-    description: "Esta pagina lista compras e parcelas para consulta rapida.",
+    description: "Esta página lista compras e parcelas para consulta rápida.",
   },
   {
     id: "dashboard-summary",
@@ -252,3 +252,4 @@ export const FirstLoginTour: React.FC<FirstLoginTourProps> = ({ userId }) => {
     </>
   );
 };
+

@@ -231,6 +231,11 @@
     animation: finance-page-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
+  .finance-page-ready {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
 .finance-page-enter-right {
     animation: finance-page-enter-right 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
@@ -283,8 +288,8 @@
 
 @keyframes finance-page-enter-right {
   0% {
-    opacity: 0.22;
-    transform: translateX(68px) scale(0.975);
+    opacity: 0.72;
+    transform: translateX(44px) scale(0.99);
   }
   100% {
     opacity: 1;
@@ -294,8 +299,8 @@
 
 @keyframes finance-page-enter-left {
   0% {
-    opacity: 0.22;
-    transform: translateX(-68px) scale(0.975);
+    opacity: 0.72;
+    transform: translateX(-44px) scale(0.99);
   }
   100% {
     opacity: 1;

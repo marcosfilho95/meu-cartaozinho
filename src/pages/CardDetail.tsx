@@ -7,11 +7,19 @@ import { InstallmentList } from "@/components/InstallmentList";
 import { BankLogo } from "@/components/BankLogo";
 import { AppHeader } from "@/components/AppHeader";
 import { AppFooter } from "@/components/AppFooter";
-import { formatCurrency, getCurrentMonth, getMonthPaymentStatus, isInstallmentOpen } from "@/lib/installments";
+import {
+  formatCurrency,
+  getCurrentMonth,
+  isInstallmentOpen,
+  getCycleMonthForDueDay,
+  isRefMonthInCycleOrCarry,
+  addMonths,
+} from "@/lib/installments";
 import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
 import { getStoredProfile, setStoredProfile } from "@/lib/profileCache";
 import { getCardDetailCache, setCardDetailCache } from "@/lib/cardDetailCache";
 import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
+import { deleteSyncedFinanceTransactionsByCardIds, deleteSyncedFinanceTransactionsByPurchaseIds } from "@/lib/financeCardSync";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -71,7 +79,8 @@ const CardDetail: React.FC = () => {
   const [userId, setUserId] = useState<string | null>(navState.initialUserId || null);
   const [card, setCard] = useState<Card | null>(navState.initialCard || null);
   const [allCards, setAllCards] = useState<Card[]>(navState.initialCards || []);
-  const [month, setMonth] = useState(searchParams.get("mes") || getCurrentMonth());
+  const requestedMonth = searchParams.get("mes");
+  const [month, setMonth] = useState(requestedMonth || getCurrentMonth());
   const [installments, setInstallments] = useState<any[]>([]);
   const [manualSubgroupNames, setManualSubgroupNames] = useState<string[]>([]);
   const [profile, setProfile] = useState<Profile | null>(navState.initialProfile || null);
@@ -112,6 +121,16 @@ const CardDetail: React.FC = () => {
   }, [userId, cardId, month]);
 
   useEffect(() => {
+    if (!card || requestedMonth) return;
+    const cycleMonth = getCycleMonthForDueDay({
+      baseMonth: getCurrentMonth(),
+      dueDay: card.default_due_day,
+      onlyShiftCurrentMonth: true,
+    });
+    setMonth(cycleMonth);
+  }, [card, requestedMonth]);
+
+  useEffect(() => {
     if (!userId || !cardId) return;
     try {
       const raw = localStorage.getItem(getManualSubgroupsKey(userId, cardId));
@@ -132,6 +151,7 @@ const CardDetail: React.FC = () => {
       ? supabase.from("profiles").select("name").eq("user_id", userId).maybeSingle()
       : supabase.from("profiles").select("name, avatar_id").eq("user_id", userId).maybeSingle();
 
+    const queryUpperBound = addMonths(month, 1);
     const [{ data: cardData }, { data: cardsData }, instResult, profileResult] = await Promise.all([
       supabase.from("cards").select("id, name, brand, default_due_day").eq("id", cardId).single(),
       supabase.from("cards").select("id, name, brand, default_due_day").eq("user_id", userId).order("created_at"),
@@ -139,15 +159,22 @@ const CardDetail: React.FC = () => {
         .from("installments")
         .select("id, installment_number, installments_count, due_day, amount, status, ref_month, purchase_id, purchases(id, description, person)")
         .eq("card_id", cardId)
-        .or(`ref_month.eq.${month},ref_month.lt.${month}`)
+        .lte("ref_month", queryUpperBound)
         .order("due_day")
         .order("installment_number"),
       profilePromise,
     ]);
 
     const rawInstData: any[] = instResult.data || [];
+    const fallbackCardDueDay = navState.initialCard?.default_due_day || null;
+    const effectiveCardDueDay = (cardData as Card | null)?.default_due_day ?? fallbackCardDueDay;
+    const cycleMonth = getCycleMonthForDueDay({
+      baseMonth: month,
+      dueDay: effectiveCardDueDay,
+      onlyShiftCurrentMonth: true,
+    });
     const instData = rawInstData.filter(
-      (inst) => inst.ref_month === month || (!!inst.ref_month && inst.ref_month < month && isInstallmentOpen(inst.status)),
+      (inst) => isRefMonthInCycleOrCarry(inst.ref_month, cycleMonth, inst.status),
     );
     const localAvatar = getStoredAvatarId(userId);
     let profileData: any = profileResult.data || null;
@@ -207,13 +234,13 @@ const CardDetail: React.FC = () => {
     if (!name) return;
     const exists = subgroups.some((s) => s.name.toLowerCase() === name.toLowerCase());
     if (exists) {
-      toast.error("Este usuario ja existe na lista");
+      toast.error("Este Usuário ja existe na lista");
       return;
     }
     const next = [...manualSubgroupNames, name];
     setManualSubgroupNames(next);
     localStorage.setItem(getManualSubgroupsKey(userId, cardId), JSON.stringify(next));
-    toast.success("Usuario criado");
+    toast.success("Usuário criado");
     setNewSubgroupName("");
   };
 
@@ -229,13 +256,13 @@ const CardDetail: React.FC = () => {
       .eq("card_id", cardId)
       .eq("person", oldName);
     if (error) {
-      toast.error("Erro ao atualizar usuario: " + error.message);
+      toast.error("Erro ao atualizar Usuário: " + error.message);
       return;
     }
     const nextManual = manualSubgroupNames.map((name) => (name === oldName ? newName : name));
     setManualSubgroupNames(nextManual);
     localStorage.setItem(getManualSubgroupsKey(userId, cardId), JSON.stringify(nextManual));
-    toast.success("Usuario atualizado");
+    toast.success("Usuário atualizado");
     setEditingSubgroupId(null);
     setEditingSubgroupName("");
     fetchData();
@@ -243,6 +270,26 @@ const CardDetail: React.FC = () => {
 
   const deleteSubgroup = async (subgroupName: string) => {
     if (!userId || !cardId) return;
+    const { data: purchasesToDelete, error: purchaseListError } = await supabase
+      .from("purchases")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("card_id", cardId)
+      .eq("person", subgroupName);
+    if (purchaseListError) {
+      toast.error("Erro ao preparar exclusão de Usuário: " + purchaseListError.message);
+      return;
+    }
+
+    try {
+      await deleteSyncedFinanceTransactionsByPurchaseIds(
+        userId,
+        (purchasesToDelete || []).map((item) => item.id),
+      );
+    } catch (syncError: any) {
+      console.error("[FinanceSync] Falha ao remover transações sincronizadas do Usuário", syncError);
+    }
+
     const { error } = await supabase
       .from("purchases")
       .delete()
@@ -250,18 +297,23 @@ const CardDetail: React.FC = () => {
       .eq("card_id", cardId)
       .eq("person", subgroupName);
     if (error) {
-      toast.error("Erro ao excluir usuario: " + error.message);
+      toast.error("Erro ao excluir Usuário: " + error.message);
       return;
     }
     const nextManual = manualSubgroupNames.filter((name) => name !== subgroupName);
     setManualSubgroupNames(nextManual);
     localStorage.setItem(getManualSubgroupsKey(userId, cardId), JSON.stringify(nextManual));
-    toast.success("Usuario excluido com todas as compras vinculadas");
+    toast.success("Usuário excluido com todas as compras vinculadas");
     fetchData();
   };
 
   const deleteCard = async () => {
-    if (!cardId) return;
+    if (!cardId || !userId) return;
+    try {
+      await deleteSyncedFinanceTransactionsByCardIds(userId, [cardId]);
+    } catch (syncError: any) {
+      console.error("[FinanceSync] Falha ao remover transações sincronizadas do cartão", syncError);
+    }
     const { error } = await supabase.from("cards").delete().eq("id", cardId);
     if (error) {
       toast.error("Erro ao excluir cartao: " + error.message);
@@ -283,7 +335,7 @@ const CardDetail: React.FC = () => {
   }, [installments]);
   const subgroupTotal = useMemo(() => subgroupChartData.reduce((sum, item) => sum + item.value, 0), [subgroupChartData]);
   const monthStatusUI = useMemo(() => {
-    const status = getMonthPaymentStatus(installments, month);
+    const status = installments.length === 0 ? "empty" : installments.some((inst) => isInstallmentOpen(inst.status)) ? "open" : "paid";
     if (status === "paid") {
       return { label: "Pago", className: "border-success/30 bg-success/10 text-success" };
     }
@@ -371,10 +423,10 @@ const CardDetail: React.FC = () => {
           <section className="order-2 flex h-full flex-col rounded-2xl border border-border/70 bg-card p-4 shadow-card animate-fade-in xl:order-2">
             <div className="mb-3 flex w-full items-center justify-between gap-3">
               <div>
-                <h2 className="font-heading text-lg font-bold text-foreground">Quem usou o cartão ?</h2>
+                <h2 className="font-heading text-lg font-bold text-foreground">Quem usou o cartão?</h2>
                 <p className="text-xs text-muted-foreground">Adicione quem pediu seu cartão emprestado</p>
               </div>
-              <p className="text-xs text-muted-foreground">{subgroups.length} usuario(s)</p>
+              <p className="text-xs text-muted-foreground">{subgroups.length} Usuário(s)</p>
             </div>
 
             <div className="mb-3 flex flex-row items-center gap-2">
@@ -482,7 +534,7 @@ const CardDetail: React.FC = () => {
           </section>
 
           <section className="order-1 h-full rounded-2xl border border-border/70 bg-card p-4 shadow-card animate-fade-in xl:order-1">
-            <h2 className="font-heading text-lg font-bold text-foreground">Divisão de Gastos</h2>
+            <h2 className="font-heading text-lg font-bold text-foreground">Divisão de gastos</h2>
 
             {subgroupChartData.length === 0 ? (
               <p className="mt-2 text-sm text-muted-foreground">Nenhuma conta para este mes.</p>

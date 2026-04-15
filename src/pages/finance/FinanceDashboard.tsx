@@ -1,12 +1,10 @@
-
+﻿
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
@@ -31,8 +29,12 @@ import { GoalsSection } from "@/components/finance/GoalsSection";
 import {
   Area,
   AreaChart,
+  Bar,
   CartesianGrid,
   Cell,
+  ComposedChart,
+  Legend,
+  Line,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -51,15 +53,30 @@ type FinanceTx = {
   type: "income" | "expense" | "transfer";
   status: "pending" | "paid" | "overdue" | "canceled";
   transaction_date: string;
+  due_date?: string | null;
   account_id: string;
   category_id: string | null;
   categories?: { id: string; name: string; color: string | null; parent_id: string | null } | null;
-  accounts?: { id: string; name: string; type: string } | null;
+  accounts?: { id: string; name: string; type: string; due_day?: number | null } | null;
 };
 
 type DistributionItem = { key: string; label: string; value: number; color: string; percentage: number; };
 
 const CATEGORY_COLORS = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#F0B27A", "#BB8FCE", "#AEB6BF", "#82E0AA"];
+const BANK_COLORS: Record<string, string> = {
+  nubank: "#8A05BE",
+  "mercado pago": "#009EE3",
+  mercadopago: "#009EE3",
+  picpay: "#21C25E",
+  itau: "#EC7000",
+  "banco do brasil": "#F7C400",
+  bb: "#F7C400",
+  bradesco: "#CC092F",
+  santander: "#EC0000",
+  caixa: "#005CA8",
+  c6: "#111111",
+  inter: "#FF7A00",
+};
 const PAYMENT_LABELS: Record<string, string> = {
   credit_card: "Cartão de crédito", checking: "Conta corrente", savings: "Poupança", cash: "Dinheiro",
   investment: "Investimento", loan: "Empréstimo", transferencia: "Transferência", other: "Outro",
@@ -70,9 +87,37 @@ const PAYMENT_COLORS: Record<string, string> = {
 };
 
 const monthKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+const addMonthsToKey = (key: string, amount: number) => {
+  const [year, month] = key.split("-").map(Number);
+  const d = new Date(year, (month || 1) - 1 + amount, 1);
+  return monthKey(d);
+};
+const txDueDay = (tx: FinanceTx) => {
+  const fromDueDate = tx.due_date ? Number(String(tx.due_date).slice(8, 10)) : 0;
+  const fromAccount = Number(tx.accounts?.due_day || 0);
+  const resolved = fromDueDate || fromAccount || 31;
+  return Math.max(1, Math.min(31, resolved));
+};
+
+const isExpenseInDynamicCycle = (tx: FinanceTx, currentMonth: string, todayDay: number) => {
+  const month = tx.transaction_date.slice(0, 7);
+  const due = txDueDay(tx);
+  const activeMonth = todayDay > due ? addMonthsToKey(currentMonth, 1) : currentMonth;
+  const carry = month < activeMonth && (tx.status === "pending" || tx.status === "overdue");
+  return month === activeMonth || carry;
+};
+
+const isExpenseInDynamicPreviousCycle = (tx: FinanceTx, currentMonth: string, todayDay: number) => {
+  const month = tx.transaction_date.slice(0, 7);
+  const due = txDueDay(tx);
+  const activeMonth = todayDay > due ? addMonthsToKey(currentMonth, 1) : currentMonth;
+  const previousActiveMonth = addMonthsToKey(activeMonth, -1);
+  const carry = month < previousActiveMonth && (tx.status === "pending" || tx.status === "overdue");
+  return month === previousActiveMonth || carry;
+};
 const startOfMonthString = (date: Date) => `${monthKey(date)}-01`;
-const getLastMonthKeys = (count: number) => {
-  const base = new Date();
+const getLastMonthKeys = (count: number, baseDate: Date = new Date()) => {
+  const base = baseDate;
   const keys: string[] = [];
   for (let i = count - 1; i >= 0; i -= 1) {
     const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
@@ -91,6 +136,31 @@ const getPaymentKey = (tx: FinanceTx) => {
   if (tx.type === "transfer") return "transferencia";
   const accountType = tx.accounts?.type || "other";
   return PAYMENT_LABELS[accountType] ? accountType : "other";
+};
+const normalizeLabel = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const resolveBankCategoryColor = (label: string, fallback: string) => {
+  const normalized = normalizeLabel(label);
+  const direct = BANK_COLORS[normalized];
+  if (direct) return direct;
+  const byContains = Object.entries(BANK_COLORS).find(([key]) => normalized.includes(key));
+  return byContains?.[1] || fallback;
+};
+
+const isGenericCardCategory = (label: string) => {
+  const normalized = normalizeLabel(label);
+  return normalized === "cartao" || normalized === "cartoes";
+};
+
+const isBankCategory = (label: string) => {
+  const normalized = normalizeLabel(label);
+  if (isGenericCardCategory(normalized)) return false;
+  return Object.keys(BANK_COLORS).some((key) => normalized.includes(normalizeLabel(key)));
 };
 
 const SegmentedDistributionBar: React.FC<{ title: string; items: DistributionItem[]; }> = ({ title, items }) => {
@@ -129,6 +199,8 @@ const SegmentedDistributionBar: React.FC<{ title: string; items: DistributionIte
 const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<"simple" | "advanced">("simple");
+  const [showGoalsOnSimple, setShowGoalsOnSimple] = useState(false);
 
   const [accounts, setAccounts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -146,6 +218,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const currentMonth = monthKey(new Date());
   const previousMonth = monthKey(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1));
+  const todayDay = new Date().getDate();
 
   const loadData = async () => {
     setLoading(true);
@@ -165,12 +238,12 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     } catch {}
 
     const [accountsRes, categoriesRes, goalsRes, txRes] = await Promise.all([
-      supabase.from("accounts").select("id, name, type, current_balance, is_active, include_in_net_worth").eq("user_id", userId).eq("is_active", true).order("name"),
+      supabase.from("accounts").select("id, name, type, due_day, current_balance, is_active, include_in_net_worth").eq("user_id", userId).eq("is_active", true).order("name"),
       supabase.from("categories").select("id, name, color, kind, parent_id").eq("user_id", userId).order("name"),
       supabase.from("goals").select("id, name, target_amount, current_amount, is_completed").eq("user_id", userId).order("created_at"),
       supabase
         .from("transactions")
-        .select("id, amount, type, status, transaction_date, account_id, category_id, categories(id, name, color, parent_id), accounts:accounts!transactions_account_id_fkey(id, name, type)")
+        .select("id, amount, type, status, transaction_date, due_date, account_id, category_id, categories(id, name, color, parent_id), accounts:accounts!transactions_account_id_fkey(id, name, type, due_day)")
         .eq("user_id", userId)
         .is("deleted_at", null)
         .gte("transaction_date", startOfMonthString(twelveMonthsAgo))
@@ -196,8 +269,36 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     loadData();
   }, [userId]);
 
-  const parentCategories = useMemo(() => categories.filter((category: any) => category.kind === "expense" && !category.parent_id), [categories]);
-  const subcategories = useMemo(() => (categoryFilter === "all" ? [] : categories.filter((category: any) => category.parent_id === categoryFilter)), [categories, categoryFilter]);
+  useEffect(() => {
+    const onFinanceSync = (event: Event) => {
+      const custom = event as CustomEvent<{ userId?: string }>;
+      if (custom.detail?.userId && custom.detail.userId !== userId) return;
+      loadData();
+    };
+    window.addEventListener("finance-sync-updated", onFinanceSync as EventListener);
+    return () => window.removeEventListener("finance-sync-updated", onFinanceSync as EventListener);
+  }, [loadData, userId]);
+
+  const hasBankExpenseCategories = useMemo(
+    () => categories.some((category: any) => category.kind === "expense" && isBankCategory(String(category.name || ""))),
+    [categories],
+  );
+
+  const parentCategories = useMemo(
+    () => categories.filter((category: any) => category.kind === "expense" && !category.parent_id),
+    [categories],
+  );
+  const subcategories = useMemo(
+    () =>
+      categoryFilter === "all"
+        ? []
+        : categories.filter((category: any) => {
+            if (category.parent_id !== categoryFilter) return false;
+            if (!hasBankExpenseCategories) return true;
+            return !isGenericCardCategory(String(category.name || ""));
+          }),
+    [categories, categoryFilter, hasBankExpenseCategories],
+  );
 
   useEffect(() => {
     if (categoryFilter === "all") { setSubcategoryFilter("all"); return; }
@@ -228,8 +329,19 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     return dimensionalFilteredTx.filter((tx) => keySet.has(tx.transaction_date.slice(0, 7)));
   }, [dimensionalFilteredTx, periodKeys]);
 
-  const currentMonthTx = useMemo(() => dimensionalFilteredTx.filter((tx) => tx.transaction_date.slice(0, 7) === currentMonth), [dimensionalFilteredTx, currentMonth]);
-  const previousMonthTx = useMemo(() => dimensionalFilteredTx.filter((tx) => tx.transaction_date.slice(0, 7) === previousMonth), [dimensionalFilteredTx, previousMonth]);
+  const currentMonthTx = useMemo(() => {
+    return dimensionalFilteredTx.filter((tx) => {
+      if (tx.type === "income") return tx.transaction_date.slice(0, 7) === currentMonth;
+      return isExpenseInDynamicCycle(tx, currentMonth, todayDay);
+    });
+  }, [dimensionalFilteredTx, currentMonth, todayDay]);
+
+  const previousMonthTx = useMemo(() => {
+    return dimensionalFilteredTx.filter((tx) => {
+      if (tx.type === "income") return tx.transaction_date.slice(0, 7) === previousMonth;
+      return isExpenseInDynamicPreviousCycle(tx, currentMonth, todayDay);
+    });
+  }, [dimensionalFilteredTx, previousMonth, currentMonth, todayDay]);
 
   const currentIncome = useMemo(() => currentMonthTx.filter((tx) => tx.type === "income" && tx.status !== "canceled").reduce((sum, tx) => sum + Number(tx.amount), 0), [currentMonthTx]);
   const currentExpense = useMemo(() => currentMonthTx.filter((tx) => tx.type === "expense" && tx.status !== "canceled").reduce((sum, tx) => sum + Number(tx.amount), 0), [currentMonthTx]);
@@ -248,7 +360,20 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     return `${trend === "up" ? "Subiu" : "Caiu"} ${formatCurrency(Math.abs(delta))}`;
   };
 
-  const evolutionKeys = useMemo(() => getLastMonthKeys(chartRange), [chartRange]);
+  const evolutionBaseDate = useMemo(() => {
+    const maxCycleExpenseMonth = currentMonthTx
+      .filter((tx) => tx.type === "expense")
+      .reduce((max, tx) => {
+        const key = tx.transaction_date.slice(0, 7);
+        return key > max ? key : max;
+      }, currentMonth);
+
+    if (maxCycleExpenseMonth <= currentMonth) return new Date();
+    const [y, m] = maxCycleExpenseMonth.split("-").map(Number);
+    return new Date(y, (m || 1) - 1, 1);
+  }, [currentMonthTx, currentMonth]);
+
+  const evolutionKeys = useMemo(() => getLastMonthKeys(chartRange, evolutionBaseDate), [chartRange, evolutionBaseDate]);
   const evolutionData = useMemo(() => {
     const map: Record<string, { income: number; expense: number }> = {};
     evolutionKeys.forEach((key) => { map[key] = { income: 0, expense: 0 }; });
@@ -261,22 +386,24 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     return evolutionKeys.map((key) => ({ key, month: getMonthLabel(key), receitas: map[key].income, despesas: map[key].expense, saldo: map[key].income - map[key].expense }));
   }, [dimensionalFilteredTx, evolutionKeys]);
   const expenseTxCurrent = useMemo(() => currentMonthTx.filter((tx) => tx.type === "expense" && tx.status !== "canceled"), [currentMonthTx]);
+  const expenseTxCurrentForVisual = useMemo(() => expenseTxCurrent, [expenseTxCurrent]);
 
   const categoryDistribution = useMemo(() => {
     const grouped: Record<string, { label: string; value: number; color: string }> = {};
-    expenseTxCurrent.forEach((tx, index) => {
+    expenseTxCurrentForVisual.forEach((tx, index) => {
       const id = tx.category_id || "uncategorized";
       const label = tx.categories?.name || "Sem categoria";
-      const color = tx.categories?.color || CATEGORY_COLORS[index % CATEGORY_COLORS.length];
+      const baseColor = tx.categories?.color || CATEGORY_COLORS[index % CATEGORY_COLORS.length];
+      const color = resolveBankCategoryColor(label, baseColor);
       if (!grouped[id]) grouped[id] = { label, value: 0, color };
       grouped[id].value += Number(tx.amount);
     });
     return buildDistribution(Object.entries(grouped).map(([key, data]) => ({ key, ...data })));
-  }, [expenseTxCurrent]);
+  }, [expenseTxCurrentForVisual]);
 
   const paymentDistribution = useMemo(() => {
     const grouped: Record<string, { label: string; value: number; color: string }> = {};
-    expenseTxCurrent.forEach((tx) => {
+    expenseTxCurrentForVisual.forEach((tx) => {
       const key = getPaymentKey(tx);
       const label = PAYMENT_LABELS[key] || PAYMENT_LABELS.other;
       const color = PAYMENT_COLORS[key] || PAYMENT_COLORS.other;
@@ -284,7 +411,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       grouped[key].value += Number(tx.amount);
     });
     return buildDistribution(Object.entries(grouped).map(([key, data]) => ({ key, ...data })));
-  }, [expenseTxCurrent]);
+  }, [expenseTxCurrentForVisual]);
 
   const categoryRows = useMemo(() => {
     const currentMap: Record<string, number> = {};
@@ -304,10 +431,12 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       const category = categories.find((item: any) => item.id === id);
       const previousValue = previousMap[id] || 0;
       const delta = currentValue - previousValue;
+      const label = category?.name || "Sem categoria";
+      const baseColor = category?.color || CATEGORY_COLORS[index % CATEGORY_COLORS.length];
       return {
         id,
-        label: category?.name || "Sem categoria",
-        color: category?.color || CATEGORY_COLORS[index % CATEGORY_COLORS.length],
+        label,
+        color: resolveBankCategoryColor(label, baseColor),
         currentValue,
         percentage: currentTotal > 0 ? (currentValue / currentTotal) * 100 : 0,
         delta,
@@ -318,6 +447,53 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
 
   const totalNetWorth = useMemo(() => accounts.reduce((sum, account) => sum + (account.include_in_net_worth ? Number(account.current_balance) : 0), 0), [accounts]);
   const paymentOptions = useMemo(() => Array.from(new Set(transactions.map((tx) => getPaymentKey(tx)))), [transactions]);
+
+  const topExpenseCategories = useMemo(() => {
+    const byCategory: Record<string, { label: string; color: string; total: number }> = {};
+    dimensionalFilteredTx.forEach((tx, index) => {
+      const key = tx.transaction_date.slice(0, 7);
+      if (!evolutionKeys.includes(key)) return;
+      if (tx.type !== "expense" || tx.status === "canceled") return;
+      const id = tx.category_id || "uncategorized";
+      const label = tx.categories?.name || "Sem categoria";
+      const baseColor = tx.categories?.color || CATEGORY_COLORS[index % CATEGORY_COLORS.length];
+      const color = resolveBankCategoryColor(label, baseColor);
+      if (!byCategory[id]) byCategory[id] = { label, color, total: 0 };
+      byCategory[id].total += Number(tx.amount);
+    });
+
+    return Object.entries(byCategory)
+      .sort((a, b) => b[1].total - a[1].total)
+      .slice(0, 4)
+      .map(([id, meta]) => ({ id, ...meta }));
+  }, [dimensionalFilteredTx, evolutionKeys]);
+
+  const stackedExpenseData = useMemo(() => {
+    const byMonth: Record<string, any> = {};
+
+    evolutionKeys.forEach((key) => {
+      byMonth[key] = {
+        month: getMonthLabel(key),
+        totalDespesas: 0,
+      };
+      topExpenseCategories.forEach((cat) => {
+        byMonth[key][`cat_${cat.id}`] = 0;
+      });
+    });
+
+    dimensionalFilteredTx.forEach((tx) => {
+      const key = tx.transaction_date.slice(0, 7);
+      if (!byMonth[key]) return;
+      if (tx.type !== "expense" || tx.status === "canceled") return;
+
+      byMonth[key].totalDespesas += Number(tx.amount);
+      const catId = tx.category_id || "uncategorized";
+      const slot = topExpenseCategories.find((cat) => cat.id === catId);
+      if (slot) byMonth[key][`cat_${slot.id}`] += Number(tx.amount);
+    });
+
+    return evolutionKeys.map((key) => byMonth[key]);
+  }, [dimensionalFilteredTx, evolutionKeys, topExpenseCategories]);
 
   // Pending + recent transactions for dashboard
   const pendingTx = useMemo(() => currentMonthTx.filter((tx) => tx.status === "pending" || tx.status === "overdue").sort((a, b) => a.transaction_date.localeCompare(b.transaction_date)), [currentMonthTx]);
@@ -338,16 +514,44 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     }
   };
 
+  const isSimple = viewMode === "simple";
+
   return (
     <>
       <div className="mx-auto max-w-6xl space-y-5 px-4">
         <Card className="border-0 shadow-elevated">
           <CardContent className="space-y-4 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-[11px]">Modo</Badge>
+                <div className="inline-flex rounded-xl border border-border bg-muted/40 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("simple")}
+                    className={cn("rounded-lg px-3 py-1 text-xs font-semibold transition", isSimple ? "bg-primary text-primary-foreground" : "text-muted-foreground")}
+                  >
+                    Simples
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("advanced")}
+                    className={cn("rounded-lg px-3 py-1 text-xs font-semibold transition", !isSimple ? "bg-primary text-primary-foreground" : "text-muted-foreground")}
+                  >
+                    Completo
+                  </button>
+                </div>
+              </div>
+              <span className="text-xs text-muted-foreground">{isSimple ? "Visão direta para uso rápido" : "Visão detalhada com análise completa"}</span>
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="text-[11px]">Filtros</Badge>
               <span className="text-xs text-muted-foreground">{periodFilteredTx.length} transações no período</span>
+              <span className="text-xs text-muted-foreground">
+                Ciclo de fatura por cartão: <span className="font-semibold text-foreground">dinâmico</span>
+              </span>
+              {loading && <span className="text-xs text-muted-foreground">Atualizando...</span>}
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+            <div className={cn("grid grid-cols-2 gap-2 sm:grid-cols-3", isSimple ? "xl:grid-cols-3" : "xl:grid-cols-6")}>
               <div>
                 <Label className="text-[11px] text-muted-foreground">Período</Label>
                 <Select value={String(periodMonths)} onValueChange={(value) => setPeriodMonths(Number(value) as 1 | 3 | 6 | 12)}>
@@ -364,34 +568,38 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
                   <SelectContent><SelectItem value="all">Todas</SelectItem>{accounts.map((account) => (<SelectItem key={account.id} value={account.id}>{account.name}</SelectItem>))}</SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label className="text-[11px] text-muted-foreground">Categoria</Label>
-                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="all">Todas</SelectItem>{parentCategories.map((category: any) => (<SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>))}</SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-[11px] text-muted-foreground">Subcategoria</Label>
-                <Select value={subcategoryFilter} onValueChange={setSubcategoryFilter}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="all">Todas</SelectItem>{subcategories.map((category: any) => (<SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>))}</SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-[11px] text-muted-foreground">Forma de pagamento</Label>
-                <Select value={paymentFilter} onValueChange={setPaymentFilter}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="all">Todas</SelectItem>{paymentOptions.map((option) => (<SelectItem key={option} value={option}>{PAYMENT_LABELS[option] || option}</SelectItem>))}</SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-[11px] text-muted-foreground">Status</Label>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="paid">Pago</SelectItem><SelectItem value="pending">Pendente</SelectItem><SelectItem value="overdue">Atrasado</SelectItem></SelectContent>
-                </Select>
-              </div>
+              {!isSimple && (
+                <>
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground">Categoria</Label>
+                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectItem value="all">Todas</SelectItem>{parentCategories.map((category: any) => (<SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>))}</SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground">Subcategoria</Label>
+                    <Select value={subcategoryFilter} onValueChange={setSubcategoryFilter}>
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectItem value="all">Todas</SelectItem>{subcategories.map((category: any) => (<SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>))}</SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground">Forma de pagamento</Label>
+                    <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectItem value="all">Todas</SelectItem>{paymentOptions.map((option) => (<SelectItem key={option} value={option}>{PAYMENT_LABELS[option] || option}</SelectItem>))}</SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground">Status</Label>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="paid">Pago</SelectItem><SelectItem value="pending">Pendente</SelectItem><SelectItem value="overdue">Atrasado</SelectItem></SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -400,21 +608,22 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
           <Card className="border-0 shadow-card xl:col-span-2"><CardContent className="p-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Saldo do mês</p>
             <p className={cn("mt-1 font-heading text-3xl font-extrabold", monthBalance >= 0 ? "text-success" : "text-destructive")}>{formatCurrency(monthBalance)}</p>
+            <p className="text-xs text-muted-foreground">Receitas - despesas</p>
             <div className="mt-2 inline-flex items-center gap-2 rounded-lg border border-border px-2.5 py-1 text-xs">
               {balanceDelta >= 0 ? <TrendingUp className="h-3.5 w-3.5 text-success" /> : <TrendingDown className="h-3.5 w-3.5 text-destructive" />}
-              <span className="font-semibold">Vs anterior: {trendLabel(monthBalance, previousBalance)}</span>
+              <span className="font-semibold">Vs mês anterior: {trendLabel(monthBalance, previousBalance)}</span>
             </div>
           </CardContent></Card>
           <Card className="border-0 shadow-card"><CardContent className="p-4 text-center"><ArrowUpCircle className="mx-auto h-4.5 w-4.5 text-success" /><p className="mt-1 text-[11px] text-muted-foreground">Receitas</p><p className="text-lg font-bold text-success">{formatCurrency(currentIncome)}</p></CardContent></Card>
           <Card className="border-0 shadow-card"><CardContent className="p-4 text-center"><ArrowDownCircle className="mx-auto h-4.5 w-4.5 text-destructive" /><p className="mt-1 text-[11px] text-muted-foreground">Despesas</p><p className="text-lg font-bold text-destructive">{formatCurrency(currentExpense)}</p></CardContent></Card>
-          <Card className="border-0 shadow-card border-l-2 border-l-success"><CardContent className="p-4 text-center"><p className="text-[11px] text-muted-foreground">✅ Pago</p><p className="text-lg font-bold text-success">{formatCurrency(paidExpense)}</p></CardContent></Card>
-          <Card className="border-0 shadow-card border-l-2 border-l-warning"><CardContent className="p-4 text-center"><p className="text-[11px] text-muted-foreground">⏳ Pendente</p><p className="text-lg font-bold text-warning">{formatCurrency(pendingExpense)}</p></CardContent></Card>
+          <Card className="border-0 shadow-card border-l-2 border-l-success"><CardContent className="p-4 text-center"><p className="text-[11px] text-muted-foreground">Pago</p><p className="text-lg font-bold text-success">{formatCurrency(paidExpense)}</p></CardContent></Card>
+          <Card className="border-0 shadow-card border-l-2 border-l-warning"><CardContent className="p-4 text-center"><p className="text-[11px] text-muted-foreground">Pendente</p><p className="text-lg font-bold text-warning">{formatCurrency(pendingExpense)}</p></CardContent></Card>
         </section>
 
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <Card className="border-0 shadow-card"><CardContent className="space-y-3 p-4">
             <div className="flex items-center justify-between">
-              <h2 className="font-heading text-sm font-bold">Evolução temporal</h2>
+              <h2 className="font-heading text-sm font-bold">Evolução de receitas e despesas</h2>
               <div className="flex gap-1 rounded-lg border border-border p-1">
                 <button type="button" className={cn("rounded-md px-2 py-1 text-xs font-semibold", chartRange === 6 ? "bg-primary text-primary-foreground" : "text-muted-foreground")} onClick={() => setChartRange(6)}>6M</button>
                 <button type="button" className={cn("rounded-md px-2 py-1 text-xs font-semibold", chartRange === 12 ? "bg-primary text-primary-foreground" : "text-muted-foreground")} onClick={() => setChartRange(12)}>12M</button>
@@ -428,9 +637,13 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
               <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
-              <Tooltip formatter={(value: number, name: string) => [formatCurrency(value), name === "receitas" ? "Receitas" : "Despesas"]} contentStyle={{ borderRadius: "12px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} />
+              <Tooltip
+                formatter={(value: number, name: string) => [formatCurrency(value), name === "receitas" ? "Receitas" : name === "despesas" ? "Despesas" : "Saldo"]}
+                contentStyle={{ borderRadius: "12px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }}
+              />
               <Area type="monotone" dataKey="receitas" stroke="hsl(152, 55%, 48%)" fill="url(#incomeGradDashboard)" strokeWidth={2} />
               <Area type="monotone" dataKey="despesas" stroke="hsl(0, 72%, 55%)" fill="url(#expenseGradDashboard)" strokeWidth={2} />
+              <Line type="monotone" dataKey="saldo" stroke="#1E40AF" strokeWidth={2.2} dot={false} strokeDasharray="4 4" />
             </AreaChart></ResponsiveContainer></div>
           </CardContent></Card>
 
@@ -445,8 +658,46 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
           </CardContent></Card>
         </section>
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-           <SegmentedDistributionBar title="Distribuição por categoria" items={categoryDistribution} />
-           <SegmentedDistributionBar title="Distribuição por forma de pagamento" items={paymentDistribution} />
+          <Card className="border-0 shadow-card">
+            <CardContent className="space-y-3 p-4">
+              <h2 className="font-heading text-sm font-bold">Volume de despesas e tendência</h2>
+              {topExpenseCategories.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Sem despesas para montar o gráfico por categoria.</p>
+              ) : (
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={stackedExpenseData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
+                      <Tooltip
+                        formatter={(value: number, name: string) => {
+                          const found = topExpenseCategories.find((cat) => `cat_${cat.id}` === name);
+                          if (found) return [formatCurrency(value), found.label];
+                          return [formatCurrency(value), "Total despesas"];
+                        }}
+                        contentStyle={{ borderRadius: "12px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }}
+                      />
+                      <Legend
+                        formatter={(value) => {
+                          const found = topExpenseCategories.find((cat) => `cat_${cat.id}` === value);
+                          return found ? found.label : "Total despesas";
+                        }}
+                      />
+                      {topExpenseCategories.map((cat) => (
+                        <Bar key={cat.id} dataKey={`cat_${cat.id}`} stackId="expense" fill={cat.color} radius={[2, 2, 0, 0]} />
+                      ))}
+                      <Line type="monotone" dataKey="totalDespesas" stroke="#111827" strokeWidth={2.5} dot={{ r: 3 }} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          <div className="space-y-4">
+            <SegmentedDistributionBar title="Distribuição por categoria" items={categoryDistribution} />
+            {!isSimple && <SegmentedDistributionBar title="Distribuição por forma de pagamento" items={paymentDistribution} />}
+          </div>
         </section>
 
         {/* Pending bills */}
@@ -459,7 +710,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
                 <Badge variant="outline" className="text-[10px] ml-auto">{pendingTx.length}</Badge>
               </div>
               {pendingTx.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-2">🎉 Tudo pago! Nenhuma conta pendente.</p>
+                <p className="text-sm text-muted-foreground py-2">Tudo pago neste mês.</p>
               ) : (
                 <div className="space-y-1.5 max-h-[320px] overflow-y-auto">
                   {pendingTx.map((tx) => (
@@ -536,10 +787,11 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
           </Card>
         </section>
 
+      {!isSimple && (
         <section>
           <Card className="border-0 shadow-card"><CardContent className="space-y-3 p-4">
-             <div className="flex items-center gap-2"><LineChartIcon className="h-4 w-4 text-primary" /><h2 className="font-heading text-sm font-bold">Tabela analítica por categoria</h2></div>
-             {categoryRows.length === 0 ? (<p className="text-sm text-muted-foreground">Sem despesas no mês para compor a tabela.</p>) : (
+            <div className="flex items-center gap-2"><LineChartIcon className="h-4 w-4 text-primary" /><h2 className="font-heading text-sm font-bold">Tabela analítica por categoria</h2></div>
+            {categoryRows.length === 0 ? (<p className="text-sm text-muted-foreground">Sem despesas no mês para compor a tabela.</p>) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[640px] text-sm">
                   <thead><tr className="border-b border-border text-left text-[11px] uppercase tracking-wider text-muted-foreground"><th className="py-2 font-semibold">Categoria</th><th className="py-2 text-right font-semibold">Valor</th><th className="py-2 text-right font-semibold">%</th><th className="py-2 text-right font-semibold">Variação</th><th className="py-2 text-right font-semibold">Tendência</th></tr></thead>
@@ -559,26 +811,45 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
             )}
           </CardContent></Card>
         </section>
+      )}
 
-        <GoalsSection
-          userId={userId}
-          goals={goals}
-          accounts={accounts}
-          totalBalance={totalNetWorth}
-          monthBalance={monthBalance}
-          onReload={loadData}
-        />
+        {isSimple ? (
+          <section className="space-y-3">
+            <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
+              <h2 className="font-heading text-sm font-bold">Metas e reservas</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {showGoalsOnSimple ? "Modo completo de metas aberto abaixo." : "Toque para abrir quando quiser reservar ou retirar valores."}
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowGoalsOnSimple((prev) => !prev)}
+                className="gradient-primary mt-3 inline-flex h-10 items-center rounded-xl border border-primary/30 px-4 py-2 text-xs font-bold text-primary-foreground shadow-md shadow-primary/30 hover:brightness-105"
+              >
+                {showGoalsOnSimple ? "Ocultar metas" : "Abrir metas e reservas"}
+              </button>
+            </div>
+            {showGoalsOnSimple && (
+              <GoalsSection
+                userId={userId}
+                goals={goals}
+                accounts={accounts}
+                totalBalance={totalNetWorth}
+                monthBalance={monthBalance}
+                onReload={loadData}
+              />
+            )}
+          </section>
+        ) : (
+          <GoalsSection
+            userId={userId}
+            goals={goals}
+            accounts={accounts}
+            totalBalance={totalNetWorth}
+            monthBalance={monthBalance}
+            onReload={loadData}
+          />
+        )}
 
-        <section>
-          <div className="flex items-center justify-between">
-            <h2 className="font-heading text-xs font-bold uppercase tracking-wider text-muted-foreground">Acesso rapido</h2>
-            <button onClick={() => navigate("/financas/transacoes")} className="text-xs font-semibold text-primary hover:underline">Ver transacoes</button>
-          </div>
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            <button onClick={() => navigate("/financas/contas")} className="rounded-xl border border-border bg-card px-3 py-3 text-left shadow-card hover:border-primary/35"><p className="text-sm font-semibold">Contas</p><p className="text-xs text-muted-foreground">Gerencie saldos e contas destino</p></button>
-            <button onClick={() => navigate("/financas/categorias")} className="rounded-xl border border-border bg-card px-3 py-3 text-left shadow-card hover:border-primary/35"><p className="text-sm font-semibold">Categorias</p><p className="text-xs text-muted-foreground">Organize grupos e subgrupos de gasto</p></button>
-          </div>
-        </section>
       </div>
     </>
   );

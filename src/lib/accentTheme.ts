@@ -35,7 +35,7 @@ const syncPwaTheme = (theme: AccentTheme) => {
   const manifestPayload = {
     name: "Meu Cartãozinho",
     short_name: "Meu Cartãozinho",
-    description: "Suas parcelas organizadas, mes a mes.",
+    description: "Suas parcelas organizadas, mês a mês.",
     start_url: `${origin}/`,
     scope: `${origin}/`,
     display: "standalone",
@@ -88,3 +88,4 @@ export const toggleAccentTheme = (current: AccentTheme): AccentTheme => {
   applyAccentTheme(next);
   return next;
 };
+

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -20,7 +20,6 @@ import { toast } from "sonner";
 import {
   ArrowDownCircle,
   ArrowUpCircle,
-  Banknote,
   CreditCard,
   Loader2,
   QrCode,
@@ -34,8 +33,6 @@ import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatCurrency } from "@/lib/constants";
 import { BankLogo } from "@/components/BankLogo";
-
-/* ── Types ──────────────────────────────────────── */
 
 type TxType = "income" | "expense";
 type PaymentMethod = "pix" | "boleto" | "credit" | "debit" | "cash";
@@ -65,7 +62,74 @@ const MODE_OPTIONS: { value: TxMode; label: string; icon: React.ReactNode }[] = 
 
 const LAST_PAYMENT_KEY = "finance_last_payment_method";
 
-/* ── Component ──────────────────────────────────── */
+const BANK_OPTIONS = [
+  { brand: "nubank", label: "Nubank" },
+  { brand: "bradesco", label: "Bradesco" },
+  { brand: "bb", label: "Banco do Brasil" },
+  { brand: "c6", label: "C6" },
+  { brand: "inter", label: "Inter" },
+  { brand: "santander", label: "Santander" },
+  { brand: "itau", label: "Itaú" },
+  { brand: "caixa", label: "Caixa" },
+  { brand: "picpay", label: "PicPay" },
+  { brand: "mercadopago", label: "Mercado Pago" },
+] as const;
+
+const BANK_COLORS: Record<string, string> = {
+  nubank: "#8A05BE",
+  "mercado pago": "#009EE3",
+  mercadopago: "#009EE3",
+  picpay: "#21C25E",
+  itau: "#EC7000",
+  "banco do brasil": "#F7C400",
+  bb: "#F7C400",
+  bradesco: "#CC092F",
+  santander: "#EC0000",
+  caixa: "#005CA8",
+  c6: "#111111",
+  inter: "#FF7A00",
+};
+
+const normalize = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const BANK_LABEL_BY_BRAND: Record<string, string> = BANK_OPTIONS.reduce((acc, item) => {
+  acc[normalize(item.brand)] = item.label;
+  return acc;
+}, {} as Record<string, string>);
+
+const isGenericCardCategory = (name?: string | null) => {
+  const n = normalize(String(name || ""));
+  return n === "cartao" || n === "cartoes";
+};
+
+const toDateInput = (date: Date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
+const getNextDueDate = (dueDay: number) => {
+  const safeDay = Math.max(1, Math.min(31, Number(dueDay || 1)));
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const today = now.getDate();
+
+  const maxCurrent = new Date(y, m + 1, 0).getDate();
+  const currentCandidate = new Date(y, m, Math.min(safeDay, maxCurrent));
+  if (today <= safeDay) return toDateInput(currentCandidate);
+
+  const y2 = m === 11 ? y + 1 : y;
+  const m2 = (m + 1) % 12;
+  const maxNext = new Date(y2, m2 + 1, 0).getDate();
+  return toDateInput(new Date(y2, m2, Math.min(safeDay, maxNext)));
+};
 
 export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
   open,
@@ -75,36 +139,46 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
 }) => {
   const queryClient = useQueryClient();
 
-  // Form state
   const [type, setType] = useState<TxType>(defaultType);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
-    () => (localStorage.getItem(LAST_PAYMENT_KEY) as PaymentMethod) || "pix"
+    () => (localStorage.getItem(LAST_PAYMENT_KEY) as PaymentMethod) || "pix",
   );
   const [cardId, setCardId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [mode, setMode] = useState<TxMode>("single");
-  const [installments, setInstallments] = useState("2");
+  const [installments, setInstallments] = useState("1");
   const [recurrenceFreq, setRecurrenceFreq] = useState<RecurrenceFreq>("monthly");
-  const [recurrenceDuration, setRecurrenceDuration] = useState("0"); // 0 = continuous
+  const [recurrenceDuration, setRecurrenceDuration] = useState("0");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
-  const [transactionDate, setTransactionDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [status, setStatus] = useState<"pending" | "paid">("paid");
+  const [transactionDate, setTransactionDate] = useState(() => toDateInput(new Date()));
+  const [status, setStatus] = useState<"pending" | "paid">("pending");
   const [saving, setSaving] = useState(false);
 
-  // Data
   const [accounts, setAccounts] = useState<any[]>([]);
   const [cards, setCards] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
 
-  // Load data on open
   useEffect(() => {
     if (!open) return;
     const load = async () => {
       const [accs, cardsRes, cats] = await Promise.all([
-        supabase.from("accounts").select("id, name, type").eq("user_id", userId).eq("is_active", true).order("name"),
-        supabase.from("cards").select("id, name, brand, color").eq("user_id", userId).order("name"),
-        supabase.from("categories").select("id, name, kind, color, icon").eq("user_id", userId).order("name"),
+        supabase
+          .from("accounts")
+          .select("id, name, type, due_day, current_balance")
+          .eq("user_id", userId)
+          .eq("is_active", true)
+          .order("name"),
+        supabase
+          .from("cards")
+          .select("id, name, brand, color, default_due_day")
+          .eq("user_id", userId)
+          .order("name"),
+        supabase
+          .from("categories")
+          .select("id, name, kind, color, icon, parent_id")
+          .eq("user_id", userId)
+          .order("name"),
       ]);
       setAccounts(accs.data || []);
       setCards(cardsRes.data || []);
@@ -113,30 +187,80 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
     load();
   }, [open, userId]);
 
-  // Reset when type changes
   useEffect(() => {
     setCategoryId("");
     if (type === "income" && mode === "installment") {
       setMode("single");
     }
-  }, [type]);
+  }, [type, mode]);
 
-  // Filter categories by type
   const filteredCategories = useMemo(
-    () => categories.filter((c: any) => c.kind === type),
-    [categories, type]
+    () => categories.filter((c: any) => c.kind === type && !isGenericCardCategory(c.name)),
+    [categories, type],
   );
 
-  // Needs card selection?
   const needsCard = type === "expense" && (paymentMethod === "credit" || paymentMethod === "debit");
 
-  // Auto-resolve account from payment method
+  const cardOptions = useMemo(() => {
+    const real = (cards || []).map((card: any) => ({
+      value: card.id,
+      label: String(card.name || "Cartão"),
+      brand: String(card.brand || ""),
+      defaultDueDay: Number(card.default_due_day || 0) || null,
+      isVirtual: false,
+    }));
+
+    const hasByBrand = new Set(real.map((item) => normalize(item.brand)));
+    const virtual = BANK_OPTIONS.filter((bank) => !hasByBrand.has(normalize(bank.brand))).map((bank) => ({
+      value: `virtual:${bank.brand}`,
+      label: bank.label,
+      brand: bank.brand,
+      defaultDueDay: null,
+      isVirtual: true,
+    }));
+
+    return [...real, ...virtual];
+  }, [cards]);
+
+  const selectedCardMeta = useMemo(() => {
+    return cardOptions.find((item) => item.value === cardId) || null;
+  }, [cardOptions, cardId]);
+
+  const selectedCardCategoryLabel = useMemo(() => {
+    if (!selectedCardMeta) return "";
+    const byBrand = BANK_LABEL_BY_BRAND[normalize(selectedCardMeta.brand || "")];
+    return byBrand || selectedCardMeta.label;
+  }, [selectedCardMeta]);
+
+  useEffect(() => {
+    if (!needsCard || !cardId) return;
+    const dueDay = Number(selectedCardMeta?.defaultDueDay || 0);
+    if (dueDay > 0) setTransactionDate(getNextDueDate(dueDay));
+  }, [needsCard, cardId, selectedCardMeta]);
+
   const resolveAccountId = useCallback((): string | null => {
     if (needsCard) {
-      // Find account matching the card brand/name or first credit_card account
+      if (selectedCardMeta?.label) {
+        const cardName = String(selectedCardMeta.label).toLowerCase();
+        const byName = accounts.find((a: any) => {
+          const accountName = String(a.name || "").toLowerCase();
+          return (
+            accountName === cardName ||
+            accountName.includes(cardName) ||
+            cardName.includes(accountName)
+          );
+        });
+        if (byName?.id) return byName.id;
+      }
+      if (selectedCardMeta?.brand) {
+        const brandKey = normalize(selectedCardMeta.brand);
+        const byInstitution = accounts.find((a: any) => normalize(String(a.institution || "")).includes(brandKey));
+        if (byInstitution?.id) return byInstitution.id;
+      }
       const ccAccount = accounts.find((a: any) => a.type === "credit_card");
       return ccAccount?.id || accounts[0]?.id || null;
     }
+
     const typeMap: Record<string, string> = {
       pix: "checking",
       boleto: "checking",
@@ -145,12 +269,82 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
     const targetType = typeMap[paymentMethod] || "checking";
     const match = accounts.find((a: any) => a.type === targetType);
     return match?.id || accounts[0]?.id || null;
-  }, [accounts, paymentMethod, needsCard]);
+  }, [accounts, paymentMethod, needsCard, selectedCardMeta]);
 
-  // Computed values
   const numAmount = parseFloat(amount.replace(",", ".")) || 0;
-  const installmentCount = Math.max(2, parseInt(installments) || 2);
-  const perInstallment = mode === "installment" && numAmount > 0 ? numAmount / installmentCount : 0;
+  const installmentCount = Math.max(1, parseInt(installments, 10) || 1);
+  const perInstallment = mode === "installment" && numAmount > 0 ? numAmount : 0;
+  const projectedTotal = mode === "installment" && numAmount > 0 ? numAmount * installmentCount : 0;
+
+  const resolveCategoryIdForSave = useCallback(async () => {
+    if (!(type === "expense" && needsCard && selectedCardMeta)) {
+      return categoryId || null;
+    }
+
+    const targetName = selectedCardCategoryLabel || selectedCardMeta.label;
+    const normalizedTarget = normalize(targetName);
+    const expenseCategories = categories.filter((c: any) => c.kind === "expense");
+
+    const existing = expenseCategories.find((cat: any) => normalize(String(cat.name || "")) === normalizedTarget);
+    if (existing?.id) return existing.id as string;
+
+    const cardsParent =
+      expenseCategories.find((cat: any) => !cat.parent_id && normalize(String(cat.name || "")) === "cartoes") ||
+      expenseCategories.find((cat: any) => !cat.parent_id && normalize(String(cat.name || "")) === "cartão");
+
+    let parentId = cardsParent?.id || null;
+    if (!parentId) {
+      const { data: parentInsert, error: parentError } = await supabase
+        .from("categories")
+        .insert({
+          user_id: userId,
+          name: "Cartões",
+          kind: "expense",
+          color: "#6366F1",
+          icon: "credit-card",
+          is_system: true,
+          parent_id: null,
+        })
+        .select("id")
+        .single();
+      if (parentError) throw parentError;
+      parentId = parentInsert.id;
+    }
+
+    const brandColor =
+      BANK_COLORS[normalize(selectedCardMeta.brand || "")] ||
+      BANK_COLORS[normalize(targetName)] ||
+      "#7C3AED";
+
+    const { data: childInsert, error: childError } = await supabase
+      .from("categories")
+      .insert({
+        user_id: userId,
+        name: targetName,
+        kind: "expense",
+        color: brandColor,
+        icon: "credit-card",
+        is_system: true,
+        parent_id: parentId,
+      })
+      .select("id")
+      .single();
+    if (childError) throw childError;
+
+    setCategories((prev) => [
+      ...prev,
+      {
+        id: childInsert.id,
+        name: targetName,
+        kind: "expense",
+        color: brandColor,
+        icon: "credit-card",
+        parent_id: parentId,
+      },
+    ]);
+    setCategoryId(childInsert.id);
+    return childInsert.id as string;
+  }, [type, needsCard, selectedCardMeta, selectedCardCategoryLabel, categoryId, categories, userId]);
 
   const handleSave = async () => {
     if (!numAmount || numAmount <= 0) {
@@ -161,7 +355,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
       toast.error("Informe uma descrição");
       return;
     }
-    if (needsCard && !cardId && cards.length > 0) {
+    if (needsCard && !cardId) {
       toast.error("Selecione um cartão");
       return;
     }
@@ -176,24 +370,24 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
     localStorage.setItem(LAST_PAYMENT_KEY, paymentMethod);
 
     try {
+      const resolvedCategoryId = await resolveCategoryIdForSave();
       if (mode === "installment" && type === "expense") {
-        // Create multiple transactions for installments
         const rows = [];
-        for (let i = 0; i < installmentCount; i++) {
-          const installmentAmount = i === installmentCount - 1
-            ? Math.round((numAmount - Math.floor((numAmount / installmentCount) * 100) / 100 * (installmentCount - 1)) * 100) / 100
-            : Math.floor((numAmount / installmentCount) * 100) / 100;
-          
-          const date = new Date(transactionDate + "T12:00:00");
-          date.setMonth(date.getMonth() + i);
-          
+        for (let i = 0; i < installmentCount; i += 1) {
+          const amountForRow = Math.round(numAmount * 100) / 100;
+
+          const due = new Date(`${transactionDate}T12:00:00`);
+          due.setMonth(due.getMonth() + i);
+          const dueStr = toDateInput(due);
+
           rows.push({
             user_id: userId,
             account_id: accountId,
-            category_id: categoryId || null,
+            category_id: resolvedCategoryId,
             type,
-            amount: installmentAmount,
-            transaction_date: date.toISOString().split("T")[0],
+            amount: amountForRow,
+            transaction_date: dueStr,
+            due_date: dueStr,
             status: i === 0 ? status : "pending",
             source: `${description.trim()} (${i + 1}/${installmentCount})`,
             payment_method: paymentMethod,
@@ -203,7 +397,6 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
         const { error } = await supabase.from("transactions").insert(rows);
         if (error) throw error;
       } else if (mode === "recurrence") {
-        // Create recurrence record + first transaction
         const { error: recError } = await supabase.from("recurrences").insert({
           user_id: userId,
           frequency: recurrenceFreq,
@@ -212,23 +405,24 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
           next_date: transactionDate,
           template_payload: {
             account_id: accountId,
-            category_id: categoryId || null,
+            category_id: resolvedCategoryId,
             type,
             amount: numAmount,
             source: description.trim(),
             payment_method: paymentMethod,
+            due_date: transactionDate,
           },
         });
         if (recError) throw recError;
 
-        // Also create the first occurrence
         const { error: txError } = await supabase.from("transactions").insert({
           user_id: userId,
           account_id: accountId,
-          category_id: categoryId || null,
+          category_id: resolvedCategoryId,
           type,
           amount: numAmount,
           transaction_date: transactionDate,
+          due_date: transactionDate,
           status,
           source: description.trim(),
           payment_method: paymentMethod,
@@ -236,7 +430,6 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
         });
         if (txError) throw txError;
       } else {
-        // Single transaction
         const { error } = await supabase.from("transactions").insert({
           user_id: userId,
           account_id: accountId,
@@ -244,6 +437,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
           type,
           amount: numAmount,
           transaction_date: transactionDate,
+          due_date: transactionDate,
           status,
           source: description.trim(),
           payment_method: paymentMethod,
@@ -252,7 +446,6 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
         if (error) throw error;
       }
 
-      // Update account balance
       const account = accounts.find((a: any) => a.id === accountId);
       if (account && status === "paid") {
         const balanceChange = type === "income" ? numAmount : -numAmount;
@@ -266,8 +459,8 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
         mode === "installment"
           ? `${installmentCount} parcelas registradas!`
           : mode === "recurrence"
-          ? "Transação recorrente criada!"
-          : "Transação registrada!"
+            ? "Transação recorrente criada!"
+            : "Transação registrada!",
       );
 
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
@@ -288,26 +481,25 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
     setCategoryId("");
     setCardId("");
     setMode("single");
-    setInstallments("2");
+    setInstallments("1");
     setRecurrenceDuration("0");
-    setStatus("paid");
-    setTransactionDate(new Date().toISOString().split("T")[0]);
+    setStatus("pending");
+    setTransactionDate(toDateInput(new Date()));
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg rounded-2xl p-0 overflow-hidden">
-        <DialogHeader className="px-5 pt-5 pb-2">
+      <DialogContent className="max-w-lg overflow-hidden rounded-2xl p-0">
+        <DialogHeader className="px-5 pb-2 pt-5">
           <DialogTitle className="font-heading text-lg">Nova transação</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 px-5 pb-5 max-h-[75vh] overflow-y-auto">
-          {/* ── 1. Type toggle ── */}
+        <div className="max-h-[75vh] space-y-4 overflow-y-auto px-5 pb-5">
           <div className="grid grid-cols-2 gap-2">
             <Button
               type="button"
               variant={type === "expense" ? "default" : "outline"}
-              className={cn("gap-2 h-11", type === "expense" && "gradient-primary text-primary-foreground")}
+              className={cn("h-11 gap-2", type === "expense" && "gradient-primary text-primary-foreground")}
               onClick={() => setType("expense")}
             >
               <ArrowDownCircle className="h-4 w-4" /> Despesa
@@ -315,14 +507,13 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
             <Button
               type="button"
               variant={type === "income" ? "default" : "outline"}
-              className={cn("gap-2 h-11", type === "income" && "bg-success text-success-foreground hover:bg-success/90")}
+              className={cn("h-11 gap-2", type === "income" && "bg-success text-success-foreground hover:bg-success/90")}
               onClick={() => setType("income")}
             >
               <ArrowUpCircle className="h-4 w-4" /> Receita
             </Button>
           </div>
 
-          {/* ── 2. Amount ── */}
           <div>
             <Label className="text-xs text-muted-foreground">Valor (R$)</Label>
             <Input
@@ -331,12 +522,11 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
               placeholder="0,00"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="mt-1 h-14 text-2xl font-bold text-center border-2 focus:border-primary"
+              className="mt-1 h-14 border-2 text-center text-2xl font-bold focus:border-primary"
               autoFocus
             />
           </div>
 
-          {/* ── 3. Description ── */}
           <div>
             <Label className="text-xs text-muted-foreground">Descrição</Label>
             <Input
@@ -347,10 +537,9 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
             />
           </div>
 
-          {/* ── 4. Payment method ── */}
           {type === "expense" && (
             <div>
-              <Label className="text-xs text-muted-foreground mb-2 block">Como pagou?</Label>
+              <Label className="mb-2 block text-xs text-muted-foreground">Como vai pagar?</Label>
               <div className="flex flex-wrap gap-1.5">
                 {PAYMENT_METHODS.map((pm) => (
                   <button
@@ -361,7 +550,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
                       "inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-all",
                       paymentMethod === pm.value
                         ? "border-primary bg-primary/10 text-primary shadow-sm"
-                        : "border-border text-muted-foreground hover:border-primary/40"
+                        : "border-border text-muted-foreground hover:border-primary/40",
                     )}
                   >
                     {pm.icon}
@@ -372,63 +561,61 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
             </div>
           )}
 
-          {/* ── 5. Card selection ── */}
           {type === "expense" && needsCard && (
             <div>
-              <Label className="text-xs text-muted-foreground mb-2 block">Qual cartão?</Label>
-              {cards.length === 0 ? (
-                <p className="text-xs text-muted-foreground rounded-lg border border-dashed border-primary/40 bg-primary/5 px-3 py-2">
-                  Nenhum cartão cadastrado. Adicione em Meu Cartãozinho.
-                </p>
-              ) : (
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {cards.map((card: any) => (
-                    <button
-                      key={card.id}
-                      type="button"
-                      onClick={() => setCardId(card.id)}
-                      className={cn(
-                        "flex items-center gap-2 rounded-xl border p-2.5 text-left transition-all",
-                        cardId === card.id
-                          ? "border-primary bg-primary/10 shadow-sm"
-                          : "border-border hover:border-primary/40"
-                      )}
-                    >
-                      <BankLogo brand={card.brand} size={28} />
-                      <span className="truncate text-xs font-medium">{card.name}</span>
-                    </button>
+              <Label className="mb-2 block text-xs text-muted-foreground">Cartão</Label>
+              <Select value={cardId} onValueChange={setCardId}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Selecione o banco/cartão" />
+                </SelectTrigger>
+                <SelectContent className="max-h-64">
+                  {cardOptions.map((card) => (
+                    <SelectItem key={card.value} value={card.value}>
+                      <span className="flex items-center gap-2">
+                        <BankLogo brand={card.brand} size={20} />
+                        <span className="truncate">{card.label}</span>
+                        {card.isVirtual && <span className="text-[10px] text-muted-foreground">• banco</span>}
+                      </span>
+                    </SelectItem>
                   ))}
-                </div>
-              )}
+                </SelectContent>
+              </Select>
             </div>
           )}
 
-          {/* ── 6. Category ── */}
           <div>
             <Label className="text-xs text-muted-foreground">Categoria</Label>
-            <Select value={categoryId} onValueChange={setCategoryId}>
-              <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Selecione uma categoria" />
-              </SelectTrigger>
-              <SelectContent>
-                {filteredCategories.map((cat: any) => (
-                  <SelectItem key={cat.id} value={cat.id}>
-                    <span className="flex items-center gap-2">
-                      <span
-                        className="h-2.5 w-2.5 rounded-full"
-                        style={{ backgroundColor: cat.color || "#ccc" }}
-                      />
-                      {cat.name}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {needsCard ? (
+              selectedCardMeta ? (
+              <div className="mt-1 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2.5 text-sm font-medium text-foreground">
+                {selectedCardCategoryLabel || selectedCardMeta.label} (automática)
+              </div>
+              ) : (
+                <div className="mt-1 rounded-lg border border-warning/35 bg-warning/10 px-3 py-2.5 text-sm text-muted-foreground">
+                  Selecione o banco/cartão para definir a categoria automaticamente.
+                </div>
+              )
+            ) : (
+              <Select value={categoryId} onValueChange={setCategoryId}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Selecione uma categoria" />
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredCategories.map((cat: any) => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      <span className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cat.color || "#ccc" }} />
+                        {cat.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
-          {/* ── 7. Transaction mode ── */}
           <div>
-            <Label className="text-xs text-muted-foreground mb-2 block">
+            <Label className="mb-2 block text-xs text-muted-foreground">
               {type === "income" ? "Tipo de receita" : "Tipo de gasto"}
             </Label>
             <div className={cn("grid gap-1.5", type === "income" ? "grid-cols-2" : "grid-cols-3")}>
@@ -440,27 +627,30 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
                     type="button"
                     onClick={() => setMode(m.value)}
                     className={cn(
-                      "flex flex-col items-center gap-1 rounded-xl border py-2.5 px-2 text-[11px] font-medium transition-all",
+                      "flex flex-col items-center gap-1 rounded-xl border px-2 py-2.5 text-[11px] font-medium transition-all",
                       mode === m.value
                         ? "border-primary bg-primary/10 text-primary shadow-sm"
-                        : "border-border text-muted-foreground hover:border-primary/40"
+                        : "border-border text-muted-foreground hover:border-primary/40",
                     )}
                   >
                     {m.icon}
-                    {m.value === "single" && type === "income" ? "Variável" : m.value === "recurrence" && type === "income" ? "Fixo/Recorrente" : m.label}
+                    {m.value === "single" && type === "income"
+                      ? "Variável"
+                      : m.value === "recurrence" && type === "income"
+                        ? "Fixo/Recorrente"
+                        : m.label}
                   </button>
                 ))}
             </div>
           </div>
 
-          {/* ── 8. Installment details ── */}
           {mode === "installment" && type === "expense" && (
-            <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 space-y-2">
+            <div className="space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
               <div>
                 <Label className="text-xs text-muted-foreground">Número de parcelas</Label>
                 <Input
                   type="number"
-                  min="2"
+                  min="1"
                   max="48"
                   value={installments}
                   onChange={(e) => setInstallments(e.target.value)}
@@ -468,21 +658,22 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
                 />
               </div>
               {numAmount > 0 && (
-                <div className="flex items-center justify-between rounded-lg bg-background/80 px-3 py-2 text-xs">
-                  <span className="text-muted-foreground">
-                    {installmentCount}x de
-                  </span>
-                  <span className="font-bold text-primary">
-                    {formatCurrency(perInstallment)}
-                  </span>
+                <div className="space-y-1 rounded-lg bg-background/80 px-3 py-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">{installmentCount}x de</span>
+                    <span className="font-bold text-primary">{formatCurrency(perInstallment)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Total projetado</span>
+                    <span className="font-semibold text-foreground">{formatCurrency(projectedTotal)}</span>
+                  </div>
                 </div>
               )}
             </div>
           )}
 
-          {/* ── 9. Recurrence details ── */}
           {mode === "recurrence" && (
-            <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 space-y-3">
+            <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-3">
               <div>
                 <Label className="text-xs text-muted-foreground">Frequência</Label>
                 <Select value={recurrenceFreq} onValueChange={(v) => setRecurrenceFreq(v as RecurrenceFreq)}>
@@ -514,36 +705,36 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
             </div>
           )}
 
-          {/* ── 10. Date & Status ── */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs text-muted-foreground">Data</Label>
+              <Label className="text-xs text-muted-foreground">Vencimento</Label>
               <Input
                 type="date"
                 value={transactionDate}
                 onChange={(e) => setTransactionDate(e.target.value)}
                 className="mt-1"
               />
+              <p className="mt-1 text-[10px] text-muted-foreground">Use a data de vencimento da conta/fatura.</p>
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">Status</Label>
+              <Label className="text-xs text-muted-foreground">Situação</Label>
               <Select value={status} onValueChange={(v) => setStatus(v as "pending" | "paid")}>
                 <SelectTrigger className="mt-1">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="paid">Pago</SelectItem>
-                  <SelectItem value="pending">Pendente</SelectItem>
+                  <SelectItem value="pending">Só lançar (pendente)</SelectItem>
+                  <SelectItem value="paid">Já pagou</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="mt-1 text-[10px] text-muted-foreground">Se ainda não foi pago, deixe como pendente.</p>
             </div>
           </div>
 
-          {/* ── Save ── */}
           <Button
             onClick={handleSave}
             disabled={saving}
-            className="w-full h-12 gradient-primary text-primary-foreground font-semibold text-base"
+            className="gradient-primary h-12 w-full text-base font-semibold text-primary-foreground"
           >
             {saving ? (
               <Loader2 className="h-5 w-5 animate-spin" />

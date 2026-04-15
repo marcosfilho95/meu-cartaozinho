@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { AppHeader } from "@/components/AppHeader";
@@ -38,7 +38,7 @@ interface Alert {
 
 const APP_MODULES = [
   {
-    id: "cartaozinho",
+    id: "Cartãozinho",
     title: "Meu Cartãozinho",
     description: "Cartões, faturas e parcelas",
     route: "/cards",
@@ -203,7 +203,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
           <div className="space-y-3">
             {APP_MODULES.map((module) => {
               const Icon = module.icon;
-              const isCardApp = module.id === "cartaozinho";
+              const isCardApp = module.id === "Cartãozinho";
 
               return (
                 <button
@@ -323,3 +323,4 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
 };
 
 export default Home;
+

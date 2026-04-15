@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Lock, Eye, EyeOff, Loader2, CheckCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -62,7 +62,7 @@ const ResetPassword: React.FC = () => {
         <div className="mb-8 text-center">
           <AppLogo size="lg" className="mx-auto mb-4" />
           <h1 className="font-heading text-2xl font-bold text-foreground">Novo PIN</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Escolha um novo PIN de 6 numeros para sua conta</p>
+          <p className="mt-2 text-sm text-muted-foreground">Escolha um novo PIN de 6 números para sua conta</p>
         </div>
 
         <div className="rounded-3xl border border-border/40 bg-card/90 p-6 shadow-elevated backdrop-blur-sm sm:p-8">
@@ -141,3 +141,4 @@ const ResetPassword: React.FC = () => {
 };
 
 export default ResetPassword;
+

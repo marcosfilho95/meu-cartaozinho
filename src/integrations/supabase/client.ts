@@ -10,8 +10,15 @@ const SUPABASE_KEY = SUPABASE_ENV.key ?? "invalid-supabase-key";
 // import { supabase } from "@/integrations/supabase/client";
 
 if (!SUPABASE_ENV.isConfigured) {
-  console.error("[Supabase] Configuração inválida de ambiente.", {
+  console.error("[Supabase] Invalid environment configuration.", {
     issues: SUPABASE_ENV.issues,
+    keyName: SUPABASE_ENV.keyName,
+    url: SUPABASE_ENV.url,
+  });
+} else {
+  console.info("[Supabase] Environment loaded.", {
+    keyName: SUPABASE_ENV.keyName,
+    url: SUPABASE_ENV.url,
   });
 }
 

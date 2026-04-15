@@ -13,25 +13,32 @@ const getFinanceRouteIndex = (pathname: string) => {
 export const useFinanceRouteTransition = () => {
   const location = useLocation();
   const currentIndex = useMemo(() => getFinanceRouteIndex(location.pathname), [location.pathname]);
-  const [transitionClass, setTransitionClass] = useState("finance-page-enter");
+  const [transitionClass, setTransitionClass] = useState("finance-page-ready");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
     const previousRaw = window.sessionStorage.getItem(FINANCE_ROUTE_INDEX_KEY);
     const previousIndex = previousRaw === null ? null : Number(previousRaw);
+    let nextClass = "finance-page-enter";
 
     if (previousIndex === null || Number.isNaN(previousIndex) || previousIndex === currentIndex) {
-      setTransitionClass("finance-page-enter");
+      nextClass = "finance-page-enter";
     } else if (currentIndex > previousIndex) {
-      setTransitionClass("finance-page-enter-right");
+      nextClass = "finance-page-enter-right";
     } else {
-      setTransitionClass("finance-page-enter-left");
+      nextClass = "finance-page-enter-left";
     }
 
+    setTransitionClass(nextClass);
     window.sessionStorage.setItem(FINANCE_ROUTE_INDEX_KEY, String(currentIndex));
+
+    const timer = window.setTimeout(() => {
+      setTransitionClass("finance-page-ready");
+    }, 320);
+
+    return () => window.clearTimeout(timer);
   }, [currentIndex]);
 
   return transitionClass;
 };
-

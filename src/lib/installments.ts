@@ -60,6 +60,29 @@ export function getCurrentMonth(): string {
   return `${y}-${m}`;
 }
 
+export function getCycleMonthForDueDay(params: {
+  baseMonth: string;
+  dueDay?: number | null;
+  today?: Date;
+  onlyShiftCurrentMonth?: boolean;
+}): string {
+  const { baseMonth, dueDay, today = new Date(), onlyShiftCurrentMonth = true } = params;
+  const safeDueDay = Math.max(1, Math.min(31, Number(dueDay || 0) || 31));
+  const todayMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+  if (onlyShiftCurrentMonth && baseMonth !== todayMonth) return baseMonth;
+  return today.getDate() > safeDueDay ? addMonths(baseMonth, 1) : baseMonth;
+}
+
+export function isRefMonthInCycleOrCarry(
+  refMonth: string | null | undefined,
+  cycleMonth: string,
+  status?: string | null,
+): boolean {
+  if (!refMonth) return false;
+  if (refMonth === cycleMonth) return true;
+  return refMonth < cycleMonth && isInstallmentOpen(status);
+}
+
 export function formatCurrency(value: number): string {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",

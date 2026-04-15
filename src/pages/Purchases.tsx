@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { getPurchasesCache, setPurchasesCache } from "@/lib/purchasesCache";
 import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
 import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
+import { deleteSyncedFinanceTransactionsByPurchaseIds } from "@/lib/financeCardSync";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -98,6 +99,13 @@ const Purchases: React.FC<PurchasesProps> = ({ initialUserId }) => {
   }, [fetchPurchases]);
 
   const deletePurchase = async (purchaseId: string) => {
+    if (userId) {
+      try {
+        await deleteSyncedFinanceTransactionsByPurchaseIds(userId, [purchaseId]);
+      } catch (syncError) {
+        console.error("[FinanceSync] Falha ao remover transacoes sincronizadas", syncError);
+      }
+    }
     const { error } = await supabase.from("purchases").delete().eq("id", purchaseId);
     if (error) {
       toast.error("Erro ao excluir: " + error.message);
@@ -124,7 +132,7 @@ const Purchases: React.FC<PurchasesProps> = ({ initialUserId }) => {
         onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
       >
         <p className="mt-3 text-xs font-medium text-primary-foreground/80" data-tour="purchases-title">
-          Historico de compras registradas no Meu Cartaozinho
+          Histórico de compras registradas no Meu Cartãozinho
         </p>
       </AppHeader>
 
@@ -170,7 +178,7 @@ const Purchases: React.FC<PurchasesProps> = ({ initialUserId }) => {
                         <AlertDialogTitle className="font-heading">Excluir compra?</AlertDialogTitle>
                         <AlertDialogDescription>
                           Isso vai excluir "{purchase.description}" e todas as suas {purchase.installments_count} parcela(s).
-                          Essa acao nao pode ser desfeita.
+                          Essa ação não pode ser desfeita.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
@@ -196,3 +204,4 @@ const Purchases: React.FC<PurchasesProps> = ({ initialUserId }) => {
 };
 
 export default Purchases;
+

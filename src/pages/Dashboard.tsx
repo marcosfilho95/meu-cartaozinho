@@ -8,7 +8,15 @@ import { AddCardDialog } from "@/components/AddCardDialog";
 import { AppHeader } from "@/components/AppHeader";
 import { AppFooter } from "@/components/AppFooter";
 import { PurchaseNotificationsPopover } from "@/components/PurchaseNotificationsPopover";
-import { getCurrentMonth, formatCurrency, getMonthPaymentStatus, isInstallmentOpen, MonthPaymentStatus } from "@/lib/installments";
+import {
+  getCurrentMonth,
+  formatCurrency,
+  isInstallmentOpen,
+  MonthPaymentStatus,
+  getCycleMonthForDueDay,
+  isRefMonthInCycleOrCarry,
+  addMonths,
+} from "@/lib/installments";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CreditCard, Plus, ShoppingCart } from "lucide-react";
@@ -121,26 +129,45 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
       ? supabase.from("profiles").select("name").eq("user_id", userId).maybeSingle()
       : supabase.from("profiles").select("name, avatar_id").eq("user_id", userId).maybeSingle();
 
+    const nextMonth = addMonths(month, 1);
     const [{ data: cardsData }, { data: installments }, profileResult] = await Promise.all([
       supabase.from("cards").select("id, name, brand, default_due_day").eq("user_id", userId).order("created_at"),
       supabase
         .from("installments")
         .select("card_id, amount, status, ref_month")
         .eq("user_id", userId)
-        .or(`ref_month.eq.${month},ref_month.lt.${month}`),
+        .lte("ref_month", nextMonth),
       profilePromise,
     ]);
 
+    const resolvedCards = (cardsData as Card[]) || [];
     const rawInstallmentRows = (installments as (MonthInstallmentStatus & { card_id: string; amount: number; status: string })[]) || [];
-    const installmentRows = rawInstallmentRows.filter(
-      (inst) => inst.ref_month === month || (!!inst.ref_month && inst.ref_month < month && isInstallmentOpen(inst.status)),
-    );
-    const resolvedMonthPaymentStatus = getMonthPaymentStatus(installmentRows, month);
-    const overdueCount = installmentRows.filter((inst) => !!inst.ref_month && inst.ref_month < month && isInstallmentOpen(inst.status)).length;
+    const cycleMonthByCardId = new Map<string, string>();
+    resolvedCards.forEach((card) => {
+      cycleMonthByCardId.set(
+        card.id,
+        getCycleMonthForDueDay({
+          baseMonth: month,
+          dueDay: card.default_due_day,
+          onlyShiftCurrentMonth: true,
+        }),
+      );
+    });
+
+    const installmentRows = rawInstallmentRows.filter((inst) => {
+      const cycleMonth = cycleMonthByCardId.get(inst.card_id) || month;
+      return isRefMonthInCycleOrCarry(inst.ref_month, cycleMonth, inst.status);
+    });
+    const resolvedMonthPaymentStatus: MonthPaymentStatus =
+      installmentRows.length === 0 ? "empty" : installmentRows.some((inst) => isInstallmentOpen(inst.status)) ? "open" : "paid";
+    const overdueCount = installmentRows.filter((inst) => {
+      const cycleMonth = cycleMonthByCardId.get(inst.card_id) || month;
+      return !!inst.ref_month && inst.ref_month < cycleMonth && isInstallmentOpen(inst.status);
+    }).length;
     setMonthPaymentStatus(resolvedMonthPaymentStatus);
     setOverdueOpenCount(overdueCount);
 
-    setCards((cardsData as Card[]) || []);
+    setCards(resolvedCards);
     const localAvatar = getStoredAvatarId(userId);
     let profileData: any = profileResult.data;
     if (profileResult.error) {
@@ -165,7 +192,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
       if (isInstallmentOpen(inst.status)) t[inst.card_id].active += 1;
     });
     setDashboardCache(userId, month, {
-      cards: ((cardsData as Card[]) || []).map((card) => ({
+      cards: resolvedCards.map((card) => ({
         id: card.id,
         name: card.name,
         brand: card.brand,
@@ -222,7 +249,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
     }
     if (monthPaymentStatus === "open") {
       return {
-        text: "Cuidado para nao atrasar as parcelas!!!",
+        text: "Cuidado para não atrasar as parcelas!!!",
         className: "border-warning/35 bg-warning/15 text-[hsl(var(--warning-foreground))]",
       };
     }
@@ -412,14 +439,21 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
                 avatarId={profile?.avatar_id}
                 userName={profile?.name}
                 onClick={() =>
-                  navigate(`/cartao/${card.id}?mes=${month}`, {
+                  navigate(
+                    `/cartao/${card.id}?mes=${getCycleMonthForDueDay({
+                      baseMonth: month,
+                      dueDay: card.default_due_day,
+                      onlyShiftCurrentMonth: true,
+                    })}`,
+                    {
                     state: {
                       initialUserId: userId,
                       initialCard: card,
                       initialCards: cards,
                       initialProfile: profile,
                     },
-                  })
+                    },
+                  )
                 }
               />
             ))}
