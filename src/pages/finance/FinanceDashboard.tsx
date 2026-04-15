@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { ensureDefaultAccounts } from "@/lib/financeDefaults";
 import { ensureDefaultCategories } from "@/lib/financeCategoryDefaults";
 import { ensureDefaultGoals } from "@/lib/financeGoalDefaults";
+import { buildCategoryColorMap, isBankCategory, isGenericCardCategory } from "@/lib/categoryColors";
 import {
   AlertCircle,
   ArrowDownCircle,
@@ -63,21 +64,7 @@ type FinanceTx = {
 
 type DistributionItem = { key: string; label: string; value: number; color: string; percentage: number; };
 
-const CATEGORY_COLORS = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#F0B27A", "#BB8FCE", "#AEB6BF", "#82E0AA"];
-const BANK_COLORS: Record<string, string> = {
-  nubank: "#8A05BE",
-  "mercado pago": "#009EE3",
-  mercadopago: "#009EE3",
-  picpay: "#21C25E",
-  itau: "#EC7000",
-  "banco do brasil": "#F7C400",
-  bb: "#F7C400",
-  bradesco: "#CC092F",
-  santander: "#EC0000",
-  caixa: "#005CA8",
-  c6: "#111111",
-  inter: "#FF7A00",
-};
+// Colors are now centralized in @/lib/categoryColors
 const PAYMENT_LABELS: Record<string, string> = {
   credit_card: "Cartão de crédito", checking: "Conta corrente", savings: "Poupança", cash: "Dinheiro",
   investment: "Investimento", loan: "Empréstimo", transferencia: "Transferência", other: "Outro",
@@ -138,31 +125,8 @@ const getPaymentKey = (tx: FinanceTx) => {
   const accountType = tx.accounts?.type || "other";
   return PAYMENT_LABELS[accountType] ? accountType : "other";
 };
-const normalizeLabel = (value: string) =>
-  value
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-
-const resolveBankCategoryColor = (label: string, fallback: string) => {
-  const normalized = normalizeLabel(label);
-  const direct = BANK_COLORS[normalized];
-  if (direct) return direct;
-  const byContains = Object.entries(BANK_COLORS).find(([key]) => normalized.includes(key));
-  return byContains?.[1] || fallback;
-};
-
-const isGenericCardCategory = (label: string) => {
-  const normalized = normalizeLabel(label);
-  return normalized === "cartao" || normalized === "cartoes";
-};
-
-const isBankCategory = (label: string) => {
-  const normalized = normalizeLabel(label);
-  if (isGenericCardCategory(normalized)) return false;
-  return Object.keys(BANK_COLORS).some((key) => normalized.includes(normalizeLabel(key)));
-};
+// normalizeLabel, resolveBankCategoryColor, isGenericCardCategory, isBankCategory
+// are now imported from @/lib/categoryColors
 
 const SegmentedDistributionBar: React.FC<{ title: string; items: DistributionItem[]; }> = ({ title, items }) => {
   const [active, setActive] = useState<string | null>(null);
@@ -395,17 +359,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const expenseTxCurrent = useMemo(() => currentMonthTx.filter((tx) => tx.type === "expense" && tx.status !== "canceled"), [currentMonthTx]);
   const expenseTxCurrentForVisual = useMemo(() => expenseTxCurrent, [expenseTxCurrent]);
 
-  // Build a stable color map: category_id -> resolved color (same everywhere)
-  const categoryColorMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    categories.forEach((cat: any) => {
-      const label = String(cat.name || "");
-      const baseColor = cat.color || "#AEB6BF";
-      map[cat.id] = resolveBankCategoryColor(label, baseColor);
-    });
-    map["uncategorized"] = "#AEB6BF";
-    return map;
-  }, [categories]);
+  const categoryColorMap = useMemo(() => buildCategoryColorMap(categories), [categories]);
 
   const categoryDistribution = useMemo(() => {
     const grouped: Record<string, { label: string; value: number; color: string }> = {};
