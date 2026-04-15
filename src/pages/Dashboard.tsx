@@ -6,6 +6,7 @@ import { MonthNavigator } from "@/components/MonthNavigator";
 import { CardSummary } from "@/components/CardSummary";
 import { AddCardDialog } from "@/components/AddCardDialog";
 import { AccentThemeSwitch } from "@/components/AccentThemeSwitch";
+import { AppHeader } from "@/components/AppHeader";
 import { UserAvatar } from "@/components/UserAvatar";
 import { AppFooter } from "@/components/AppFooter";
 import { getCurrentMonth, formatCurrency, getMonthPaymentStatus, isInstallmentOpen, MonthPaymentStatus } from "@/lib/installments";
