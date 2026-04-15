@@ -186,6 +186,7 @@ export type Database = {
           is_system: boolean
           kind: Database["public"]["Enums"]["category_kind"]
           name: string
+          normalized_name: string | null
           parent_id: string | null
           user_id: string
         }
@@ -197,6 +198,7 @@ export type Database = {
           is_system?: boolean
           kind?: Database["public"]["Enums"]["category_kind"]
           name: string
+          normalized_name?: string | null
           parent_id?: string | null
           user_id: string
         }
@@ -208,6 +210,7 @@ export type Database = {
           is_system?: boolean
           kind?: Database["public"]["Enums"]["category_kind"]
           name?: string
+          normalized_name?: string | null
           parent_id?: string | null
           user_id?: string
         }
