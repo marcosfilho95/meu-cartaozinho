@@ -371,17 +371,17 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   };
 
   const evolutionBaseDate = useMemo(() => {
-    const maxCycleExpenseMonth = currentMonthTx
-      .filter((tx) => tx.type === "expense")
+    const maxMonth = dimensionalFilteredTx
+      .filter((tx) => tx.type === "expense" && tx.status !== "canceled")
       .reduce((max, tx) => {
         const key = tx.transaction_date.slice(0, 7);
         return key > max ? key : max;
       }, currentMonth);
 
-    if (maxCycleExpenseMonth <= currentMonth) return new Date();
-    const [y, m] = maxCycleExpenseMonth.split("-").map(Number);
+    if (maxMonth <= currentMonth) return new Date();
+    const [y, m] = maxMonth.split("-").map(Number);
     return new Date(y, (m || 1) - 1, 1);
-  }, [currentMonthTx, currentMonth]);
+  }, [dimensionalFilteredTx, currentMonth]);
 
   const evolutionKeys = useMemo(() => getLastMonthKeys(chartRange, evolutionBaseDate), [chartRange, evolutionBaseDate]);
   const evolutionData = useMemo(() => {
