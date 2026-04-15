@@ -248,6 +248,8 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
 
   const currentIncome = useMemo(() => currentMonthTx.filter((tx) => tx.type === "income" && tx.status !== "canceled").reduce((sum, tx) => sum + Number(tx.amount), 0), [currentMonthTx]);
   const currentExpense = useMemo(() => currentMonthTx.filter((tx) => tx.type === "expense" && tx.status !== "canceled").reduce((sum, tx) => sum + Number(tx.amount), 0), [currentMonthTx]);
+  const paidExpense = useMemo(() => currentMonthTx.filter((tx) => tx.type === "expense" && tx.status === "paid").reduce((sum, tx) => sum + Number(tx.amount), 0), [currentMonthTx]);
+  const pendingExpense = useMemo(() => currentMonthTx.filter((tx) => tx.type === "expense" && (tx.status === "pending" || tx.status === "overdue")).reduce((sum, tx) => sum + Number(tx.amount), 0), [currentMonthTx]);
   const previousIncome = useMemo(() => previousMonthTx.filter((tx) => tx.type === "income" && tx.status !== "canceled").reduce((sum, tx) => sum + Number(tx.amount), 0), [previousMonthTx]);
   const previousExpense = useMemo(() => previousMonthTx.filter((tx) => tx.type === "expense" && tx.status !== "canceled").reduce((sum, tx) => sum + Number(tx.amount), 0), [previousMonthTx]);
 
