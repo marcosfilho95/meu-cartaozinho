@@ -123,8 +123,7 @@ const SegmentedDistributionBar: React.FC<{ title: string; items: DistributionIte
 };
 const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const navigate = useNavigate();
-  const headerProfile = useUserHeaderProfile(userId);
-  const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
+  const [loading, setLoading] = useState(true);
   const [loading, setLoading] = useState(true);
 
   const [accounts, setAccounts] = useState<any[]>([]);

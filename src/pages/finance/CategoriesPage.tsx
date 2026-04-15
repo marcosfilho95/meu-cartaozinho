@@ -24,8 +24,6 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
   const [editing, setEditing] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("expense");
-  const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
-  const headerProfile = useUserHeaderProfile(userId);
 
   const [name, setName] = useState("");
   const [kind, setKind] = useState<string>("expense");

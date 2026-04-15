@@ -12,7 +12,6 @@ import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { getFinanceTransactionsCache, setFinanceTransactionsCache } from "@/lib/financePageCache";
-import { getFinanceTransactionsCache, setFinanceTransactionsCache } from "@/lib/financePageCache";
 
 interface TransactionsPageProps {
   userId: string;
@@ -23,9 +22,6 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
-  const headerProfile = useUserHeaderProfile(userId);
-
   const cachedTransactions = userId ? getFinanceTransactionsCache<any[]>(userId) || [] : [];
   const { data: transactions = [], isLoading } = useQuery({
     queryKey: ["transactions", userId],

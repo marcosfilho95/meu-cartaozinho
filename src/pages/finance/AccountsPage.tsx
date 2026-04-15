@@ -67,8 +67,6 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<any>(null);
   const [saving, setSaving] = useState(false);
-  const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
-  const headerProfile = useUserHeaderProfile(userId);
 
   const [name, setName] = useState("");
   const [type, setType] = useState<string>("checking");
