@@ -466,6 +466,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
+      window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId } }));
       onOpenChange(false);
       resetForm();
     } catch (err: any) {

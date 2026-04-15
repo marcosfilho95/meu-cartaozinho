@@ -196,6 +196,8 @@ const SegmentedDistributionBar: React.FC<{ title: string; items: DistributionIte
     </Card>
   );
 };
+const DEFAULTS_INIT_KEY = "finance_defaults_initialized";
+
 const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -220,22 +222,9 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const previousMonth = monthKey(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1));
   const todayDay = new Date().getDate();
 
-  const loadData = async () => {
-    setLoading(true);
+  const fetchData = React.useCallback(async () => {
     const now = new Date();
     const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-
-    try {
-      await ensureDefaultAccounts(userId);
-    } catch {
-      // Non-blocking: dashboard still loads even if bootstrap fails.
-    }
-    try {
-      await ensureDefaultCategories(userId);
-    } catch {}
-    try {
-      await ensureDefaultGoals(userId);
-    } catch {}
 
     const [accountsRes, categoriesRes, goalsRes, txRes] = await Promise.all([
       supabase.from("accounts").select("id, name, type, due_day, current_balance, is_active, include_in_net_worth").eq("user_id", userId).eq("is_active", true).order("name"),
@@ -252,7 +241,6 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
 
     if (accountsRes.error || categoriesRes.error || goalsRes.error || txRes.error) {
       toast.error("Falha ao carregar dashboard financeiro.");
-      setLoading(false);
       return;
     }
 
@@ -260,24 +248,42 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     setCategories(categoriesRes.data || []);
     setGoals(goalsRes.data || []);
     setTransactions((txRes.data as FinanceTx[]) || []);
+  }, [userId]);
 
+  const loadData = React.useCallback(async () => {
+    setLoading(true);
+
+    // Run default seeding only once per session
+    const initKey = `${DEFAULTS_INIT_KEY}:${userId}`;
+    if (!sessionStorage.getItem(initKey)) {
+      try {
+        await Promise.all([
+          ensureDefaultAccounts(userId),
+          ensureDefaultCategories(userId),
+          ensureDefaultGoals(userId),
+        ]);
+      } catch {}
+      sessionStorage.setItem(initKey, "1");
+    }
+
+    await fetchData();
     setLoading(false);
-  };
+  }, [userId, fetchData]);
 
   useEffect(() => {
     if (!userId) return;
     loadData();
-  }, [userId]);
+  }, [userId, loadData]);
 
   useEffect(() => {
     const onFinanceSync = (event: Event) => {
       const custom = event as CustomEvent<{ userId?: string }>;
       if (custom.detail?.userId && custom.detail.userId !== userId) return;
-      loadData();
+      fetchData(); // Fast reload: no default seeding
     };
     window.addEventListener("finance-sync-updated", onFinanceSync as EventListener);
     return () => window.removeEventListener("finance-sync-updated", onFinanceSync as EventListener);
-  }, [loadData, userId]);
+  }, [fetchData, userId]);
 
   const hasBankExpenseCategories = useMemo(
     () => categories.some((category: any) => category.kind === "expense" && isBankCategory(String(category.name || ""))),
@@ -506,7 +512,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       const { error } = await supabase.from("transactions").update({ status: newStatus }).eq("id", tx.id);
       if (error) throw error;
       toast.success(newStatus === "paid" ? "✅ Marcado como pago!" : "Voltou para pendente");
-      await loadData();
+      await fetchData();
     } catch (err: any) {
       toast.error("Erro: " + (err?.message || "falha"));
     } finally {
@@ -515,6 +521,26 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   };
 
   const isSimple = viewMode === "simple";
+
+  if (loading && transactions.length === 0) {
+    return (
+      <div className="mx-auto max-w-6xl space-y-5 px-4 animate-pulse">
+        <div className="rounded-2xl bg-card/80 border border-border/30 p-4 space-y-3">
+          <div className="h-5 w-32 rounded-lg bg-muted" />
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {[1,2,3].map(i => <div key={i} className="h-9 rounded-xl bg-muted" />)}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+          {[1,2,3,4,5,6].map(i => <div key={i} className="h-24 rounded-2xl bg-card border border-border/30" />)}
+        </div>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <div className="h-72 rounded-2xl bg-card border border-border/30" />
+          <div className="h-72 rounded-2xl bg-card border border-border/30" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
