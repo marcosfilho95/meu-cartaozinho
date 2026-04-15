@@ -401,7 +401,27 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     }
   };
 
+  // Pending + recent transactions for dashboard
+  const pendingTx = useMemo(() => currentMonthTx.filter((tx) => tx.status === "pending" || tx.status === "overdue").sort((a, b) => a.transaction_date.localeCompare(b.transaction_date)), [currentMonthTx]);
+  const recentTx = useMemo(() => [...currentMonthTx].sort((a, b) => b.transaction_date.localeCompare(a.transaction_date)).slice(0, 8), [currentMonthTx]);
+
+  const handleToggleStatus = async (tx: FinanceTx) => {
+    const newStatus = tx.status === "paid" ? "pending" : "paid";
+    setTogglingId(tx.id);
+    try {
+      const { error } = await supabase.from("transactions").update({ status: newStatus }).eq("id", tx.id);
+      if (error) throw error;
+      toast.success(newStatus === "paid" ? "✅ Marcado como pago!" : "Voltou para pendente");
+      await loadData();
+    } catch (err: any) {
+      toast.error("Erro: " + (err?.message || "falha"));
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   return (
+    <>
       <div className="mx-auto max-w-6xl space-y-5 px-4">
         <Card className="border-0 shadow-elevated">
           <CardContent className="space-y-4 p-4">
