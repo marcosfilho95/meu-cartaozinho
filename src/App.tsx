@@ -72,7 +72,8 @@ const AppRoutes = () => {
   return (
     <>
       <Routes>
-        <Route path="/" element={<Dashboard initialUserId={session?.user?.id} />} />
+        <Route path="/" element={<Home userId={session?.user?.id} />} />
+        <Route path="/cards" element={<Dashboard initialUserId={session?.user?.id} />} />
         <Route path="/cartao/:cardId" element={<CardDetail />} />
         <Route path="/compras" element={<Purchases initialUserId={session?.user?.id} />} />
         <Route path="/perfil" element={<Profile />} />
