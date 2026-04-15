@@ -8,13 +8,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FinanceBottomNav } from "@/components/finance/FinanceBottomNav";
 import { QuickTransactionFab } from "@/components/finance/QuickTransactionFab";
-import { Plus, Pencil, Trash2, Wallet, Building2, PiggyBank, CreditCard, TrendingUp, HandCoins, ArrowLeft, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Wallet, Building2, PiggyBank, CreditCard, TrendingUp, HandCoins, Loader2 } from "lucide-react";
 import { ACCOUNT_TYPE_LABELS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/constants";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { AppHeader } from "@/components/AppHeader";
+import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
+import { getStoredProfile } from "@/lib/profileCache";
+import { getStoredAvatarId } from "@/lib/profileAvatar";
 
 const ICON_MAP: Record<string, React.ElementType> = {
   cash: Wallet, checking: Building2, savings: PiggyBank,
@@ -31,8 +35,9 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<any>(null);
   const [saving, setSaving] = useState(false);
+  const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
+  const [profile, setProfile] = useState<{ name: string; avatar_id: string | null }>({ name: "", avatar_id: null });
 
-  // Form state
   const [name, setName] = useState("");
   const [type, setType] = useState<string>("checking");
   const [scope, setScope] = useState<string>("personal");
@@ -42,6 +47,11 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
   const [dueDay, setDueDay] = useState("");
   const [creditLimit, setCreditLimit] = useState("");
 
+  useEffect(() => {
+    const cached = getStoredProfile(userId);
+    if (cached) setProfile({ name: cached.name, avatar_id: cached.avatar_id ?? getStoredAvatarId(userId) ?? null });
+  }, [userId]);
+
   const loadAccounts = async () => {
     setLoading(true);
     const { data } = await supabase.from("accounts").select("*").eq("user_id", userId).order("name");
@@ -50,6 +60,8 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
   };
 
   useEffect(() => { loadAccounts(); }, [userId]);
+
+  const totalBalance = accounts.reduce((s, a) => s + (a.include_in_net_worth ? Number(a.current_balance) : 0), 0);
 
   const openCreate = () => {
     setEditingAccount(null);
@@ -71,9 +83,7 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
     if (!name.trim()) { toast.error("Informe o nome da conta"); return; }
     setSaving(true);
     const payload: any = {
-      user_id: userId,
-      name: name.trim(),
-      type, scope,
+      user_id: userId, name: name.trim(), type, scope,
       institution: institution.trim() || null,
       initial_balance: parseFloat(initialBalance.replace(",", ".")) || 0,
       closing_day: closingDay ? parseInt(closingDay) : null,
@@ -107,19 +117,28 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border/40">
-        <div className="mx-auto max-w-lg flex items-center gap-3 px-4 py-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/financas")} className="shrink-0">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="font-heading text-lg font-bold flex-1">Contas</h1>
-          <Button size="sm" onClick={openCreate} className="gradient-primary text-primary-foreground gap-1">
+      <AppHeader
+        title="Contas"
+        avatarId={profile.avatar_id}
+        showBack
+        backTo="/financas"
+        accentTheme={accentTheme}
+        onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
+      >
+        <div className="mt-3 flex items-center justify-between">
+          <div>
+            <p className="text-primary-foreground/70 text-xs">Saldo total</p>
+            <p className="text-2xl font-extrabold font-heading text-primary-foreground">
+              {formatCurrency(totalBalance)}
+            </p>
+          </div>
+          <Button size="sm" onClick={openCreate} className="bg-white/20 hover:bg-white/30 text-primary-foreground backdrop-blur-sm gap-1 rounded-xl">
             <Plus className="h-4 w-4" /> Nova
           </Button>
         </div>
-      </div>
+      </AppHeader>
 
-      <div className="mx-auto max-w-lg px-4 py-4 space-y-2">
+      <div className="mx-auto max-w-lg px-4 -mt-4 space-y-2 animate-fade-in">
         {loading ? (
           <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
         ) : accounts.length === 0 ? (
@@ -127,7 +146,7 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
             <CardContent className="p-8 text-center text-muted-foreground">
               <Wallet className="mx-auto h-10 w-10 mb-3 opacity-40" />
               <p className="font-medium">Nenhuma conta ainda</p>
-              <p className="text-sm mt-1">Adicione sua primeira conta para começar a organizar suas finanças.</p>
+              <p className="text-sm mt-1">Adicione sua primeira conta para começar.</p>
               <Button onClick={openCreate} className="mt-4 gradient-primary text-primary-foreground">
                 <Plus className="h-4 w-4 mr-1" /> Criar conta
               </Button>
@@ -137,7 +156,7 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
           accounts.map((acc) => {
             const Icon = ICON_MAP[acc.type] || Wallet;
             return (
-              <Card key={acc.id} className="border-0 shadow-card">
+              <Card key={acc.id} className="border-0 shadow-card transition-all hover:shadow-elevated">
                 <CardContent className="flex items-center gap-3 p-4">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
                     <Icon className="h-5 w-5" />
@@ -152,11 +171,11 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
                   <p className={cn("text-sm font-bold shrink-0", Number(acc.current_balance) >= 0 ? "text-success" : "text-destructive")}>
                     {formatCurrency(Number(acc.current_balance))}
                   </p>
-                  <div className="flex gap-1 shrink-0">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(acc)}>
+                  <div className="flex gap-0.5 shrink-0">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => openEdit(acc)}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(acc.id)}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-destructive" onClick={() => handleDelete(acc.id)}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -167,7 +186,6 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
         )}
       </div>
 
-      {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md rounded-2xl">
           <DialogHeader>
