@@ -138,7 +138,9 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
         </div>
       </AppHeader>
 
-      <div className="mx-auto max-w-lg px-4 -mt-4 space-y-2 animate-fade-in">
+      <FinanceTopNav />
+
+      <div className="mx-auto max-w-lg px-4 space-y-2 animate-fade-in">
         {loading ? (
           <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
         ) : accounts.length === 0 ? (
@@ -251,7 +253,6 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
       </Dialog>
 
       <QuickTransactionFab userId={userId} />
-      <FinanceTopNav />
     </div>
   );
 };

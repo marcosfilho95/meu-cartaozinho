@@ -99,7 +99,9 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
         </div>
       </AppHeader>
 
-      <div className="mx-auto max-w-lg px-4 -mt-4 animate-fade-in">
+      <FinanceTopNav />
+
+      <div className="mx-auto max-w-lg px-4 animate-fade-in">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-2 mb-4 rounded-xl">
             <TabsTrigger value="expense" className="rounded-lg">Despesas</TabsTrigger>
@@ -175,7 +177,6 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
         </DialogContent>
       </Dialog>
 
-      <FinanceTopNav />
     </div>
   );
 };
