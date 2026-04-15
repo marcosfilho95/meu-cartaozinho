@@ -368,17 +368,17 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   };
 
   const evolutionBaseDate = useMemo(() => {
-    const maxMonth = dimensionalFilteredTx
-      .filter((tx) => tx.type === "expense" && tx.status !== "canceled")
+    const maxCycleExpenseMonth = currentMonthTx
+      .filter((tx) => tx.type === "expense")
       .reduce((max, tx) => {
         const key = tx.transaction_date.slice(0, 7);
         return key > max ? key : max;
       }, currentMonth);
 
-    if (maxMonth <= currentMonth) return new Date();
-    const [y, m] = maxMonth.split("-").map(Number);
+    if (maxCycleExpenseMonth <= currentMonth) return new Date();
+    const [y, m] = maxCycleExpenseMonth.split("-").map(Number);
     return new Date(y, (m || 1) - 1, 1);
-  }, [dimensionalFilteredTx, currentMonth]);
+  }, [currentMonthTx, currentMonth]);
 
   const evolutionKeys = useMemo(() => getLastMonthKeys(chartRange, evolutionBaseDate), [chartRange, evolutionBaseDate]);
   const evolutionData = useMemo(() => {
@@ -480,7 +480,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
 
     return Object.entries(byCategory)
       .sort((a, b) => b[1].total - a[1].total)
-      .slice(0, 8)
+      .slice(0, 4)
       .map(([id, meta]) => ({ id, ...meta }));
   }, [dimensionalFilteredTx, evolutionKeys, categoryColorMap]);
 
@@ -750,7 +750,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
                     </div>
                   </div>
                   <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground pt-1">
-                    <span className="text-base leading-none">⚊</span>
+                    <span className="inline-block h-[3px] w-5 rounded-full bg-[#111827]" />
                     <span className="font-medium">Total despesas</span>
                   </div>
                 </>
