@@ -147,7 +147,6 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const [statusFilter, setStatusFilter] = useState("all");
 
   const [togglingId, setTogglingId] = useState<string | null>(null);
-  const [togglingId, setTogglingId] = useState<string | null>(null);
   const currentMonth = monthKey(new Date());
   const previousMonth = monthKey(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1));
 
