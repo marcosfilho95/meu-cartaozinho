@@ -104,8 +104,11 @@ const isExpenseInDynamicCycle = (tx: FinanceTx, currentMonth: string, todayDay: 
   const month = tx.transaction_date.slice(0, 7);
   const due = txDueDay(tx);
   const activeMonth = todayDay > due ? addMonthsToKey(currentMonth, 1) : currentMonth;
+  // Include: exact match, carry-forward from past, or next-month upcoming
+  const nextMonth = addMonthsToKey(activeMonth, 1);
   const carry = month < activeMonth && (tx.status === "pending" || tx.status === "overdue");
-  return month === activeMonth || carry;
+  const upcoming = month === nextMonth;
+  return month === activeMonth || carry || upcoming;
 };
 
 const isExpenseInDynamicPreviousCycle = (tx: FinanceTx, currentMonth: string, todayDay: number) => {
