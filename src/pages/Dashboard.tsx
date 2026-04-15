@@ -363,7 +363,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
                           isAnimationActive
                           animationBegin={120}
                           animationDuration={1550}
-                          animationEasing="cubic-bezier(0.22, 1, 0.36, 1)"
+                          animationEasing="ease-out"
                         >
                           {chartData.map((item, index) => (
                             <Cell

@@ -123,12 +123,12 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
       return;
     }
     const loadSubgroups = async () => {
-      const { data, error } = await supabase
-        .from("card_subgroups")
+      const { data, error } = await (supabase
+        .from("card_subgroups" as any)
         .select("id, card_id, name")
         .eq("user_id", userId)
         .eq("card_id", selectedCardId)
-        .order("created_at");
+        .order("created_at") as any);
       if (error) {
         const message = String(error.message || "");
         const isMissingSubgroupTable =

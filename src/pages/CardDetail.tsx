@@ -499,7 +499,7 @@ const CardDetail: React.FC = () => {
                           isAnimationActive
                           animationBegin={40}
                           animationDuration={600}
-                          animationEasing="cubic-bezier(0.22, 1, 0.36, 1)"
+                          animationEasing="ease-out"
                         >
                         {subgroupChartData.map((item, index) => (
                           <Cell key={item.name} fill={SUBGROUP_CHART_COLORS[index % SUBGROUP_CHART_COLORS.length]} />
