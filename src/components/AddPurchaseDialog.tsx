@@ -176,15 +176,15 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
         toast.error("Informe o nome do subgrupo");
         return;
       }
-      const { data: subgroup, error: subgroupError } = await supabase
-        .from("card_subgroups")
+      const { data: subgroup, error: subgroupError } = await (supabase
+        .from("card_subgroups" as any)
         .insert({
           user_id: userId,
           card_id: data.card_id,
           name: subgroupName,
         })
         .select("id")
-        .single();
+        .single() as any);
       if (subgroupError || !subgroup) {
         toast.error("Erro ao criar subgrupo: " + (subgroupError?.message || "Erro desconhecido"));
         return;
