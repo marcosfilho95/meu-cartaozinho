@@ -50,7 +50,7 @@ const APP_MODULES = [
     title: "Meu Cartãozinho",
     description: "Controle de cartões, faturas e parcelas",
     icon: CreditCard,
-    route: "/",
+    route: "/cards",
     gradient: "from-pink-500/90 to-rose-400/90",
     iconBg: "bg-pink-100 text-pink-600",
   },
