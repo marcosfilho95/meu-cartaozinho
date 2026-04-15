@@ -61,11 +61,10 @@ const getUsernameValidationError = (value: string) => {
   return "";
 };
 
-const sanitizePin = (value: string) => value.replace(/\D/g, "").slice(0, 6);
-
-const getPinValidationError = (value: string) => {
-  if (!value) return "O PIN deve conter 6 números.";
-  if (!/^\d{6}$/.test(value)) return "O PIN deve conter 6 números.";
+const getPasswordValidationError = (value: string) => {
+  if (!value) return "A senha deve ter no mínimo 8 caracteres.";
+  if (value.length < 8) return "A senha deve ter no mínimo 8 caracteres.";
+  if (!/[a-zA-Z]/.test(value) || !/\d/.test(value)) return "A senha deve conter letras e números.";
   return "";
 };
 
@@ -104,7 +103,7 @@ const Auth: React.FC = () => {
   const [authFormsHeight, setAuthFormsHeight] = useState(0);
   const [connectionIssue, setConnectionIssue] = useState("");
 
-  const pinError = useMemo(() => (view !== "forgot" ? getPinValidationError(password) : ""), [password, view]);
+  const passwordError = useMemo(() => (view !== "forgot" ? getPasswordValidationError(password) : ""), [password, view]);
   const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword;
   const passwordsMismatch = confirmPassword.length > 0 && password !== confirmPassword;
   const usernameError = useMemo(() => (view === "signup" ? getUsernameValidationError(username) : ""), [username, view]);
@@ -114,7 +113,7 @@ const Auth: React.FC = () => {
     name.trim().length > 0 &&
     !usernameError &&
     !signupEmailError &&
-    !pinError &&
+    !passwordError &&
     password === confirmPassword;
 
   const resolveLoginEmail = async (identifier: string) => {
@@ -169,7 +168,7 @@ const Auth: React.FC = () => {
       const email = await resolveLoginEmail(loginIdentifier);
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        if (error.message.includes("Invalid login")) throw new Error("PIN inválido.");
+        if (error.message.includes("Invalid login")) throw new Error("Senha inválida.");
         throw error;
       }
 
@@ -247,10 +246,10 @@ const Auth: React.FC = () => {
         redirectTo: `${window.location.origin}/reset-password`,
       });
       if (error) throw error;
-      toast.success("Link enviado para redefinição do PIN");
+      toast.success("Link enviado para redefinição da senha");
       setView("login");
     } catch (err: any) {
-      console.error("[Auth] Reset de PIN falhou", { error: err, forgotIdentifier });
+      console.error("[Auth] Reset de senha falhou", { error: err, forgotIdentifier });
       toast.error(getFriendlyAuthError(err));
     } finally {
       setLoading(false);
@@ -269,7 +268,7 @@ const Auth: React.FC = () => {
     updateHeight();
     const timer = window.setTimeout(updateHeight, 220);
     return () => window.clearTimeout(timer);
-  }, [view, loading, usernameError, signupEmailError, passwordsMismatch, passwordsMatch]);
+  }, [view, loading, usernameError, signupEmailError, passwordsMismatch, passwordsMatch, passwordError]);
 
   React.useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -381,18 +380,16 @@ const Auth: React.FC = () => {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password">PIN (6 dígitos)</Label>
+                  <Label htmlFor="password">Senha</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
                     <Input
                       id="password"
                       type={showPassword ? "text" : "password"}
-                      placeholder="******"
+                      placeholder="Mínimo 8 caracteres"
                       value={password}
-                      onChange={(e) => setPassword(sanitizePin(e.target.value))}
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={6}
+                      onChange={(e) => setPassword(e.target.value)}
+                      maxLength={128}
                       required
                       className={inputClasses}
                     />
@@ -404,11 +401,11 @@ const Auth: React.FC = () => {
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
-                  {pinError && <p className="text-xs text-destructive">{pinError}</p>}
+                  {passwordError && <p className="text-xs text-destructive">{passwordError}</p>}
                 </div>
                 <div className="text-right">
                   <button type="button" onClick={() => setView("forgot")} className="text-xs font-medium text-primary hover:underline">
-                    Esqueci meu PIN
+                    Esqueci minha senha
                   </button>
                 </div>
                 <Button type="submit" className="h-12 w-full rounded-xl gradient-primary text-base font-semibold text-primary-foreground" disabled={loading}>
@@ -478,19 +475,17 @@ const Auth: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="signup-password">PIN (6 dígitos)</Label>
+                  <Label htmlFor="signup-password">Senha</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
                     <Input
                       id="signup-password"
                       type={showPassword ? "text" : "password"}
-                      placeholder="******"
+                      placeholder="Mínimo 8 caracteres"
                       value={password}
-                      onChange={(e) => setPassword(sanitizePin(e.target.value))}
+                      onChange={(e) => setPassword(e.target.value)}
                       required
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={6}
+                      maxLength={128}
                       className={inputClasses}
                     />
                     <button
@@ -501,22 +496,20 @@ const Auth: React.FC = () => {
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
-                  {pinError && <p className="text-xs text-destructive">{pinError}</p>}
+                  {passwordError && <p className="text-xs text-destructive">{passwordError}</p>}
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="confirm-password">Confirmar PIN</Label>
+                  <Label htmlFor="confirm-password">Confirmar senha</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
                     <Input
                       id="confirm-password"
                       type={showConfirmPassword ? "text" : "password"}
-                      placeholder="******"
+                      placeholder="Repita a senha"
                       value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(sanitizePin(e.target.value))}
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={6}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      maxLength={128}
                       required
                       className={`${inputClasses} ${passwordsMatch ? "border-green-400/60" : passwordsMismatch ? "border-destructive/60" : ""}`}
                     />
@@ -528,8 +521,8 @@ const Auth: React.FC = () => {
                       {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
-                  {passwordsMismatch && <p className="text-xs text-destructive">PINs não coincidem.</p>}
-                  {passwordsMatch && <p className="text-xs text-green-600">PIN confirmado</p>}
+                  {passwordsMismatch && <p className="text-xs text-destructive">As senhas não coincidem.</p>}
+                  {passwordsMatch && <p className="text-xs text-green-600">Senha confirmada</p>}
                 </div>
 
                 <Button
@@ -553,7 +546,7 @@ const Auth: React.FC = () => {
           {view === "forgot" && (
             <form onSubmit={handleForgotPassword} className="space-y-5">
               <div>
-                <h2 className="font-heading text-xl font-bold text-foreground">Recuperar PIN</h2>
+                <h2 className="font-heading text-xl font-bold text-foreground">Recuperar senha</h2>
                 <p className="mt-1 text-sm text-muted-foreground">Informe seu e-mail para receber o link de redefinição.</p>
               </div>
               <div className="space-y-2">
