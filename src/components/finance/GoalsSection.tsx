@@ -188,6 +188,14 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
         .eq("id", goalId);
       if (gErr) throw gErr;
 
+      // Restore to primary account
+      if (primaryAccount) {
+        await supabase
+          .from("accounts")
+          .update({ current_balance: Number(primaryAccount.current_balance || 0) + amount })
+          .eq("id", primaryAccount.id);
+      }
+
       await (supabase as any)
         .from("goal_transactions")
         .insert({
@@ -195,7 +203,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
           goal_id: goalId,
           amount,
           type: "withdraw",
-          description: "Retirada manual",
+          description: `Retirada para ${primaryAccount?.name || "conta"}`,
         });
 
       toast.success(`${formatCurrency(amount)} retirado de "${goal.name}".`);
