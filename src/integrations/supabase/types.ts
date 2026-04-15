@@ -539,6 +539,7 @@ export type Database = {
           is_reviewed: boolean
           notes: string | null
           payee_id: string | null
+          payment_method: string | null
           recurrence_id: string | null
           source: string | null
           status: Database["public"]["Enums"]["transaction_status"]
@@ -560,6 +561,7 @@ export type Database = {
           is_reviewed?: boolean
           notes?: string | null
           payee_id?: string | null
+          payment_method?: string | null
           recurrence_id?: string | null
           source?: string | null
           status?: Database["public"]["Enums"]["transaction_status"]
@@ -581,6 +583,7 @@ export type Database = {
           is_reviewed?: boolean
           notes?: string | null
           payee_id?: string | null
+          payment_method?: string | null
           recurrence_id?: string | null
           source?: string | null
           status?: Database["public"]["Enums"]["transaction_status"]
