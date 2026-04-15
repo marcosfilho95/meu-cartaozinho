@@ -151,7 +151,8 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const [destinationGoalId, setDestinationGoalId] = useState("all");
   const [destinationAccountId, setDestinationAccountId] = useState("all");
   const [allocationSaving, setAllocationSaving] = useState(false);
-
+  const [goalDialogOpen, setGoalDialogOpen] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
   const currentMonth = monthKey(new Date());
   const previousMonth = monthKey(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1));
 
