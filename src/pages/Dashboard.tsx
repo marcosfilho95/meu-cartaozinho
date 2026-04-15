@@ -266,71 +266,15 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <header className="gradient-primary px-4 pb-8 pt-6">
-        <div className="container flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-center gap-3">
-            <UserAvatar avatarId={profile?.avatar_id} name={profile?.name} size={52} />
-            <div className="min-w-0">
-              <p className="text-base font-extrabold tracking-tight text-primary-foreground sm:text-lg">
-                {`Olá, ${getFirstName(profile?.name)}`}
-              </p>
-              <h1 className="truncate font-heading text-2xl font-extrabold text-primary-foreground sm:text-3xl">Minhas Faturas</h1>
-            </div>
-          </div>
-          <div className="grid w-full grid-cols-4 items-center gap-2.5 sm:flex sm:w-auto sm:grid-cols-none">
-            <div data-tour="theme-switch">
-              <AccentThemeSwitch
-                compact
-                theme={accentTheme}
-                onToggle={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
-              />
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate("/perfil")}
-              className="h-12 w-full rounded-xl border border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20 sm:h-11 sm:w-11"
-              aria-label="Perfil"
-              title="Perfil"
-              data-tour="profile-button"
-            >
-              <UserCircle2 className="h-6 w-6" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate("/financas")}
-              className="h-12 w-full rounded-xl border border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20 sm:h-11 sm:w-11"
-              aria-label="Finanças"
-              title="Organizador Financeiro"
-            >
-              <Wallet className="h-6 w-6" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate("/compras")}
-              className="h-12 w-full rounded-xl border border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20 sm:h-11 sm:w-11"
-              aria-label="Compras"
-              title="Minhas compras"
-              data-tour="purchases-button"
-            >
-              <ShoppingBag className="h-6 w-6" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleLogout}
-              className="h-12 w-full rounded-xl border border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20 sm:h-11 sm:w-11"
-              aria-label="Sair"
-              title="Sair"
-              data-tour="logout-button"
-            >
-              <LogOut className="h-6 w-6" />
-            </Button>
-          </div>
-        </div>
-      </header>
+      <AppHeader
+        title="Minhas Faturas"
+        subtitle={`Olá, ${getFirstName(profile?.name)}`}
+        avatarId={profile?.avatar_id}
+        showBack
+        backTo="/"
+        accentTheme={accentTheme}
+        onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
+      />
 
       <div className="container -mt-4 flex-1 space-y-6 pb-4">
         <section data-tour="month-summary" className="overflow-hidden rounded-3xl border border-border/60 bg-card p-5 shadow-elevated animate-fade-in">
