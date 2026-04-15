@@ -279,11 +279,11 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     const onFinanceSync = (event: Event) => {
       const custom = event as CustomEvent<{ userId?: string }>;
       if (custom.detail?.userId && custom.detail.userId !== userId) return;
-      loadData();
+      fetchData(); // Fast reload: no default seeding
     };
     window.addEventListener("finance-sync-updated", onFinanceSync as EventListener);
     return () => window.removeEventListener("finance-sync-updated", onFinanceSync as EventListener);
-  }, [loadData, userId]);
+  }, [fetchData, userId]);
 
   const hasBankExpenseCategories = useMemo(
     () => categories.some((category: any) => category.kind === "expense" && isBankCategory(String(category.name || ""))),
