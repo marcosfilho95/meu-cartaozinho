@@ -760,6 +760,18 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
                 <h2 className="font-heading text-sm font-bold">Contas pendentes</h2>
                 <Badge variant="outline" className="text-[10px] ml-auto">{pendingTx.length}</Badge>
               </div>
+              {pendingTx.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={bulkPaying}
+                  onClick={handleBulkPayAll}
+                  className="h-8 gap-1.5 rounded-xl border-success/40 text-xs font-semibold text-success hover:bg-success/10 hover:text-success w-full"
+                >
+                  {bulkPaying ? <Loader2Icon className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                  Confirmar tudo ({formatCurrency(pendingTx.reduce((s, tx) => s + Number(tx.amount), 0))})
+                </Button>
+              )}
               {pendingTx.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-2">Tudo pago neste mês.</p>
               ) : (
