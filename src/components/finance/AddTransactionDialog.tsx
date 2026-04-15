@@ -386,6 +386,13 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
 
     try {
       const resolvedCategoryId = await resolveCategoryIdForSave();
+      // Build source: include bank name for card expenses
+      const bankLabel = needsCard && selectedCardMeta ? (selectedCardCategoryLabel || selectedCardMeta.label) : "";
+      const buildSource = (desc: string, suffix?: string) => {
+        const base = bankLabel ? `${desc} — ${bankLabel}` : desc;
+        return suffix ? `${base} ${suffix}` : base;
+      };
+
       if (mode === "installment" && type === "expense") {
         const rows = [];
         for (let i = 0; i < installmentCount; i += 1) {
@@ -404,7 +411,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
             transaction_date: dueStr,
             due_date: dueStr,
             status: i === 0 ? status : "pending",
-            source: `${description.trim()} (${i + 1}/${installmentCount})`,
+            source: buildSource(description.trim(), `(${i + 1}/${installmentCount})`),
             payment_method: paymentMethod,
             notes: null,
           });
@@ -412,6 +419,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
         const { error } = await supabase.from("transactions").insert(rows);
         if (error) throw error;
       } else if (mode === "recurrence") {
+        const sourceText = buildSource(description.trim());
         const { error: recError } = await supabase.from("recurrences").insert({
           user_id: userId,
           frequency: recurrenceFreq,
@@ -423,7 +431,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
             category_id: resolvedCategoryId,
             type,
             amount: numAmount,
-            source: description.trim(),
+            source: sourceText,
             payment_method: paymentMethod,
             due_date: transactionDate,
           },
@@ -439,7 +447,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
           transaction_date: transactionDate,
           due_date: transactionDate,
           status,
-          source: description.trim(),
+          source: sourceText,
           payment_method: paymentMethod,
           notes: null,
         });
@@ -454,7 +462,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
           transaction_date: transactionDate,
           due_date: transactionDate,
           status,
-          source: description.trim(),
+          source: buildSource(description.trim()),
           payment_method: paymentMethod,
           notes: null,
         });
