@@ -433,7 +433,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
         const { error } = await supabase.from("transactions").insert({
           user_id: userId,
           account_id: accountId,
-          category_id: categoryId || null,
+          category_id: resolvedCategoryId,
           type,
           amount: numAmount,
           transaction_date: transactionDate,
