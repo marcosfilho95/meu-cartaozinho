@@ -146,12 +146,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const [paymentFilter, setPaymentFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const [allocationAmount, setAllocationAmount] = useState("");
-  const [destinationType, setDestinationType] = useState<DestinationType>("free");
-  const [destinationGoalId, setDestinationGoalId] = useState("all");
-  const [destinationAccountId, setDestinationAccountId] = useState("all");
-  const [allocationSaving, setAllocationSaving] = useState(false);
-  const [goalDialogOpen, setGoalDialogOpen] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const currentMonth = monthKey(new Date());
   const previousMonth = monthKey(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1));
