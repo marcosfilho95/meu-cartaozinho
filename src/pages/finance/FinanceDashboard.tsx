@@ -44,7 +44,7 @@ import {
 
 interface FinanceDashboardProps { userId: string; }
 type MonthTrend = "up" | "down" | "stable";
-type DestinationType = "free" | "reserve" | "goal" | "account";
+
 
 type FinanceTx = {
   id: string;
@@ -333,8 +333,6 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   }, [currentMonthTx, previousMonthTx, categories]);
 
   const totalNetWorth = useMemo(() => accounts.reduce((sum, account) => sum + (account.include_in_net_worth ? Number(account.current_balance) : 0), 0), [accounts]);
-  const monthAllocated = useMemo(() => allocations.reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0), [allocations]);
-  const freeSurplus = monthBalance - monthAllocated;
   const paymentOptions = useMemo(() => Array.from(new Set(transactions.map((tx) => getPaymentKey(tx)))), [transactions]);
 
   // Pending + recent transactions for dashboard
