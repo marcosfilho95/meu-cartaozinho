@@ -7,10 +7,14 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FinanceBottomNav } from "@/components/finance/FinanceBottomNav";
-import { Plus, Pencil, Trash2, ArrowLeft, Loader2, FolderOpen } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, FolderOpen } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AppHeader } from "@/components/AppHeader";
+import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
+import { getStoredProfile } from "@/lib/profileCache";
+import { getStoredAvatarId } from "@/lib/profileAvatar";
 
 interface CategoriesPageProps { userId: string; }
 
@@ -22,10 +26,17 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
   const [editing, setEditing] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("expense");
+  const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
+  const [profile, setProfile] = useState<{ name: string; avatar_id: string | null }>({ name: "", avatar_id: null });
 
   const [name, setName] = useState("");
   const [kind, setKind] = useState<string>("expense");
   const [color, setColor] = useState("#E65A8D");
+
+  useEffect(() => {
+    const cached = getStoredProfile(userId);
+    if (cached) setProfile({ name: cached.name, avatar_id: cached.avatar_id ?? getStoredAvatarId(userId) ?? null });
+  }, [userId]);
 
   const load = async () => {
     setLoading(true);
@@ -73,23 +84,26 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border/40">
-        <div className="mx-auto max-w-lg flex items-center gap-3 px-4 py-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/financas")} className="shrink-0">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="font-heading text-lg font-bold flex-1">Categorias</h1>
-          <Button size="sm" onClick={openCreate} className="gradient-primary text-primary-foreground gap-1">
+      <AppHeader
+        title="Categorias"
+        avatarId={profile.avatar_id}
+        showBack
+        backTo="/financas"
+        accentTheme={accentTheme}
+        onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
+      >
+        <div className="mt-3 flex justify-end">
+          <Button size="sm" onClick={openCreate} className="bg-white/20 hover:bg-white/30 text-primary-foreground backdrop-blur-sm gap-1 rounded-xl">
             <Plus className="h-4 w-4" /> Nova
           </Button>
         </div>
-      </div>
+      </AppHeader>
 
-      <div className="mx-auto max-w-lg px-4 py-4">
+      <div className="mx-auto max-w-lg px-4 -mt-4 animate-fade-in">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2 mb-4">
-            <TabsTrigger value="expense">Despesas</TabsTrigger>
-            <TabsTrigger value="income">Receitas</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 mb-4 rounded-xl">
+            <TabsTrigger value="expense" className="rounded-lg">Despesas</TabsTrigger>
+            <TabsTrigger value="income" className="rounded-lg">Receitas</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -105,18 +119,18 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
         ) : (
           <div className="space-y-2">
             {filtered.map((cat) => (
-              <Card key={cat.id} className="border-0 shadow-card">
-                <CardContent className="flex items-center gap-3 p-3">
-                  <div className="h-8 w-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: cat.color + "20" }}>
-                    <div className="h-3 w-3 rounded-full" style={{ backgroundColor: cat.color }} />
+              <Card key={cat.id} className="border-0 shadow-card transition-all hover:shadow-elevated">
+                <CardContent className="flex items-center gap-3 p-3.5">
+                  <div className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: cat.color + "18" }}>
+                    <div className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: cat.color }} />
                   </div>
                   <p className="flex-1 text-sm font-medium">{cat.name}</p>
                   {!cat.is_system && (
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(cat)}>
+                    <div className="flex gap-0.5">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => openEdit(cat)}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(cat.id)}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-destructive" onClick={() => handleDelete(cat.id)}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
