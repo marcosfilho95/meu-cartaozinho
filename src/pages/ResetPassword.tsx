@@ -9,12 +9,7 @@ import { AppLogo } from "@/components/AppLogo";
 import { AppFooter } from "@/components/AppFooter";
 import { toast } from "sonner";
 
-const getPasswordError = (value: string) => {
-  if (!value) return "";
-  if (value.length < 8) return "A senha deve ter no mínimo 8 caracteres.";
-  if (!/[a-zA-Z]/.test(value) || !/\d/.test(value)) return "A senha deve conter letras e números.";
-  return "";
-};
+const sanitizePin = (value: string) => value.replace(/\D/g, "").slice(0, 6);
 
 const ResetPassword: React.FC = () => {
   const [password, setPassword] = useState("");
@@ -24,10 +19,9 @@ const ResetPassword: React.FC = () => {
   const [success, setSuccess] = useState(false);
   const navigate = useNavigate();
 
-  const passwordError = getPasswordError(password);
-  const passwordValid = password.length >= 8 && !passwordError;
+  const pinValid = /^\d{6}$/.test(password);
   const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword;
-  const canSubmit = passwordValid && password === confirmPassword;
+  const canSubmit = pinValid && password === confirmPassword;
 
   const inputClasses =
     "pl-10 pr-10 h-12 rounded-xl border-border/60 bg-card/80 transition-all duration-200 focus:ring-2 focus:ring-primary/30 focus:border-primary focus:shadow-md placeholder:text-muted-foreground/60";
@@ -41,7 +35,7 @@ const ResetPassword: React.FC = () => {
       if (error) throw error;
       await supabase.auth.signOut();
       setSuccess(true);
-      toast.success("Senha atualizada com sucesso.");
+      toast.success("PIN atualizado com sucesso.");
       window.setTimeout(() => navigate("/"), 2000);
     } catch (err: any) {
       toast.error(err.message || "Ocorreu um erro");
@@ -55,7 +49,7 @@ const ResetPassword: React.FC = () => {
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-accent/30 to-background p-4">
         <div className="text-center animate-fade-in">
           <CheckCircle className="mx-auto mb-4 h-16 w-16 text-primary" />
-          <h2 className="font-heading text-xl font-bold text-foreground">Senha atualizada!</h2>
+          <h2 className="font-heading text-xl font-bold text-foreground">PIN atualizado!</h2>
           <p className="mt-2 text-sm text-muted-foreground">Redirecionando...</p>
         </div>
       </div>
@@ -67,26 +61,28 @@ const ResetPassword: React.FC = () => {
       <div className="w-full max-w-md animate-fade-in">
         <div className="mb-8 text-center">
           <AppLogo size="lg" className="mx-auto mb-4" />
-          <h1 className="font-heading text-2xl font-bold text-foreground">Nova senha</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Escolha uma nova senha para sua conta (mínimo 8 caracteres, letras e números)</p>
+          <h1 className="font-heading text-2xl font-bold text-foreground">Novo PIN</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Escolha um novo PIN de 6 números para sua conta</p>
         </div>
 
         <div className="rounded-3xl border border-border/40 bg-card/90 p-6 shadow-elevated backdrop-blur-sm sm:p-8">
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="new-password" className="text-sm font-medium">
-                Nova senha
+                Novo PIN
               </Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
                 <Input
                   id="new-password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="Mínimo 8 caracteres"
+                  placeholder="••••••"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => setPassword(sanitizePin(e.target.value))}
                   required
-                  maxLength={128}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
                   className={inputClasses}
                 />
                 <button
@@ -97,27 +93,29 @@ const ResetPassword: React.FC = () => {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-              {passwordError && <p className="text-xs text-destructive">{passwordError}</p>}
+              {!pinValid && password.length > 0 && <p className="text-xs text-destructive">O PIN deve conter 6 números.</p>}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="confirm-new-password" className="text-sm font-medium">
-                Confirmar senha
+                Confirmar PIN
               </Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
                 <Input
                   id="confirm-new-password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="Repita a senha"
+                  placeholder="••••••"
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onChange={(e) => setConfirmPassword(sanitizePin(e.target.value))}
                   required
-                  maxLength={128}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
                   className={inputClasses}
                 />
               </div>
-              {confirmPassword.length > 0 && !passwordsMatch && <p className="text-xs text-destructive">As senhas não coincidem.</p>}
+              {confirmPassword.length > 0 && !passwordsMatch && <p className="text-xs text-destructive">PIN inválido.</p>}
             </div>
 
             <Button
@@ -131,7 +129,7 @@ const ResetPassword: React.FC = () => {
                   Salvando...
                 </span>
               ) : (
-                "Salvar nova senha"
+                "Salvar novo PIN"
               )}
             </Button>
           </form>
