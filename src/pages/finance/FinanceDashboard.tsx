@@ -480,7 +480,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
 
     return Object.entries(byCategory)
       .sort((a, b) => b[1].total - a[1].total)
-      .slice(0, 4)
+      .slice(0, 8)
       .map(([id, meta]) => ({ id, ...meta }));
   }, [dimensionalFilteredTx, evolutionKeys, categoryColorMap]);
 
