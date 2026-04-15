@@ -24,8 +24,6 @@ import {
   LineChart as LineChartIcon,
   Loader2 as Loader2Icon,
   PieChart as PieChartIcon,
-  Plus,
-  Target,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
