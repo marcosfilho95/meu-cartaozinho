@@ -43,8 +43,8 @@ const isMissingUsernameRpc = (error: any) => {
 
 const getEmailValidationError = (value: string) => {
   const email = normalizeEmail(value);
-  if (!email) return "Informe seu email.";
-  if (!BASIC_EMAIL_REGEX.test(email)) return "Email invalido. Exemplo: nome@gmail.com";
+  if (!email) return "Informe seu e-mail.";
+  if (!BASIC_EMAIL_REGEX.test(email)) return "E-mail inválido. Exemplo: nome@gmail.com";
   const domain = email.split("@")[1] || "";
   if (!ALLOWED_EMAIL_DOMAINS.includes(domain)) {
     return "Use um provedor comum (gmail, hotmail, outlook, live, yahoo, icloud, bol ou uol).";
@@ -54,9 +54,9 @@ const getEmailValidationError = (value: string) => {
 
 const getUsernameValidationError = (value: string) => {
   const username = normalizeUsername(value);
-  if (!username) return "Escolha um nome de usuario.";
+  if (!username) return "Escolha um nome de usuário.";
   if (!USERNAME_REGEX.test(username)) {
-    return "Use 3-20 caracteres: letras minusculas, numeros, ponto, underline ou hifen.";
+    return "Use 3–20 caracteres: letras minúsculas, números, ponto, underline ou hífen.";
   }
   return "";
 };
@@ -64,8 +64,8 @@ const getUsernameValidationError = (value: string) => {
 const sanitizePin = (value: string) => value.replace(/\D/g, "").slice(0, 6);
 
 const getPinValidationError = (value: string) => {
-  if (!value) return "O PIN deve conter 6 numeros.";
-  if (!/^\d{6}$/.test(value)) return "O PIN deve conter 6 numeros.";
+  if (!value) return "O PIN deve conter 6 números.";
+  if (!/^\d{6}$/.test(value)) return "O PIN deve conter 6 números.";
   return "";
 };
 
@@ -103,12 +103,12 @@ const Auth: React.FC = () => {
 
   const resolveLoginEmail = async (identifier: string) => {
     const normalized = identifier.trim().toLowerCase();
-    if (!normalized) throw new Error("Informe seu usuario.");
+    if (!normalized) throw new Error("Informe seu usuário.");
     if (normalized.includes("@")) {
-      if (!BASIC_EMAIL_REGEX.test(normalized)) throw new Error("Email invalido. Exemplo: nome@gmail.com");
+      if (!BASIC_EMAIL_REGEX.test(normalized)) throw new Error("E-mail inválido. Exemplo: nome@gmail.com");
       return normalized;
     }
-    if (!USERNAME_REGEX.test(normalized)) throw new Error("Use um usuario valido ou um email valido.");
+    if (!USERNAME_REGEX.test(normalized)) throw new Error("Use um usuário válido ou um e-mail válido.");
 
     const { data, error } = await supabase.rpc("get_login_email_by_username", {
       p_username: normalized,
@@ -116,12 +116,12 @@ const Auth: React.FC = () => {
 
     if (error) {
       if (isMissingUsernameRpc(error)) {
-        throw new Error("Login por usuario nao esta habilitado neste projeto. Entre com e-mail.");
+        throw new Error("Login por usuário não está habilitado neste projeto. Entre com e-mail.");
       }
       throw error;
     }
 
-    if (!data) throw new Error("Usuario nao encontrado.");
+    if (!data) throw new Error("Usuário não encontrado.");
     return data;
   };
 
@@ -131,20 +131,20 @@ const Auth: React.FC = () => {
 
     if (!navigator.onLine) return "Sem internet no dispositivo.";
     if (message.includes("Failed to fetch")) {
-      return "Falha de conexao com o Supabase. Verifique URL/chave e status do projeto.";
+      return "Falha de conexão com o servidor. Verifique URL/chave e status do projeto.";
     }
     if (lower.includes("invalid api key") || lower.includes("apikey") || lower.includes("jwt")) {
-      return "Chave do Supabase invalida para este projeto.";
+      return "Chave do servidor inválida para este projeto.";
     }
     if (lower.includes("email not confirmed")) return "Confirme seu e-mail antes de entrar.";
-    if (lower.includes("invalid login")) return "Credenciais invalidas.";
+    if (lower.includes("invalid login")) return "Credenciais inválidas.";
     return message || "Ocorreu um erro";
   };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isSupabaseConfigured) {
-      toast.error("Supabase nao configurado no .env.");
+      toast.error("Backend não configurado.");
       return;
     }
 
@@ -153,7 +153,7 @@ const Auth: React.FC = () => {
       const email = await resolveLoginEmail(loginIdentifier);
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        if (error.message.includes("Invalid login")) throw new Error("PIN invalido.");
+        if (error.message.includes("Invalid login")) throw new Error("PIN inválido.");
         throw error;
       }
 
@@ -170,7 +170,7 @@ const Auth: React.FC = () => {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isSupabaseConfigured) {
-      toast.error("Supabase nao configurado no .env.");
+      toast.error("Backend não configurado.");
       return;
     }
     if (!canSubmitSignup) return;
@@ -188,10 +188,10 @@ const Auth: React.FC = () => {
 
       if (error) {
         if (error.message.includes("already registered")) {
-          throw new Error("Esse email ja esta em uso. Tente fazer login.");
+          throw new Error("Esse e-mail já está em uso. Tente fazer login.");
         }
         if (error.message.toLowerCase().includes("profiles_username_lower_uniq")) {
-          throw new Error("Esse nome de usuario ja esta em uso.");
+          throw new Error("Esse nome de usuário já está em uso.");
         }
         throw error;
       }
@@ -214,7 +214,7 @@ const Auth: React.FC = () => {
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isSupabaseConfigured) {
-      toast.error("Supabase nao configurado no .env.");
+      toast.error("Backend não configurado.");
       return;
     }
     if (!forgotIdentifier.trim()) return;
@@ -226,7 +226,7 @@ const Auth: React.FC = () => {
         redirectTo: `${window.location.origin}/reset-password`,
       });
       if (error) throw error;
-      toast.success("Link enviado para redefinicao do PIN");
+      toast.success("Link enviado para redefinição do PIN");
       setView("login");
     } catch (err: any) {
       console.error("[Auth] Reset de PIN falhou", { error: err, forgotIdentifier });
@@ -284,14 +284,14 @@ const Auth: React.FC = () => {
       <div className="relative z-10 w-full max-w-md animate-fade-in py-4">
         <div className="mb-8 text-center">
           <AppLogo size="lg" className="mx-auto mb-4" />
-          <h1 className="font-heading text-[2.15rem] font-extrabold tracking-[-0.02em] text-foreground">Meu Cartaozinho</h1>
-          <p className="mt-2 text-[0.95rem] font-semibold tracking-[0.01em] text-muted-foreground/90">Suas parcelas organizadas, mes a mes</p>
+          <h1 className="font-heading text-[2.15rem] font-extrabold tracking-[-0.02em] text-foreground">Meu Cartãozinho</h1>
+          <p className="mt-2 text-[0.95rem] font-semibold tracking-[0.01em] text-muted-foreground/90">Suas parcelas organizadas, mês a mês</p>
         </div>
 
         <div className="rounded-3xl border border-border/40 bg-card/90 p-6 shadow-elevated backdrop-blur-sm sm:p-8">
           {!!connectionIssue && (
             <div className="mb-4 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              <p className="font-semibold">Falha de configuracao/conexao do Supabase</p>
+              <p className="font-semibold">Falha de configuração/conexão do servidor</p>
               <p className="mt-1">{connectionIssue}</p>
             </div>
           )}
@@ -345,13 +345,13 @@ const Auth: React.FC = () => {
                 }`}
               >
                 <div className="space-y-2">
-                  <Label htmlFor="identifier">Usuario</Label>
+                  <Label htmlFor="identifier">Usuário</Label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
                     <Input
                       id="identifier"
                       type="text"
-                      placeholder="Usuario ou e-mail"
+                      placeholder="Usuário ou e-mail"
                       value={loginIdentifier}
                       onChange={(e) => setLoginIdentifier(e.target.value)}
                       required
@@ -360,7 +360,7 @@ const Auth: React.FC = () => {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password">PIN (6 digitos)</Label>
+                  <Label htmlFor="password">PIN (6 dígitos)</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
                     <Input
@@ -420,7 +420,7 @@ const Auth: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="username">Nome de usuario</Label>
+                  <Label htmlFor="username">Nome de usuário</Label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
                     <Input
@@ -457,7 +457,7 @@ const Auth: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="signup-password">PIN (6 digitos)</Label>
+                  <Label htmlFor="signup-password">PIN (6 dígitos)</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
                     <Input
@@ -507,7 +507,7 @@ const Auth: React.FC = () => {
                       {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
-                  {passwordsMismatch && <p className="text-xs text-destructive">PIN invalido.</p>}
+                  {passwordsMismatch && <p className="text-xs text-destructive">PINs não coincidem.</p>}
                   {passwordsMatch && <p className="text-xs text-green-600">PIN confirmado</p>}
                 </div>
 
@@ -533,23 +533,23 @@ const Auth: React.FC = () => {
             <form onSubmit={handleForgotPassword} className="space-y-5">
               <div>
                 <h2 className="font-heading text-xl font-bold text-foreground">Recuperar PIN</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Informe seu email para receber o link de redefinicao.</p>
+                <p className="mt-1 text-sm text-muted-foreground">Informe seu e-mail para receber o link de redefinição.</p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="forgot-identifier">Usuario ou e-mail</Label>
+                <Label htmlFor="forgot-identifier">Usuário ou e-mail</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
                   <Input
                     id="forgot-identifier"
                     type="text"
-                    placeholder="Usuario ou e-mail"
+                    placeholder="Usuário ou e-mail"
                     value={forgotIdentifier}
                     onChange={(e) => setForgotIdentifier(e.target.value)}
                     required
                     className={`${inputClasses} placeholder:text-[0.92rem] sm:placeholder:text-base`}
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">Use o mesmo usuario ou e-mail do login.</p>
+                <p className="text-xs text-muted-foreground">Use o mesmo usuário ou e-mail do login.</p>
               </div>
               <Button type="submit" className="h-12 w-full rounded-xl gradient-primary text-base font-semibold text-primary-foreground" disabled={loading}>
                 {loading ? (
@@ -558,7 +558,7 @@ const Auth: React.FC = () => {
                     Enviando...
                   </span>
                 ) : (
-                  "Enviar link de recuperacao"
+                  "Enviar link de recuperação"
                 )}
               </Button>
               <button type="button" onClick={() => setView("login")} className="w-full text-center text-sm font-medium text-primary hover:underline">
