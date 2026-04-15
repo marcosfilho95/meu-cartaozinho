@@ -466,14 +466,13 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
 
   const topExpenseCategories = useMemo(() => {
     const byCategory: Record<string, { label: string; color: string; total: number }> = {};
-    dimensionalFilteredTx.forEach((tx, index) => {
+    dimensionalFilteredTx.forEach((tx) => {
       const key = tx.transaction_date.slice(0, 7);
       if (!evolutionKeys.includes(key)) return;
       if (tx.type !== "expense" || tx.status === "canceled") return;
       const id = tx.category_id || "uncategorized";
       const label = tx.categories?.name || "Sem categoria";
-      const baseColor = tx.categories?.color || CATEGORY_COLORS[index % CATEGORY_COLORS.length];
-      const color = resolveBankCategoryColor(label, baseColor);
+      const color = categoryColorMap[id] || "#AEB6BF";
       if (!byCategory[id]) byCategory[id] = { label, color, total: 0 };
       byCategory[id].total += Number(tx.amount);
     });
@@ -482,7 +481,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       .sort((a, b) => b[1].total - a[1].total)
       .slice(0, 4)
       .map(([id, meta]) => ({ id, ...meta }));
-  }, [dimensionalFilteredTx, evolutionKeys]);
+  }, [dimensionalFilteredTx, evolutionKeys, categoryColorMap]);
 
   const stackedExpenseData = useMemo(() => {
     const byMonth: Record<string, any> = {};
