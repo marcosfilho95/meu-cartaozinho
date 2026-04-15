@@ -190,7 +190,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
           ))
         )}
       </div>
-    </FinanceLayout>
+    </>
   );
 };
 

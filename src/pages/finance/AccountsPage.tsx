@@ -189,20 +189,7 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
   };
 
   return (
-    <FinanceLayout
-      userId={userId}
-      headerChildren={
-        <div className="mt-3 flex items-center justify-between">
-          <div>
-            <p className="text-primary-foreground/70 text-xs">Saldo total</p>
-            <p className="text-2xl font-extrabold font-heading text-primary-foreground">{formatCurrency(totalBalance)}</p>
-          </div>
-          <Button size="sm" onClick={openCreate} className="bg-white/20 hover:bg-white/30 text-primary-foreground backdrop-blur-sm gap-1 rounded-xl">
-            <Plus className="h-4 w-4" /> Nova
-          </Button>
-        </div>
-      }
-    >
+    <>
       <div className="mx-auto max-w-5xl px-4 space-y-3">
         {loading && accounts.length === 0 ? (
           <div className="flex justify-center py-12">
@@ -319,7 +306,7 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
           </div>
         </DialogContent>
       </Dialog>
-    </FinanceLayout>
+    </>
   );
 };
 

@@ -117,17 +117,7 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
   const parentOptions = categories.filter((category) => category.kind === kind && !category.parent_id && (!editing || category.id !== editing.id));
 
   return (
-    <FinanceLayout
-      userId={userId}
-      showFab={false}
-      headerChildren={
-        <div className="mt-3 flex justify-end">
-          <Button size="sm" onClick={openCreate} className="bg-white/20 hover:bg-white/30 text-primary-foreground backdrop-blur-sm gap-1 rounded-xl">
-            <Plus className="h-4 w-4" /> Nova
-          </Button>
-        </div>
-      }
-    >
+    <>
       <div className="mx-auto max-w-5xl px-4">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full max-w-md grid-cols-2 mb-4 rounded-xl">
@@ -215,7 +205,7 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
           </div>
         </DialogContent>
       </Dialog>
-    </FinanceLayout>
+    </>
   );
 };
 
