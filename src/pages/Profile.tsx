@@ -37,9 +37,7 @@ const Profile: React.FC = () => {
       }
       const localAvatar = getStoredAvatarId(id);
       const skipAvatarColumn = localStorage.getItem(PROFILE_AVATAR_COLUMN_MISSING_KEY) === "1";
-      const profileQuery = skipAvatarColumn
-        ? supabase.from("profiles").select("name").eq("user_id", id).maybeSingle()
-        : supabase.from("profiles").select("name, avatar_id").eq("user_id", id).maybeSingle();
+      const profileQuery = supabase.from("profiles").select("name, avatar_id").eq("user_id", id).maybeSingle();
       const { data: profile, error } = await profileQuery;
       if (error) {
         if (isMissingAvatarColumnError(error)) {

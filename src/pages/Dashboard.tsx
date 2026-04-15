@@ -11,7 +11,7 @@ import { AppFooter } from "@/components/AppFooter";
 import { getCurrentMonth, formatCurrency, getMonthPaymentStatus, isInstallmentOpen, MonthPaymentStatus } from "@/lib/installments";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CreditCard, LogOut, ShoppingBag, Plus, UserCircle2 } from "lucide-react";
+import { CreditCard, LogOut, ShoppingBag, Plus, UserCircle2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
 import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
@@ -299,6 +299,16 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
             <Button
               variant="ghost"
               size="icon"
+              onClick={() => navigate("/financas")}
+              className="h-12 w-full rounded-xl border border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20 sm:h-11 sm:w-11"
+              aria-label="Finanças"
+              title="Organizador Financeiro"
+            >
+              <Wallet className="h-6 w-6" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => navigate("/compras")}
               className="h-12 w-full rounded-xl border border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20 sm:h-11 sm:w-11"
               aria-label="Compras"
@@ -363,7 +373,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
                           isAnimationActive
                           animationBegin={120}
                           animationDuration={1550}
-                          animationEasing="cubic-bezier(0.22, 1, 0.36, 1)"
+                          animationEasing="ease-out"
                         >
                           {chartData.map((item, index) => (
                             <Cell
