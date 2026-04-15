@@ -12,7 +12,7 @@ import { AppFooter } from "@/components/AppFooter";
 import { getCurrentMonth, formatCurrency, getMonthPaymentStatus, isInstallmentOpen, MonthPaymentStatus } from "@/lib/installments";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CreditCard, LogOut, ShoppingBag, Plus, UserCircle2, Wallet } from "lucide-react";
+import { CreditCard, LogOut, ShoppingBag, Plus, UserCircle2, Wallet, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
 import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
@@ -372,10 +372,18 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
             trigger={
               <Button data-tour="new-card-button" className="gap-2 gradient-primary text-primary-foreground">
                 <Plus className="h-4 w-4" />
-                Novo cartao
+                Novo cartão
               </Button>
             }
           />
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => navigate("/compras")}
+          >
+            <ShoppingCart className="h-4 w-4" />
+            Ver Compras
+          </Button>
         </div>
 
         {loading ? (
