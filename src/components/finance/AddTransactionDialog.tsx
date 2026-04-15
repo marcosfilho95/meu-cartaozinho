@@ -128,7 +128,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
   );
 
   // Needs card selection?
-  const needsCard = paymentMethod === "credit" || paymentMethod === "debit";
+  const needsCard = type === "expense" && (paymentMethod === "credit" || paymentMethod === "debit");
 
   // Auto-resolve account from payment method
   const resolveAccountId = useCallback((): string | null => {
