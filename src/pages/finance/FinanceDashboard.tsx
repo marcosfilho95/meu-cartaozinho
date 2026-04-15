@@ -559,7 +559,6 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
         </section>
       </div>
   );
-  );
 };
 
 export default FinanceDashboard;
