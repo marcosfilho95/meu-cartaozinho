@@ -19,10 +19,12 @@ import {
   ArrowUpCircle,
   LineChart as LineChartIcon,
   PieChart as PieChartIcon,
+  Plus,
   Target,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
+import { AddGoalDialog } from "@/components/finance/AddGoalDialog";
 import {
   Area,
   AreaChart,
