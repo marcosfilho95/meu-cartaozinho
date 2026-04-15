@@ -558,7 +558,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
           </div>
         </section>
       </div>
-    </FinanceLayout>
+  );
   );
 };
 
