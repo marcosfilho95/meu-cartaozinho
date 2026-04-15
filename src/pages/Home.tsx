@@ -14,10 +14,9 @@ import {
   ChevronRight,
   Clock,
   TrendingUp,
-  LayoutGrid,
-  BarChart3,
   Target,
   FileText,
+  BarChart3,
 } from "lucide-react";
 import { getStoredAvatarId } from "@/lib/profileAvatar";
 import { getStoredProfile } from "@/lib/profileCache";
@@ -46,20 +45,18 @@ const APP_MODULES = [
   {
     id: "cartaozinho",
     title: "Meu Cartãozinho",
-    description: "Controle de cartões, faturas e parcelas",
+    description: "Cartões, faturas e parcelas",
     icon: CreditCard,
     route: "/cards",
-    gradient: "from-[hsl(205,75%,58%)] to-[hsl(196,80%,74%)]",
-    iconBg: "bg-blue-100 text-blue-600",
+    gradient: "from-[hsl(215,80%,55%)] to-[hsl(200,85%,60%)]",
   },
   {
     id: "financas",
     title: "Organizador Financeiro",
-    description: "Controle completo de finanças pessoais",
+    description: "Finanças pessoais completas",
     icon: Wallet,
     route: "/financas",
-    gradient: "from-emerald-500/90 to-teal-400/90",
-    iconBg: "bg-emerald-100 text-emerald-600",
+    gradient: "from-[hsl(152,55%,42%)] to-[hsl(168,60%,48%)]",
   },
 ];
 
@@ -129,8 +126,6 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
         const pendingTxs = txs.filter((t: any) => t.status === "pending");
         const pendingCount = pendingTxs.length;
         const pendingAmount = pendingTxs.reduce((s: number, t: any) => s + Number(t.amount), 0);
-
-        // Card installments total
         const cardTotal = installs.reduce((s: number, i: any) => s + Number(i.amount), 0);
 
         setStats({ totalBalance, monthIncome, monthExpense, pendingCount, pendingAmount, cardTotal });
@@ -197,158 +192,136 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
     );
   }
 
+  const netFlow = stats.monthIncome - stats.monthExpense;
+
   return (
     <div className="min-h-screen bg-background pb-8">
       <AppHeader
         title={`${firstName} 👋`}
-        subtitle={`${greeting},`}
+        subtitle={greeting}
         avatarId={profile.avatar_id}
         accentTheme={accentTheme}
         onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
       />
 
-      <div className="mx-auto max-w-lg px-4 -mt-4 space-y-5">
+      <div className="mx-auto max-w-lg px-4 -mt-4 space-y-5 animate-fade-in">
         {/* App Modules */}
-        <section>
-          <div className="flex items-center gap-2 mb-3">
-            <LayoutGrid className="h-4 w-4 text-muted-foreground" />
-            <h2 className="font-heading text-sm font-semibold text-foreground">Meus Apps</h2>
-          </div>
-          <div className="grid grid-cols-1 gap-3">
-            {APP_MODULES.map((mod) => {
-              const Icon = mod.icon;
-              return (
-                <button
-                  key={mod.id}
-                  onClick={() => navigate(mod.route)}
-                  className="group relative overflow-hidden rounded-2xl text-left transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-primary/40"
-                >
-                  <div className={cn("bg-gradient-to-br p-5 text-white", mod.gradient)}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
-                          <Icon className="h-6 w-6" />
-                        </div>
-                        <div>
-                          <h3 className="font-heading text-base font-bold">{mod.title}</h3>
-                          <p className="text-sm text-white/80 mt-0.5">{mod.description}</p>
-                        </div>
+        <section className="space-y-3">
+          {APP_MODULES.map((mod) => {
+            const Icon = mod.icon;
+            return (
+              <button
+                key={mod.id}
+                onClick={() => navigate(mod.route)}
+                className="group relative w-full overflow-hidden rounded-2xl text-left transition-all duration-200 hover:scale-[1.02] active:scale-[0.97] focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                <div className={cn("bg-gradient-to-br p-5 text-white shadow-elevated", mod.gradient)}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm">
+                        <Icon className="h-6 w-6" />
                       </div>
-                      <ChevronRight className="h-5 w-5 text-white/60 group-hover:text-white transition-colors" />
+                      <div>
+                        <h3 className="font-heading text-base font-bold">{mod.title}</h3>
+                        <p className="text-sm text-white/75 mt-0.5">{mod.description}</p>
+                      </div>
                     </div>
+                    <ChevronRight className="h-5 w-5 text-white/50 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
                   </div>
-                </button>
-              );
-            })}
-          </div>
+                </div>
+              </button>
+            );
+          })}
         </section>
 
-        {/* Quick Stats */}
+        {/* Quick Stats — refined 2x2 grid */}
         <section>
-          <div className="flex items-center gap-2 mb-3">
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            <h2 className="font-heading text-sm font-semibold text-foreground">Visão Rápida</h2>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Card className="border-0 shadow-card">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
-                    <Wallet className="h-3.5 w-3.5 text-primary" />
-                  </div>
-                  <span className="text-[11px] text-muted-foreground font-medium">Saldo Total</span>
-                </div>
-                <p className={cn("text-lg font-bold font-heading", stats.totalBalance >= 0 ? "text-foreground" : "text-destructive")}>
+          <h2 className="font-heading text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+            <TrendingUp className="h-3.5 w-3.5" />
+            Visão do mês
+          </h2>
+
+          {/* Main balance card */}
+          <Card className="border-0 shadow-elevated mb-3 overflow-hidden">
+            <CardContent className="p-0">
+              <div className="gradient-primary px-5 py-4">
+                <p className="text-primary-foreground/70 text-xs font-medium">Patrimônio</p>
+                <p className={cn("text-2xl font-extrabold font-heading text-primary-foreground")}>
                   {formatCurrency(stats.totalBalance)}
                 </p>
+              </div>
+              <div className="grid grid-cols-3 divide-x divide-border/40">
+                <div className="px-3 py-3 text-center">
+                  <ArrowUpCircle className="mx-auto h-4 w-4 text-success mb-1" />
+                  <p className="text-[10px] text-muted-foreground">Receitas</p>
+                  <p className="text-xs font-bold text-success">{formatCurrency(stats.monthIncome)}</p>
+                </div>
+                <div className="px-3 py-3 text-center">
+                  <ArrowDownCircle className="mx-auto h-4 w-4 text-destructive mb-1" />
+                  <p className="text-[10px] text-muted-foreground">Despesas</p>
+                  <p className="text-xs font-bold text-destructive">{formatCurrency(stats.monthExpense)}</p>
+                </div>
+                <div className="px-3 py-3 text-center">
+                  <CreditCard className="mx-auto h-4 w-4 text-primary mb-1" />
+                  <p className="text-[10px] text-muted-foreground">Cartões</p>
+                  <p className="text-xs font-bold text-foreground">{formatCurrency(stats.cardTotal)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Net flow + pending */}
+          <div className="grid grid-cols-2 gap-3">
+            <Card className="border-0 shadow-card">
+              <CardContent className="p-3.5">
+                <p className="text-[10px] text-muted-foreground font-medium mb-0.5">Balanço do mês</p>
+                <p className={cn("text-lg font-bold font-heading", netFlow >= 0 ? "text-success" : "text-destructive")}>
+                  {netFlow >= 0 ? "+" : ""}{formatCurrency(netFlow)}
+                </p>
               </CardContent>
             </Card>
-
             <Card className="border-0 shadow-card">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/10">
-                    <CreditCard className="h-3.5 w-3.5 text-blue-500" />
-                  </div>
-                  <span className="text-[11px] text-muted-foreground font-medium">Cartões</span>
+              <CardContent className="p-3.5">
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <Clock className="h-3 w-3 text-warning" />
+                  <p className="text-[10px] text-muted-foreground font-medium">Pendências</p>
                 </div>
                 <p className="text-lg font-bold font-heading text-foreground">
-                  {formatCurrency(stats.cardTotal)}
+                  {stats.pendingCount}
                 </p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-card">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-success/10">
-                    <ArrowUpCircle className="h-3.5 w-3.5 text-success" />
-                  </div>
-                  <span className="text-[11px] text-muted-foreground font-medium">Receitas</span>
-                </div>
-                <p className="text-lg font-bold font-heading text-success">
-                  {formatCurrency(stats.monthIncome)}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-card">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-destructive/10">
-                    <ArrowDownCircle className="h-3.5 w-3.5 text-destructive" />
-                  </div>
-                  <span className="text-[11px] text-muted-foreground font-medium">Despesas</span>
-                </div>
-                <p className="text-lg font-bold font-heading text-destructive">
-                  {formatCurrency(stats.monthExpense)}
-                </p>
+                {stats.pendingCount > 0 && (
+                  <p className="text-[10px] text-muted-foreground">{formatCurrency(stats.pendingAmount)}</p>
+                )}
               </CardContent>
             </Card>
           </div>
-
-          {(stats.pendingCount > 0) && (
-            <Card className="border-0 shadow-card mt-3">
-              <CardContent className="flex items-center gap-3 p-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-warning/10">
-                  <Clock className="h-4 w-4 text-warning" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold">{stats.pendingCount} pendência{stats.pendingCount > 1 ? "s" : ""}</p>
-                  <p className="text-xs text-muted-foreground">{formatCurrency(stats.pendingAmount)}</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </section>
 
         {/* Alerts */}
         {alerts.length > 0 && (
           <section>
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="h-4 w-4 text-warning" />
-              <h2 className="font-heading text-sm font-semibold text-foreground">Alertas</h2>
-            </div>
+            <h2 className="font-heading text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Alertas
+            </h2>
             <div className="space-y-2">
               {alerts.map((alert) => (
-                <Card
+                <div
                   key={alert.id}
                   className={cn(
-                    "border-0 shadow-card",
-                    alert.type === "danger" && "border-l-4 border-l-destructive",
-                    alert.type === "warning" && "border-l-4 border-l-warning"
+                    "flex items-center gap-3 rounded-xl px-4 py-3",
+                    alert.type === "danger" && "bg-destructive/8 border border-destructive/20",
+                    alert.type === "warning" && "bg-warning/8 border border-warning/20"
                   )}
                 >
-                  <CardContent className="flex items-center gap-3 p-3">
-                    <AlertTriangle
-                      className={cn(
-                        "h-4 w-4 flex-shrink-0",
-                        alert.type === "danger" ? "text-destructive" : "text-warning"
-                      )}
-                    />
-                    <p className="text-sm font-medium">{alert.text}</p>
-                  </CardContent>
-                </Card>
+                  <AlertTriangle
+                    className={cn(
+                      "h-4 w-4 flex-shrink-0",
+                      alert.type === "danger" ? "text-destructive" : "text-warning"
+                    )}
+                  />
+                  <p className="text-sm font-medium text-foreground">{alert.text}</p>
+                </div>
               ))}
             </div>
           </section>
@@ -356,22 +329,19 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
 
         {/* Future Modules */}
         <section>
-          <div className="flex items-center gap-2 mb-3">
-            <LayoutGrid className="h-4 w-4 text-muted-foreground" />
-            <h2 className="font-heading text-sm font-semibold text-foreground">Em Breve</h2>
-          </div>
+          <h2 className="font-heading text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
+            Em breve
+          </h2>
           <div className="grid grid-cols-3 gap-3">
             {FUTURE_MODULES.map((mod) => {
               const Icon = mod.icon;
               return (
-                <Card key={mod.id} className="border-0 shadow-card opacity-50">
-                  <CardContent className="flex flex-col items-center gap-1.5 p-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
-                      <Icon className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                    <span className="text-[11px] font-medium text-muted-foreground">{mod.title}</span>
-                  </CardContent>
-                </Card>
+                <div key={mod.id} className="flex flex-col items-center gap-1.5 rounded-2xl border border-dashed border-border/60 bg-muted/30 p-4 opacity-50">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
+                    <Icon className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <span className="text-[11px] font-medium text-muted-foreground">{mod.title}</span>
+                </div>
               );
             })}
           </div>
