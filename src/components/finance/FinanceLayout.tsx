@@ -1,28 +1,21 @@
-import React from "react";
+import React, { useState } from "react";
+import { Outlet, useLocation } from "react-router-dom";
 import { AppHeader } from "@/components/AppHeader";
 import { FinanceTopNav } from "@/components/finance/FinanceTopNav";
 import { QuickTransactionFab } from "@/components/finance/QuickTransactionFab";
 import { useFinanceRouteTransition } from "@/hooks/use-finance-route-transition";
 import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
 import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
-import { useState } from "react";
 
 interface FinanceLayoutProps {
   userId: string;
-  children: React.ReactNode;
-  headerChildren?: React.ReactNode;
-  showFab?: boolean;
 }
 
-export const FinanceLayout: React.FC<FinanceLayoutProps> = ({
-  userId,
-  children,
-  headerChildren,
-  showFab = true,
-}) => {
+export const FinanceLayout: React.FC<FinanceLayoutProps> = ({ userId }) => {
   const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
   const headerProfile = useUserHeaderProfile(userId);
   const transitionClass = useFinanceRouteTransition();
+  const location = useLocation();
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -36,17 +29,15 @@ export const FinanceLayout: React.FC<FinanceLayoutProps> = ({
         backTo="/"
         accentTheme={accentTheme}
         onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
-      >
-        {headerChildren}
-      </AppHeader>
+      />
 
       <FinanceTopNav />
 
-      <div key={transitionClass} className={transitionClass}>
-        {children}
+      <div key={location.pathname} className={transitionClass}>
+        <Outlet />
       </div>
 
-      {showFab && <QuickTransactionFab userId={userId} />}
+      <QuickTransactionFab userId={userId} />
     </div>
   );
 };
