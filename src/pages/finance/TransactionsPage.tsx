@@ -11,9 +11,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
-import { AppHeader } from "@/components/AppHeader";
-import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
-import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
+import { getFinanceTransactionsCache, setFinanceTransactionsCache } from "@/lib/financePageCache";
 import { getFinanceTransactionsCache, setFinanceTransactionsCache } from "@/lib/financePageCache";
 
 interface TransactionsPageProps {

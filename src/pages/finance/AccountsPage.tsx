@@ -29,9 +29,6 @@ import { ACCOUNT_TYPE_LABELS, formatCurrency } from "@/lib/constants";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
-import { AppHeader } from "@/components/AppHeader";
-import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
-import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
 import { ensureDefaultAccounts } from "@/lib/financeDefaults";
 import { getFinanceAccountsCache, setFinanceAccountsCache } from "@/lib/financePageCache";
 

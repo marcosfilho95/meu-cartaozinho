@@ -10,9 +10,6 @@ import { FinanceLayout } from "@/components/finance/FinanceLayout";
 import { Plus, Pencil, Trash2, Loader2, FolderOpen } from "lucide-react";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AppHeader } from "@/components/AppHeader";
-import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
-import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
 import { getFinanceCategoriesCache, setFinanceCategoriesCache } from "@/lib/financePageCache";
 import { ensureDefaultCategories } from "@/lib/financeCategoryDefaults";
 
