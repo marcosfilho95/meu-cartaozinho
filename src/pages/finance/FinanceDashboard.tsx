@@ -15,9 +15,13 @@ import { cn } from "@/lib/utils";
 import { ensureDefaultAccounts } from "@/lib/financeDefaults";
 import { ensureDefaultCategories } from "@/lib/financeCategoryDefaults";
 import {
+  AlertCircle,
   ArrowDownCircle,
   ArrowUpCircle,
+  Check,
+  Clock,
   LineChart as LineChartIcon,
+  Loader2 as Loader2Icon,
   PieChart as PieChartIcon,
   Plus,
   Target,
@@ -148,7 +152,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const [destinationAccountId, setDestinationAccountId] = useState("all");
   const [allocationSaving, setAllocationSaving] = useState(false);
   const [goalDialogOpen, setGoalDialogOpen] = useState(false);
-
+  const [togglingId, setTogglingId] = useState<string | null>(null);
   const currentMonth = monthKey(new Date());
   const previousMonth = monthKey(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1));
 
@@ -397,6 +401,25 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     }
   };
 
+  // Pending + recent transactions for dashboard
+  const pendingTx = useMemo(() => currentMonthTx.filter((tx) => tx.status === "pending" || tx.status === "overdue").sort((a, b) => a.transaction_date.localeCompare(b.transaction_date)), [currentMonthTx]);
+  const recentTx = useMemo(() => [...currentMonthTx].sort((a, b) => b.transaction_date.localeCompare(a.transaction_date)).slice(0, 8), [currentMonthTx]);
+
+  const handleToggleStatus = async (tx: FinanceTx) => {
+    const newStatus = tx.status === "paid" ? "pending" : "paid";
+    setTogglingId(tx.id);
+    try {
+      const { error } = await supabase.from("transactions").update({ status: newStatus }).eq("id", tx.id);
+      if (error) throw error;
+      toast.success(newStatus === "paid" ? "✅ Marcado como pago!" : "Voltou para pendente");
+      await loadData();
+    } catch (err: any) {
+      toast.error("Erro: " + (err?.message || "falha"));
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   return (
     <>
       <div className="mx-auto max-w-6xl space-y-5 px-4">
@@ -508,6 +531,93 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
            <SegmentedDistributionBar title="Distribuição por forma de pagamento" items={paymentDistribution} />
         </section>
 
+        {/* Pending bills */}
+        <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <Card className="border-0 shadow-card">
+            <CardContent className="space-y-3 p-4">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-warning" />
+                <h2 className="font-heading text-sm font-bold">Contas pendentes</h2>
+                <Badge variant="outline" className="text-[10px] ml-auto">{pendingTx.length}</Badge>
+              </div>
+              {pendingTx.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">🎉 Tudo pago! Nenhuma conta pendente.</p>
+              ) : (
+                <div className="space-y-1.5 max-h-[320px] overflow-y-auto">
+                  {pendingTx.map((tx) => (
+                    <div key={tx.id} className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2.5">
+                      <button
+                        type="button"
+                        disabled={togglingId === tx.id}
+                        onClick={() => handleToggleStatus(tx)}
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-muted-foreground/30 text-muted-foreground hover:border-success hover:text-success transition-all"
+                        title="Marcar como pago"
+                      >
+                        {togglingId === tx.id ? <Loader2Icon className="h-3 w-3 animate-spin" /> : null}
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{(tx as any).source || (tx as any).notes || "Sem descrição"}</p>
+                        <p className="text-[10px] text-muted-foreground">{tx.categories?.name || ""} · {new Date(tx.transaction_date + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}</p>
+                      </div>
+                      <p className={cn("text-sm font-bold shrink-0", tx.type === "income" ? "text-success" : "text-foreground")}>
+                        {tx.type === "income" ? "+" : "-"}{formatCurrency(Number(tx.amount))}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Recent transactions */}
+          <Card className="border-0 shadow-card">
+            <CardContent className="space-y-3 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-primary" />
+                  <h2 className="font-heading text-sm font-bold">Últimas transações</h2>
+                </div>
+                <button onClick={() => navigate("/financas/transacoes")} className="text-xs font-semibold text-primary hover:underline">Ver todas</button>
+              </div>
+              {recentTx.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">Nenhuma transação no mês.</p>
+              ) : (
+                <div className="space-y-1.5 max-h-[320px] overflow-y-auto">
+                  {recentTx.map((tx) => {
+                    const isPaid = tx.status === "paid";
+                    return (
+                      <div key={tx.id} className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2.5">
+                        <button
+                          type="button"
+                          disabled={togglingId === tx.id}
+                          onClick={() => handleToggleStatus(tx)}
+                          className={cn(
+                            "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-all",
+                            isPaid ? "border-success bg-success/15 text-success" : "border-muted-foreground/30 text-muted-foreground hover:border-success hover:text-success"
+                          )}
+                          title={isPaid ? "Voltar para pendente" : "Marcar como pago"}
+                        >
+                          {togglingId === tx.id ? <Loader2Icon className="h-3 w-3 animate-spin" /> : isPaid ? <Check className="h-3.5 w-3.5" /> : null}
+                        </button>
+                        <div className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg", tx.type === "income" ? "bg-success/10" : "bg-destructive/10")}>
+                          {tx.type === "income" ? <ArrowUpCircle className="h-3.5 w-3.5 text-success" /> : <ArrowDownCircle className="h-3.5 w-3.5 text-destructive" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={cn("text-sm font-medium truncate", isPaid && "line-through text-muted-foreground")}>{(tx as any).source || (tx as any).notes || "Sem descrição"}</p>
+                          <p className="text-[10px] text-muted-foreground">{tx.categories?.name || ""}</p>
+                        </div>
+                        <p className={cn("text-sm font-bold shrink-0", tx.type === "income" ? "text-success" : "text-foreground")}>
+                          {tx.type === "income" ? "+" : "-"}{formatCurrency(Number(tx.amount))}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+
         <section>
           <Card className="border-0 shadow-card"><CardContent className="space-y-3 p-4">
              <div className="flex items-center gap-2"><LineChartIcon className="h-4 w-4 text-primary" /><h2 className="font-heading text-sm font-bold">Tabela analítica por categoria</h2></div>
@@ -538,25 +648,15 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
               <div className="flex items-center gap-2"><Target className="h-4 w-4 text-primary" /><h2 className="font-heading text-sm font-bold">Reservas, metas e destino do saldo</h2></div>
               <Button variant="outline" size="sm" className="gap-1.5 rounded-xl text-xs" onClick={() => setGoalDialogOpen(true)}><Plus className="h-3.5 w-3.5" />Nova meta</Button>
             </div>
-
-            {/* Goals list */}
             {goals.length > 0 && (
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {goals.map((goal) => {
                   const progress = goal.target_amount > 0 ? Math.min((Number(goal.current_amount) / Number(goal.target_amount)) * 100, 100) : 0;
                   return (
                     <div key={goal.id} className="rounded-xl border border-border p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-semibold truncate">{goal.name}</p>
-                        {goal.is_completed && <span className="text-[10px] font-bold text-success">✅</span>}
-                      </div>
-                      <div className="flex h-2 overflow-hidden rounded-full bg-muted">
-                        <div className="rounded-full bg-primary transition-all" style={{ width: `${progress}%` }} />
-                      </div>
-                      <div className="flex justify-between text-[11px] text-muted-foreground">
-                        <span>{formatCurrency(Number(goal.current_amount))}</span>
-                        <span>{formatCurrency(Number(goal.target_amount))}</span>
-                      </div>
+                      <div className="flex items-center justify-between"><p className="text-sm font-semibold truncate">{goal.name}</p>{goal.is_completed && <span className="text-[10px] font-bold text-success">✅</span>}</div>
+                      <div className="flex h-2 overflow-hidden rounded-full bg-muted"><div className="rounded-full bg-primary transition-all" style={{ width: `${progress}%` }} /></div>
+                      <div className="flex justify-between text-[11px] text-muted-foreground"><span>{formatCurrency(Number(goal.current_amount))}</span><span>{formatCurrency(Number(goal.target_amount))}</span></div>
                     </div>
                   );
                 })}
@@ -564,11 +664,10 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
             )}
             {goals.length === 0 && (
               <div className="rounded-xl border-2 border-dashed border-border p-4 text-center">
-                <p className="text-sm text-muted-foreground">Nenhuma meta criada. Crie sua primeira meta!</p>
+                <p className="text-sm text-muted-foreground">Nenhuma meta criada.</p>
                 <Button variant="outline" size="sm" className="mt-2 gap-1.5 text-xs" onClick={() => setGoalDialogOpen(true)}><Plus className="h-3.5 w-3.5" />Criar meta</Button>
               </div>
             )}
-
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <div className="rounded-xl border border-border p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Saldo do mês</p><p className={cn("mt-1 text-lg font-extrabold", monthBalance >= 0 ? "text-success" : "text-destructive")}>{formatCurrency(monthBalance)}</p></div>
               <div className="rounded-xl border border-border p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Já alocado</p><p className="mt-1 text-lg font-extrabold text-foreground">{formatCurrency(monthAllocated)}</p></div>
