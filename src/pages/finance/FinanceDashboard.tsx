@@ -5,8 +5,11 @@ import { ArrowDownCircle, ArrowUpCircle, Wallet, AlertTriangle } from "lucide-re
 import { formatCurrency } from "@/lib/constants";
 import { FinanceBottomNav } from "@/components/finance/FinanceBottomNav";
 import { QuickTransactionFab } from "@/components/finance/QuickTransactionFab";
-import { AppLogo } from "@/components/AppLogo";
+import { AppHeader } from "@/components/AppHeader";
 import { cn } from "@/lib/utils";
+import { getStoredAvatarId } from "@/lib/profileAvatar";
+import { getStoredProfile } from "@/lib/profileCache";
+import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
 
 interface FinanceDashboardProps {
   userId: string;
@@ -17,6 +20,15 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<{ name: string; avatar_id: string | null }>({ name: "", avatar_id: null });
+  const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
+
+  useEffect(() => {
+    const cached = getStoredProfile(userId);
+    if (cached) {
+      setProfile({ name: cached.name, avatar_id: cached.avatar_id ?? getStoredAvatarId(userId) ?? null });
+    }
+  }, [userId]);
 
   useEffect(() => {
     if (!userId) return;
@@ -27,11 +39,16 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
       const monthEnd = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}-01`;
 
-      const [accsRes, txRes] = await Promise.all([
+      const [profileRes, accsRes, txRes] = await Promise.all([
+        supabase.from("profiles").select("name, avatar_id").eq("user_id", userId).maybeSingle(),
         supabase.from("accounts").select("*").eq("user_id", userId).eq("is_active", true).order("name"),
         supabase.from("transactions").select("*").eq("user_id", userId).is("deleted_at", null)
           .gte("transaction_date", monthStart).lt("transaction_date", monthEnd).order("transaction_date", { ascending: false }),
       ]);
+
+      if (profileRes.data) {
+        setProfile({ name: profileRes.data.name || "", avatar_id: profileRes.data.avatar_id });
+      }
 
       const accs = accsRes.data || [];
       const txs = txRes.data || [];
@@ -48,6 +65,8 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     load();
   }, [userId]);
 
+  const firstName = (profile.name || "").trim().split(/\s+/)[0] || "Usuário";
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -58,19 +77,22 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Header */}
-      <div className="gradient-primary px-4 pb-8 pt-6">
-        <div className="mx-auto max-w-lg">
-          <div className="flex items-center gap-3 mb-6">
-            <AppLogo size="sm" />
-            <h1 className="font-heading text-lg font-bold text-primary-foreground">Meu Cartãozinho</h1>
-          </div>
-          <p className="text-primary-foreground/80 text-sm mb-1">Saldo total</p>
+      <AppHeader
+        title="Organizador Financeiro"
+        subtitle={`Olá, ${firstName}`}
+        avatarId={profile.avatar_id}
+        showBack
+        backTo="/"
+        accentTheme={accentTheme}
+        onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
+      >
+        <div className="mt-4">
+          <p className="text-primary-foreground/70 text-xs">Saldo total</p>
           <p className="text-3xl font-bold font-heading text-primary-foreground">
             {formatCurrency(summary.balance)}
           </p>
         </div>
-      </div>
+      </AppHeader>
 
       <div className="mx-auto max-w-lg px-4 -mt-4 space-y-4">
         {/* Summary cards */}
