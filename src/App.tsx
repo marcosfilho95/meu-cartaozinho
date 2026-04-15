@@ -19,6 +19,7 @@ import FinanceDashboard from "./pages/finance/FinanceDashboard";
 import AccountsPage from "./pages/finance/AccountsPage";
 import CategoriesPage from "./pages/finance/CategoriesPage";
 import TransactionsPage from "./pages/finance/TransactionsPage";
+import { FinanceLayout } from "./components/finance/FinanceLayout";
 
 const queryClient = new QueryClient();
 
@@ -94,10 +95,12 @@ const AppRoutes = () => {
         <Route path="/cartao/:cardId" element={<CardDetail />} />
         <Route path="/compras" element={<Purchases initialUserId={session?.user?.id} />} />
         <Route path="/perfil" element={<Profile />} />
-        <Route path="/financas" element={<FinanceDashboard userId={session?.user?.id} />} />
-        <Route path="/financas/contas" element={<AccountsPage userId={session?.user?.id} />} />
-        <Route path="/financas/categorias" element={<CategoriesPage userId={session?.user?.id} />} />
-        <Route path="/financas/transacoes" element={<TransactionsPage userId={session?.user?.id} />} />
+        <Route path="/financas" element={<FinanceLayout userId={session?.user?.id} />}>
+          <Route index element={<FinanceDashboard userId={session?.user?.id} />} />
+          <Route path="contas" element={<AccountsPage userId={session?.user?.id} />} />
+          <Route path="categorias" element={<CategoriesPage userId={session?.user?.id} />} />
+          <Route path="transacoes" element={<TransactionsPage userId={session?.user?.id} />} />
+        </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>
       <FirstLoginTour userId={session?.user?.id} />
