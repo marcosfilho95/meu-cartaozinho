@@ -39,11 +39,11 @@ interface Alert {
 const APP_MODULES = [
   {
     id: "cartaozinho",
-    title: "Meu Cartaozinho",
-    description: "Cartoes, faturas e parcelas",
+    title: "Meu Cartãozinho",
+    description: "Cartões, faturas e parcelas",
     route: "/cards",
     icon: CreditCard,
-    badge: "Controle de cartoes",
+    badge: "Controle de cartões",
   },
   {
     id: "financas",
@@ -139,7 +139,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
         if (dueSoon.length > 0) {
           builtAlerts.push({
             id: "due-soon",
-            text: `${dueSoon.length} conta${dueSoon.length > 1 ? "s" : ""} vence nos proximos 3 dias`,
+            text: `${dueSoon.length} conta${dueSoon.length > 1 ? "s" : ""} vence nos próximos 3 dias`,
             type: "warning",
           });
         }
@@ -176,23 +176,23 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
         onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
       />
 
-      <div className="mx-auto -mt-3 max-w-lg space-y-5 px-4 pb-2 animate-fade-in">
-        <section className="rounded-3xl border border-border/70 bg-card p-4 shadow-elevated">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Resumo rapido</p>
+      <div className="mx-auto -mt-3 max-w-2xl space-y-5 px-4 pb-2 animate-fade-in">
+        <section className="rounded-3xl border border-border/70 bg-card p-5 shadow-elevated">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Resumo rápido</p>
           <div className="mt-2 flex items-end justify-between gap-3">
             <div>
               <p className="text-xs text-muted-foreground">Saldo geral</p>
               <p className="font-heading text-3xl font-extrabold text-foreground">{formatCurrency(stats.totalBalance)}</p>
             </div>
             <div className="rounded-2xl bg-secondary/70 px-3 py-2 text-right">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Saldo do mes</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Saldo do mês</p>
               <p className={cn("text-sm font-bold", netFlow >= 0 ? "text-success" : "text-destructive")}>
                 {netFlow >= 0 ? "+" : ""}
                 {formatCurrency(netFlow)}
               </p>
             </div>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">Saldo do mes = Receitas - Despesas</p>
+          <p className="mt-2 text-xs text-muted-foreground">Saldo do mês = Receitas − Despesas</p>
         </section>
 
         <section className="space-y-3">
@@ -248,12 +248,12 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
         </section>
 
         <section className="space-y-3">
-          <h2 className="font-heading text-sm font-bold text-foreground">Visao rapida</h2>
+          <h2 className="font-heading text-sm font-bold text-foreground">Visão rápida</h2>
 
           <div className="grid grid-cols-2 gap-3">
             <Card className="border-0 shadow-card">
               <CardContent className="p-3.5">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Total em cartoes</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Total em cartões</p>
                 <p className="mt-1 text-base font-extrabold text-foreground">{formatCurrency(stats.cardTotal)}</p>
               </CardContent>
             </Card>
@@ -261,7 +261,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
               <CardContent className="p-3.5">
                 <div className="mb-0.5 flex items-center gap-1.5">
                   <Clock3 className="h-3.5 w-3.5 text-warning" />
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Pendencias</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Pendências</p>
                 </div>
                 <p className="text-base font-extrabold text-foreground">{stats.pendingCount}</p>
                 {stats.pendingCount > 0 && <p className="text-[11px] text-muted-foreground">{formatCurrency(stats.pendingAmount)}</p>}
@@ -287,7 +287,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
             <Card className="border-0 shadow-card">
               <CardContent className="p-3 text-center">
                 <Wallet className={cn("mx-auto h-4 w-4", netFlow >= 0 ? "text-success" : "text-destructive")} />
-                <p className="mt-1 text-[10px] text-muted-foreground">Saldo mes</p>
+                <p className="mt-1 text-[10px] text-muted-foreground">Saldo mês</p>
                 <p className={cn("text-xs font-bold", netFlow >= 0 ? "text-success" : "text-destructive")}>
                   {formatCurrency(netFlow)}
                 </p>
@@ -315,7 +315,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
 
         <section className="rounded-2xl border border-dashed border-border/70 bg-muted/25 p-3.5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Em breve</p>
-          <p className="mt-1 text-sm text-muted-foreground">Metas, relatorios e investimentos no mesmo hub.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Metas, relatórios e investimentos no mesmo hub.</p>
         </section>
       </div>
     </div>

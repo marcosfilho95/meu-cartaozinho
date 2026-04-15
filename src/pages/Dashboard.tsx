@@ -216,7 +216,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
     if (loading) return null;
     if (overdueOpenCount > 0) {
       return {
-        text: "Voce tem parcelas atrasadas. Evite juros e pague o quanto antes.",
+        text: "Você tem parcelas atrasadas. Evite juros e pague o quanto antes.",
         className: "border-destructive/40 bg-destructive/10 text-destructive",
       };
     }
@@ -293,7 +293,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
               {loading ? (
                 <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">Carregando distribuição...</div>
               ) : chartData.length === 0 ? (
-                <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">Sem distribuicao no mes</div>
+                <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">Sem distribuição no mês</div>
               ) : (
                 <div className="grid items-center gap-4 lg:grid-cols-[1.2fr_1.05fr]">
                   <div className="h-64 rounded-xl border border-border/60 bg-card/50 p-3">
@@ -385,9 +385,9 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-accent">
               <CreditCard className="h-8 w-8 text-primary" />
             </div>
-            <h2 className="font-heading text-lg font-semibold text-foreground">Sem cartoes cadastrados</h2>
+            <h2 className="font-heading text-lg font-semibold text-foreground">Sem cartões cadastrados</h2>
             <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-              Comece criando seu primeiro cartao para organizar as parcelas mes a mes.
+              Comece criando seu primeiro cartão para organizar as parcelas mês a mês.
             </p>
             <AddCardDialog
               userId={userId}
@@ -395,14 +395,14 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
               trigger={
                 <Button className="mt-4 gap-2 gradient-primary text-primary-foreground">
                   <Plus className="h-4 w-4" />
-                  Cadastrar primeiro cartao
+                  Cadastrar primeiro cartão
                 </Button>
               }
             />
           </div>
         ) : (
           <section className="space-y-3">
-            <h2 className="font-heading text-xl font-bold text-foreground">Seus cartoes</h2>
+            <h2 className="font-heading text-xl font-bold text-foreground">Seus cartões</h2>
             {cards.map((card) => (
               <CardSummary
                 key={card.id}

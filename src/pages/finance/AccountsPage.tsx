@@ -184,13 +184,13 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Excluir esta conta? Todas as transacoes vinculadas serao removidas.")) return;
+    if (!confirm("Excluir esta conta? Todas as transações vinculadas serão removidas.")) return;
     const { error } = await supabase.from("accounts").delete().eq("id", id);
     if (error) {
       toast.error(error.message);
       return;
     }
-    toast.success("Conta excluida");
+    toast.success("Conta excluída");
     loadAccounts();
   };
 
@@ -230,7 +230,7 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
             <CardContent className="p-8 text-center text-muted-foreground">
               <Wallet className="mx-auto h-10 w-10 mb-3 opacity-40" />
               <p className="font-medium">Nenhuma conta ainda</p>
-              <p className="text-sm mt-1">Contas sao bancos, carteira ou cartoes onde seu dinheiro entra e sai.</p>
+              <p className="text-sm mt-1">Contas são bancos, carteira ou cartões onde seu dinheiro entra e sai.</p>
               <Button onClick={openCreate} className="mt-4 gradient-primary text-primary-foreground">
                 <Plus className="h-4 w-4 mr-1" /> Criar conta
               </Button>
@@ -280,8 +280,8 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
           <div className="space-y-4">
             <div>
               <Label className="text-xs text-muted-foreground">Nome</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Casa, Alimentacao, Nubank..." className="mt-1" />
-              <p className="mt-1 text-[11px] text-muted-foreground">Aqui voce pode colocar: Casa, Alimentacao, Transporte, Lazer, etc.</p>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Casa, Alimentação, Nubank..." className="mt-1" />
+              <p className="mt-1 text-[11px] text-muted-foreground">Aqui você pode colocar: Casa, Alimentação, Transporte, Lazer, etc.</p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -307,8 +307,8 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
               </div>
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">Instituicao (opcional)</Label>
-              <Input value={institution} onChange={(e) => setInstitution(e.target.value)} placeholder="Ex: Nubank, Itau..." className="mt-1" />
+              <Label className="text-xs text-muted-foreground">Instituição (opcional)</Label>
+              <Input value={institution} onChange={(e) => setInstitution(e.target.value)} placeholder="Ex: Nubank, Itaú..." className="mt-1" />
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">Saldo inicial (R$)</Label>

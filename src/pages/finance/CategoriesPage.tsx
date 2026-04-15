@@ -114,7 +114,7 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
       toast.error(error.message);
       return;
     }
-    toast.success("Categoria excluida");
+    toast.success("Categoria excluída");
     load();
   };
 
@@ -157,7 +157,7 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
           <Card className="border-dashed border-2">
             <CardContent className="p-8 text-center text-muted-foreground">
               <FolderOpen className="mx-auto h-10 w-10 mb-3 opacity-40" />
-              <p className="text-sm">Nenhuma categoria nesta aba. Crie uma para aparecer no lancamento.</p>
+              <p className="text-sm">Nenhuma categoria nesta aba. Crie uma para aparecer no lançamento.</p>
             </CardContent>
           </Card>
         ) : (
@@ -194,7 +194,7 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
           <div className="space-y-4">
             <div>
               <Label className="text-xs text-muted-foreground">Nome</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Alimentacao" className="mt-1" />
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Alimentação" className="mt-1" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

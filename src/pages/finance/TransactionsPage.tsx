@@ -77,7 +77,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
       toast.error(error.message);
       return;
     }
-    toast.success("Transacao removida");
+    toast.success("Transação removida");
     queryClient.invalidateQueries({ queryKey: ["transactions"] });
   };
 
@@ -95,7 +95,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
     <div className="min-h-screen bg-background pb-24">
       <AppHeader
         containerClassName="max-w-5xl"
-        title="Transacoes"
+        title="Transações"
         greeting={headerProfile.greeting}
         userName={headerProfile.firstName}
         avatarId={headerProfile.avatarId}
@@ -149,7 +149,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
           </div>
         ) : grouped.length === 0 ? (
           <div className="py-12 text-center text-muted-foreground">
-            <p className="text-sm">Nenhuma transacao encontrada.</p>
+            <p className="text-sm">Nenhuma transação encontrada.</p>
           </div>
         ) : (
           grouped.map(([date, txs]) => (
@@ -178,7 +178,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{tx.source || "Sem descricao"}</p>
+                        <p className="truncate text-sm font-medium">{tx.source || "Sem descrição"}</p>
                         <div className="mt-0.5 flex items-center gap-1.5">
                           {tx.categories && (
                             <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium">{tx.categories.name}</span>

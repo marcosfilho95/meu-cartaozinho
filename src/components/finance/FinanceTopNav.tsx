@@ -5,7 +5,7 @@ import { NavLink } from "@/components/NavLink";
 
 const NAV_ITEMS = [
   { to: "/financas", icon: LayoutDashboard, label: "Resumo" },
-  { to: "/financas/transacoes", icon: ArrowLeftRight, label: "Transacoes" },
+  { to: "/financas/transacoes", icon: ArrowLeftRight, label: "Transações" },
   { to: "/financas/contas", icon: Wallet, label: "Contas" },
   { to: "/financas/categorias", icon: FolderOpen, label: "Categorias" },
 ];
