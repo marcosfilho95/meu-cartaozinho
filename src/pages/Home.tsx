@@ -88,9 +88,9 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const cached = getStoredProfile(userId);
+const cached = getStoredProfile(userId);
     if (cached) {
-      setProfile({ name: cached.name, avatar_id: cached.avatar_id ?? getStoredAvatarId() ?? null });
+      setProfile({ name: cached.name, avatar_id: cached.avatar_id ?? getStoredAvatarId(userId) ?? null });
     }
   }, [userId]);
 
@@ -223,7 +223,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
                 onClick={() => navigate("/perfil")}
                 className="rounded-full p-1 transition-transform hover:scale-105"
               >
-                <UserAvatar avatarId={profile.avatar_id} size="sm" />
+                <UserAvatar avatarId={profile.avatar_id} size={32} />
               </button>
               <button
                 onClick={handleLogout}
