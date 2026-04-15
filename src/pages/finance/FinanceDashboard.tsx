@@ -14,6 +14,7 @@ import { formatCurrency } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { ensureDefaultAccounts } from "@/lib/financeDefaults";
 import { ensureDefaultCategories } from "@/lib/financeCategoryDefaults";
+import { ensureDefaultGoals } from "@/lib/financeGoalDefaults";
 import {
   AlertCircle,
   ArrowDownCircle,
@@ -135,8 +136,6 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const [categories, setCategories] = useState<any[]>([]);
   const [goals, setGoals] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<FinanceTx[]>([]);
-  const [allocations, setAllocations] = useState<any[]>([]);
-  const [allocationSupport, setAllocationSupport] = useState(true);
 
   const [periodMonths, setPeriodMonths] = useState<1 | 3 | 6 | 12>(6);
   const [chartRange, setChartRange] = useState<6 | 12>(6);
@@ -162,9 +161,10 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     }
     try {
       await ensureDefaultCategories(userId);
-    } catch {
-      // Non-blocking: dashboard still loads even if bootstrap fails.
-    }
+    } catch {}
+    try {
+      await ensureDefaultGoals(userId);
+    } catch {}
 
     const [accountsRes, categoriesRes, goalsRes, txRes] = await Promise.all([
       supabase.from("accounts").select("id, name, type, current_balance, is_active, include_in_net_worth").eq("user_id", userId).eq("is_active", true).order("name"),
@@ -190,20 +190,6 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     setGoals(goalsRes.data || []);
     setTransactions((txRes.data as FinanceTx[]) || []);
 
-    try {
-      const supabaseAny = supabase as any;
-      const { data, error } = await supabaseAny
-        .from("monthly_surplus_allocations")
-        .select("*")
-        .eq("user_id", userId)
-        .eq("ref_month", currentMonth)
-        .order("created_at", { ascending: false });
-      if (error) { setAllocationSupport(false); setAllocations([]); }
-      else { setAllocationSupport(true); setAllocations(data || []); }
-    } catch {
-      setAllocationSupport(false);
-      setAllocations([]);
-    }
     setLoading(false);
   };
 
