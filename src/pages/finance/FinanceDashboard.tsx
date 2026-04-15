@@ -565,6 +565,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
         <GoalsSection
           userId={userId}
           goals={goals}
+          accounts={accounts}
           totalBalance={totalNetWorth}
           monthBalance={monthBalance}
           onReload={loadData}
