@@ -686,7 +686,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <Card className="border-0 shadow-card">
             <CardContent className="space-y-3 p-4">
-              <h2 className="font-heading text-sm font-bold">Volume de despesas e tendência</h2>
+              <h2 className="font-heading text-sm font-bold">Histórico de despesas</h2>
               {topExpenseCategories.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Sem despesas para montar o gráfico por categoria.</p>
               ) : (
@@ -720,10 +720,9 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
               )}
             </CardContent>
           </Card>
-          <div className="space-y-4">
-            <SegmentedDistributionBar title="Distribuição por categoria" items={categoryDistribution} />
-            {!isSimple && <SegmentedDistributionBar title="Distribuição por forma de pagamento" items={paymentDistribution} />}
-          </div>
+          {!isSimple && (
+            <SegmentedDistributionBar title="Distribuição por forma de pagamento" items={paymentDistribution} />
+          )}
         </section>
 
         {/* Pending bills */}
