@@ -750,7 +750,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
                     </div>
                   </div>
                   <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground pt-1">
-                    <span className="inline-block h-[3px] w-5 rounded-full bg-[#111827]" />
+                    <span className="text-base leading-none">⚊</span>
                     <span className="font-medium">Total despesas</span>
                   </div>
                 </>
