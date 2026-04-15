@@ -1,9 +1,9 @@
-import { Toaster } from "@/components/ui/toaster";
+﻿import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
-import { useEffect, useLayoutEffect, useState } from "react";
+import { BrowserRouter, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { applyAccentTheme, getStoredAccentTheme } from "@/lib/accentTheme";
 import { FirstLoginTour } from "@/components/FirstLoginTour";
@@ -26,6 +26,11 @@ const AppRoutes = () => {
   const [session, setSession] = useState<any>(undefined);
   const location = useLocation();
   const navigate = useNavigate();
+  const pathnameRef = useRef(location.pathname);
+
+  useEffect(() => {
+    pathnameRef.current = location.pathname;
+  }, [location.pathname]);
 
   useLayoutEffect(() => {
     applyAccentTheme(getStoredAccentTheme());
@@ -44,18 +49,32 @@ const AppRoutes = () => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, nextSession) => {
-      if (event === "PASSWORD_RECOVERY" && location.pathname !== "/reset-password") {
+      if (event === "SIGNED_OUT") {
+        console.info("[Auth] Usuario deslogado");
+      }
+      if (event === "PASSWORD_RECOVERY" && pathnameRef.current !== "/reset-password") {
         navigate("/reset-password", { replace: true });
       }
       setSession(nextSession);
     });
 
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("[Auth] Erro ao carregar sessao inicial", error);
+          setSession(null);
+          return;
+        }
+        setSession(data.session);
+      })
+      .catch((error) => {
+        console.error("[Auth] Falha inesperada ao inicializar sessao", error);
+        setSession(null);
+      });
 
     return () => subscription.unsubscribe();
-  }, [location.pathname, navigate]);
+  }, [navigate]);
 
   if (session === undefined) {
     return (
@@ -65,9 +84,7 @@ const AppRoutes = () => {
     );
   }
 
-  if (!session) {
-    return <Auth />;
-  }
+  if (!session) return <Auth />;
 
   return (
     <>

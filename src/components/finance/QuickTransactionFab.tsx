@@ -15,10 +15,10 @@ export const QuickTransactionFab: React.FC<QuickTransactionFabProps> = ({ userId
       <Button
         onClick={() => setOpen(true)}
         className="fixed bottom-6 right-4 z-50 h-12 gap-2 rounded-full px-5 shadow-elevated gradient-primary hover:opacity-90 transition-all duration-200 md:right-8"
-        aria-label="Nova transação"
+        aria-label="Nova transacao"
       >
         <Plus className="h-5 w-5 text-primary-foreground" />
-        <span className="text-sm font-semibold text-primary-foreground">Nova Transação</span>
+        <span className="text-sm font-semibold text-primary-foreground">Nova transacao</span>
       </Button>
       <AddTransactionDialog open={open} onOpenChange={setOpen} userId={userId} />
     </>

@@ -1,26 +1,21 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent } from "@/components/ui/card";
 import { AppHeader } from "@/components/AppHeader";
+import { Card, CardContent } from "@/components/ui/card";
+import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
+import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
 import { formatCurrency } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import {
-  CreditCard,
-  Wallet,
-  ArrowUpCircle,
   ArrowDownCircle,
-  AlertTriangle,
+  ArrowUpCircle,
   ChevronRight,
-  Clock,
-  TrendingUp,
-  Target,
-  FileText,
-  BarChart3,
+  Clock3,
+  CreditCard,
+  Sparkles,
+  Wallet,
 } from "lucide-react";
-import { getStoredAvatarId } from "@/lib/profileAvatar";
-import { getStoredProfile } from "@/lib/profileCache";
-import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
 
 interface HomeProps {
   userId: string;
@@ -44,50 +39,40 @@ interface Alert {
 const APP_MODULES = [
   {
     id: "cartaozinho",
-    title: "Meu Cartãozinho",
-    description: "Cartões, faturas e parcelas",
-    icon: CreditCard,
+    title: "Meu Cartaozinho",
+    description: "Cartoes, faturas e parcelas",
     route: "/cards",
-    gradient: "gradient-primary",
+    icon: CreditCard,
+    badge: "Controle de cartoes",
   },
   {
     id: "financas",
     title: "Organizador Financeiro",
-    description: "Finanças pessoais completas",
-    icon: Wallet,
+    description: "Receitas, despesas e contas",
     route: "/financas",
-    gradient: "from-[hsl(152,55%,42%)] to-[hsl(168,60%,48%)]",
+    icon: Wallet,
+    badge: "Planejamento mensal",
   },
-];
-
-const FUTURE_MODULES = [
-  { id: "metas", title: "Metas", icon: Target },
-  { id: "relatorios", title: "Relatórios", icon: FileText },
-  { id: "investimentos", title: "Investimentos", icon: BarChart3 },
-];
+] as const;
 
 const Home: React.FC<HomeProps> = ({ userId }) => {
   const navigate = useNavigate();
   const [stats, setStats] = useState<QuickStats>({
-    totalBalance: 0, monthIncome: 0, monthExpense: 0,
-    pendingCount: 0, pendingAmount: 0, cardTotal: 0,
+    totalBalance: 0,
+    monthIncome: 0,
+    monthExpense: 0,
+    pendingCount: 0,
+    pendingAmount: 0,
+    cardTotal: 0,
   });
   const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [profile, setProfile] = useState<{ name: string; avatar_id: string | null }>({
-    name: "", avatar_id: null,
-  });
   const [loading, setLoading] = useState(true);
   const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
-
-  useEffect(() => {
-    const cached = getStoredProfile(userId);
-    if (cached) {
-      setProfile({ name: cached.name, avatar_id: cached.avatar_id ?? getStoredAvatarId(userId) ?? null });
-    }
-  }, [userId]);
+  const headerProfile = useUserHeaderProfile(userId);
 
   useEffect(() => {
     if (!userId) return;
+
     const load = async () => {
       setLoading(true);
       try {
@@ -97,92 +82,78 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
         const monthEnd = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}-01`;
         const currentRefMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-        const [profileRes, accsRes, txRes, installRes] = await Promise.all([
-          supabase.from("profiles").select("name, avatar_id").eq("user_id", userId).maybeSingle(),
+        const [accsRes, txRes, installRes] = await Promise.all([
           supabase.from("accounts").select("*").eq("user_id", userId).eq("is_active", true),
-          supabase.from("transactions").select("*").eq("user_id", userId).is("deleted_at", null)
-            .gte("transaction_date", monthStart).lt("transaction_date", monthEnd),
-          supabase.from("installments").select("amount, status, ref_month").eq("user_id", userId)
-            .eq("ref_month", currentRefMonth),
+          supabase
+            .from("transactions")
+            .select("*")
+            .eq("user_id", userId)
+            .is("deleted_at", null)
+            .gte("transaction_date", monthStart)
+            .lt("transaction_date", monthEnd),
+          supabase.from("installments").select("amount, status, ref_month").eq("user_id", userId).eq("ref_month", currentRefMonth),
         ]);
-
-        if (profileRes.data) {
-          setProfile({ name: profileRes.data.name || "", avatar_id: profileRes.data.avatar_id });
-        }
 
         const accs = accsRes.data || [];
         const txs = txRes.data || [];
         const installs = installRes.data || [];
 
-        const totalBalance = accs.reduce(
-          (s, a) => s + (a.include_in_net_worth ? Number(a.current_balance) : 0), 0
-        );
+        const totalBalance = accs.reduce((sum, account) => {
+          return sum + (account.include_in_net_worth ? Number(account.current_balance) : 0);
+        }, 0);
+
         const monthIncome = txs
-          .filter((t: any) => t.type === "income" && t.status !== "canceled")
-          .reduce((s: number, t: any) => s + Number(t.amount), 0);
+          .filter((tx: any) => tx.type === "income" && tx.status !== "canceled")
+          .reduce((sum: number, tx: any) => sum + Number(tx.amount), 0);
+
         const monthExpense = txs
-          .filter((t: any) => t.type === "expense" && t.status !== "canceled")
-          .reduce((s: number, t: any) => s + Number(t.amount), 0);
-        const pendingTxs = txs.filter((t: any) => t.status === "pending");
+          .filter((tx: any) => tx.type === "expense" && tx.status !== "canceled")
+          .reduce((sum: number, tx: any) => sum + Number(tx.amount), 0);
+
+        const pendingTxs = txs.filter((tx: any) => tx.status === "pending");
         const pendingCount = pendingTxs.length;
-        const pendingAmount = pendingTxs.reduce((s: number, t: any) => s + Number(t.amount), 0);
-        const cardTotal = installs.reduce((s: number, i: any) => s + Number(i.amount), 0);
+        const pendingAmount = pendingTxs.reduce((sum: number, tx: any) => sum + Number(tx.amount), 0);
+        const cardTotal = installs.reduce((sum: number, item: any) => sum + Number(item.amount), 0);
 
         setStats({ totalBalance, monthIncome, monthExpense, pendingCount, pendingAmount, cardTotal });
 
-        // Build alerts
-        const newAlerts: Alert[] = [];
         const today = now.toISOString().slice(0, 10);
         const threeDaysLater = new Date(now.getTime() + 3 * 86400000).toISOString().slice(0, 10);
 
         const overdue = txs.filter(
-          (t: any) => t.status === "overdue" || (t.status === "pending" && t.due_date && t.due_date < today)
+          (tx: any) => tx.status === "overdue" || (tx.status === "pending" && tx.due_date && tx.due_date < today),
         );
+
+        const dueSoon = txs.filter(
+          (tx: any) => tx.status === "pending" && tx.due_date && tx.due_date >= today && tx.due_date <= threeDaysLater,
+        );
+
+        const builtAlerts: Alert[] = [];
         if (overdue.length > 0) {
-          newAlerts.push({
+          builtAlerts.push({
             id: "overdue",
             text: `${overdue.length} conta${overdue.length > 1 ? "s" : ""} atrasada${overdue.length > 1 ? "s" : ""}`,
             type: "danger",
           });
         }
-
-        const openInstalls = installs.filter((i: any) => i.status === "pendente");
-        if (openInstalls.length > 0) {
-          newAlerts.push({
-            id: "card-pending",
-            text: `${openInstalls.length} parcela${openInstalls.length > 1 ? "s" : ""} de cartão em aberto`,
-            type: "warning",
-          });
-        }
-
-        const dueSoon = txs.filter(
-          (t: any) => t.status === "pending" && t.due_date && t.due_date >= today && t.due_date <= threeDaysLater
-        );
         if (dueSoon.length > 0) {
-          newAlerts.push({
+          builtAlerts.push({
             id: "due-soon",
-            text: `${dueSoon.length} conta${dueSoon.length > 1 ? "s" : ""} vence${dueSoon.length > 1 ? "m" : ""} nos próximos 3 dias`,
+            text: `${dueSoon.length} conta${dueSoon.length > 1 ? "s" : ""} vence nos proximos 3 dias`,
             type: "warning",
           });
         }
 
-        setAlerts(newAlerts);
-      } catch (err) {
-        console.error("Home load error", err);
+        setAlerts(builtAlerts);
+      } catch (error) {
+        console.error("Home load error", error);
       } finally {
         setLoading(false);
       }
     };
+
     load();
   }, [userId]);
-
-  const firstName = (profile.name || "").trim().split(/\s+/)[0] || "Usuário";
-  const greeting = (() => {
-    const h = new Date().getHours();
-    if (h < 12) return "Bom dia";
-    if (h < 18) return "Boa tarde";
-    return "Boa noite";
-  })();
 
   if (loading) {
     return (
@@ -195,156 +166,156 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
   const netFlow = stats.monthIncome - stats.monthExpense;
 
   return (
-    <div className="min-h-screen bg-background pb-8">
+    <div className="min-h-screen bg-background pb-10">
       <AppHeader
-        title={`${firstName} 👋`}
-        subtitle={greeting}
-        avatarId={profile.avatar_id}
+        title="Home"
+        greeting={headerProfile.greeting}
+        userName={headerProfile.firstName}
+        avatarId={headerProfile.avatarId}
         accentTheme={accentTheme}
         onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
       />
 
-      <div className="mx-auto max-w-lg px-4 -mt-4 space-y-5 animate-fade-in">
-        {/* App Modules */}
+      <div className="mx-auto -mt-3 max-w-lg space-y-5 px-4 pb-2 animate-fade-in">
+        <section className="rounded-3xl border border-border/70 bg-card p-4 shadow-elevated">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Resumo rapido</p>
+          <div className="mt-2 flex items-end justify-between gap-3">
+            <div>
+              <p className="text-xs text-muted-foreground">Saldo geral</p>
+              <p className="font-heading text-3xl font-extrabold text-foreground">{formatCurrency(stats.totalBalance)}</p>
+            </div>
+            <div className="rounded-2xl bg-secondary/70 px-3 py-2 text-right">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Saldo do mes</p>
+              <p className={cn("text-sm font-bold", netFlow >= 0 ? "text-success" : "text-destructive")}>
+                {netFlow >= 0 ? "+" : ""}
+                {formatCurrency(netFlow)}
+              </p>
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">Saldo do mes = Receitas - Despesas</p>
+        </section>
+
         <section className="space-y-3">
-          {APP_MODULES.map((mod) => {
-            const Icon = mod.icon;
-            return (
-              <button
-                key={mod.id}
-                onClick={() => navigate(mod.route)}
-                className="group relative w-full overflow-hidden rounded-2xl text-left transition-all duration-200 hover:scale-[1.02] active:scale-[0.97] focus:outline-none focus:ring-2 focus:ring-primary/40"
-              >
-                <div className={cn("p-5 text-white shadow-elevated", mod.gradient === "gradient-primary" ? "gradient-primary" : `bg-gradient-to-br ${mod.gradient}`)}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm">
-                        <Icon className="h-6 w-6" />
+          <div className="flex items-center justify-between">
+            <h2 className="font-heading text-sm font-bold text-foreground">Meus apps</h2>
+            <Sparkles className="h-4 w-4 text-primary" />
+          </div>
+
+          <div className="space-y-3">
+            {APP_MODULES.map((module) => {
+              const Icon = module.icon;
+              const isCardApp = module.id === "cartaozinho";
+
+              return (
+                <button
+                  key={module.id}
+                  onClick={() => navigate(module.route)}
+                  className="group w-full text-left"
+                >
+                  <div
+                    className={cn(
+                      "relative overflow-hidden rounded-3xl p-4 text-white shadow-elevated transition-all duration-200 group-hover:scale-[1.015] group-active:scale-[0.985]",
+                      isCardApp
+                        ? cn(
+                            "gradient-primary",
+                            accentTheme === "blue" ? "ring-1 ring-cyan-200/60" : "ring-1 ring-pink-200/60",
+                          )
+                        : "bg-gradient-to-br from-[hsl(152,55%,42%)] to-[hsl(168,60%,48%)]",
+                    )}
+                  >
+                    <div className="absolute right-[-22px] top-[-20px] h-24 w-24 rounded-full bg-white/15 blur-md" />
+                    <div className="relative flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/30 bg-white/20 backdrop-blur-sm">
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/75">{module.badge}</p>
+                          <h3 className="font-heading text-lg font-extrabold leading-tight">{module.title}</h3>
+                          <p className="text-xs text-white/80">{module.description}</p>
+                        </div>
                       </div>
-                      <div>
-                        <h3 className="font-heading text-base font-bold">{mod.title}</h3>
-                        <p className="text-sm text-white/75 mt-0.5">{mod.description}</p>
+                      <div className="inline-flex items-center gap-1 rounded-xl bg-white/15 px-2.5 py-1 text-[11px] font-semibold">
+                        Abrir
+                        <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                       </div>
                     </div>
-                    <ChevronRight className="h-5 w-5 text-white/50 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
                   </div>
-                </div>
-              </button>
-            );
-          })}
-        </section>
-
-        {/* Quick Stats — refined 2x2 grid */}
-        <section>
-          <h2 className="font-heading text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
-            <TrendingUp className="h-3.5 w-3.5" />
-            Visão do mês
-          </h2>
-
-          {/* Main balance card */}
-          <Card className="border-0 shadow-elevated mb-3 overflow-hidden">
-            <CardContent className="p-0">
-              <div className="gradient-primary px-5 py-4">
-                <p className="text-primary-foreground/70 text-xs font-medium">Patrimônio</p>
-                <p className={cn("text-2xl font-extrabold font-heading text-primary-foreground")}>
-                  {formatCurrency(stats.totalBalance)}
-                </p>
-              </div>
-              <div className="grid grid-cols-3 divide-x divide-border/40">
-                <div className="px-3 py-3 text-center">
-                  <ArrowUpCircle className="mx-auto h-4 w-4 text-success mb-1" />
-                  <p className="text-[10px] text-muted-foreground">Receitas</p>
-                  <p className="text-xs font-bold text-success">{formatCurrency(stats.monthIncome)}</p>
-                </div>
-                <div className="px-3 py-3 text-center">
-                  <ArrowDownCircle className="mx-auto h-4 w-4 text-destructive mb-1" />
-                  <p className="text-[10px] text-muted-foreground">Despesas</p>
-                  <p className="text-xs font-bold text-destructive">{formatCurrency(stats.monthExpense)}</p>
-                </div>
-                <div className="px-3 py-3 text-center">
-                  <CreditCard className="mx-auto h-4 w-4 text-primary mb-1" />
-                  <p className="text-[10px] text-muted-foreground">Cartões</p>
-                  <p className="text-xs font-bold text-foreground">{formatCurrency(stats.cardTotal)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Net flow + pending */}
-          <div className="grid grid-cols-2 gap-3">
-            <Card className="border-0 shadow-card">
-              <CardContent className="p-3.5">
-                <p className="text-[10px] text-muted-foreground font-medium mb-0.5">Balanço do mês</p>
-                <p className={cn("text-lg font-bold font-heading", netFlow >= 0 ? "text-success" : "text-destructive")}>
-                  {netFlow >= 0 ? "+" : ""}{formatCurrency(netFlow)}
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="border-0 shadow-card">
-              <CardContent className="p-3.5">
-                <div className="flex items-center gap-1.5 mb-0.5">
-                  <Clock className="h-3 w-3 text-warning" />
-                  <p className="text-[10px] text-muted-foreground font-medium">Pendências</p>
-                </div>
-                <p className="text-lg font-bold font-heading text-foreground">
-                  {stats.pendingCount}
-                </p>
-                {stats.pendingCount > 0 && (
-                  <p className="text-[10px] text-muted-foreground">{formatCurrency(stats.pendingAmount)}</p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        </section>
-
-        {/* Alerts */}
-        {alerts.length > 0 && (
-          <section>
-            <h2 className="font-heading text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
-              <AlertTriangle className="h-3.5 w-3.5" />
-              Alertas
-            </h2>
-            <div className="space-y-2">
-              {alerts.map((alert) => (
-                <div
-                  key={alert.id}
-                  className={cn(
-                    "flex items-center gap-3 rounded-xl px-4 py-3",
-                    alert.type === "danger" && "bg-destructive/8 border border-destructive/20",
-                    alert.type === "warning" && "bg-warning/8 border border-warning/20"
-                  )}
-                >
-                  <AlertTriangle
-                    className={cn(
-                      "h-4 w-4 flex-shrink-0",
-                      alert.type === "danger" ? "text-destructive" : "text-warning"
-                    )}
-                  />
-                  <p className="text-sm font-medium text-foreground">{alert.text}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Future Modules */}
-        <section>
-          <h2 className="font-heading text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
-            Em breve
-          </h2>
-          <div className="grid grid-cols-3 gap-3">
-            {FUTURE_MODULES.map((mod) => {
-              const Icon = mod.icon;
-              return (
-                <div key={mod.id} className="flex flex-col items-center gap-1.5 rounded-2xl border border-dashed border-border/60 bg-muted/30 p-4 opacity-50">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
-                    <Icon className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <span className="text-[11px] font-medium text-muted-foreground">{mod.title}</span>
-                </div>
+                </button>
               );
             })}
           </div>
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="font-heading text-sm font-bold text-foreground">Visao rapida</h2>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Card className="border-0 shadow-card">
+              <CardContent className="p-3.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Total em cartoes</p>
+                <p className="mt-1 text-base font-extrabold text-foreground">{formatCurrency(stats.cardTotal)}</p>
+              </CardContent>
+            </Card>
+            <Card className="border-0 shadow-card">
+              <CardContent className="p-3.5">
+                <div className="mb-0.5 flex items-center gap-1.5">
+                  <Clock3 className="h-3.5 w-3.5 text-warning" />
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Pendencias</p>
+                </div>
+                <p className="text-base font-extrabold text-foreground">{stats.pendingCount}</p>
+                {stats.pendingCount > 0 && <p className="text-[11px] text-muted-foreground">{formatCurrency(stats.pendingAmount)}</p>}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2.5">
+            <Card className="border-0 shadow-card">
+              <CardContent className="p-3 text-center">
+                <ArrowUpCircle className="mx-auto h-4 w-4 text-success" />
+                <p className="mt-1 text-[10px] text-muted-foreground">Receitas</p>
+                <p className="text-xs font-bold text-success">{formatCurrency(stats.monthIncome)}</p>
+              </CardContent>
+            </Card>
+            <Card className="border-0 shadow-card">
+              <CardContent className="p-3 text-center">
+                <ArrowDownCircle className="mx-auto h-4 w-4 text-destructive" />
+                <p className="mt-1 text-[10px] text-muted-foreground">Despesas</p>
+                <p className="text-xs font-bold text-destructive">{formatCurrency(stats.monthExpense)}</p>
+              </CardContent>
+            </Card>
+            <Card className="border-0 shadow-card">
+              <CardContent className="p-3 text-center">
+                <Wallet className={cn("mx-auto h-4 w-4", netFlow >= 0 ? "text-success" : "text-destructive")} />
+                <p className="mt-1 text-[10px] text-muted-foreground">Saldo mes</p>
+                <p className={cn("text-xs font-bold", netFlow >= 0 ? "text-success" : "text-destructive")}>
+                  {formatCurrency(netFlow)}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+
+        {alerts.length > 0 && (
+          <section className="space-y-2">
+            {alerts.map((alert) => (
+              <div
+                key={alert.id}
+                className={cn(
+                  "rounded-2xl border px-4 py-3 text-sm font-medium",
+                  alert.type === "danger" && "border-destructive/30 bg-destructive/10 text-destructive",
+                  alert.type === "warning" && "border-warning/35 bg-warning/15 text-[hsl(var(--warning-foreground))]",
+                )}
+              >
+                {alert.text}
+              </div>
+            ))}
+          </section>
+        )}
+
+        <section className="rounded-2xl border border-dashed border-border/70 bg-muted/25 p-3.5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Em breve</p>
+          <p className="mt-1 text-sm text-muted-foreground">Metas, relatorios e investimentos no mesmo hub.</p>
         </section>
       </div>
     </div>

@@ -5,19 +5,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { MonthNavigator } from "@/components/MonthNavigator";
 import { CardSummary } from "@/components/CardSummary";
 import { AddCardDialog } from "@/components/AddCardDialog";
-import { AccentThemeSwitch } from "@/components/AccentThemeSwitch";
 import { AppHeader } from "@/components/AppHeader";
-import { UserAvatar } from "@/components/UserAvatar";
 import { AppFooter } from "@/components/AppFooter";
+import { PurchaseNotificationsPopover } from "@/components/PurchaseNotificationsPopover";
 import { getCurrentMonth, formatCurrency, getMonthPaymentStatus, isInstallmentOpen, MonthPaymentStatus } from "@/lib/installments";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CreditCard, LogOut, ShoppingBag, Plus, UserCircle2, Wallet, ShoppingCart } from "lucide-react";
-import { toast } from "sonner";
+import { CreditCard, Plus, ShoppingCart } from "lucide-react";
 import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
 import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
 import { getStoredProfile, setStoredProfile } from "@/lib/profileCache";
 import { getDashboardCache, setDashboardCache } from "@/lib/dashboardCache";
+import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
 
 interface Card {
   id: string;
@@ -35,12 +34,6 @@ interface MonthInstallmentStatus {
   ref_month: string | null;
   status: string | null;
 }
-
-const getFirstName = (name?: string | null) => {
-  const firstName = (name || "").trim().split(/\s+/)[0];
-  if (!firstName) return "Usuario";
-  return firstName;
-};
 
 const BANK_CHART_COLORS: Record<string, string> = {
   nubank: "#8A05BE",
@@ -89,6 +82,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
   const [chartIntroActive, setChartIntroActive] = useState(false);
   const [monthPaymentStatus, setMonthPaymentStatus] = useState<MonthPaymentStatus>("empty");
   const [overdueOpenCount, setOverdueOpenCount] = useState(0);
+  const headerProfile = useUserHeaderProfile(userId);
 
   useEffect(() => {
     if (initialUserId) {
@@ -258,23 +252,21 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
     };
   }, [month, chartData.length, loading]);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    toast.success("Sessao encerrada");
-  };
-
   if (!userId) return null;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <AppHeader
+        containerClassName="max-w-6xl"
         title="Minhas Faturas"
-        subtitle={`Olá, ${getFirstName(profile?.name)}`}
-        avatarId={profile?.avatar_id}
+        greeting={headerProfile.greeting}
+        userName={headerProfile.firstName}
+        avatarId={headerProfile.avatarId}
         showBack
         backTo="/"
         accentTheme={accentTheme}
         onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
+        topActions={<PurchaseNotificationsPopover userId={userId} />}
       />
 
       <div className="container -mt-4 flex-1 space-y-6 pb-4">
@@ -376,13 +368,9 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
               </Button>
             }
           />
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => navigate("/compras")}
-          >
+          <Button variant="outline" className="gap-2" data-tour="purchases-button" onClick={() => navigate("/compras")}>
             <ShoppingCart className="h-4 w-4" />
-            Ver Compras
+            Compras / ordens
           </Button>
         </div>
 

@@ -5,17 +5,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { MonthNavigator } from "@/components/MonthNavigator";
 import { InstallmentList } from "@/components/InstallmentList";
 import { BankLogo } from "@/components/BankLogo";
-import { UserAvatar } from "@/components/UserAvatar";
+import { AppHeader } from "@/components/AppHeader";
 import { AppFooter } from "@/components/AppFooter";
 import { formatCurrency, getCurrentMonth, getMonthPaymentStatus, isInstallmentOpen } from "@/lib/installments";
 import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
 import { getStoredProfile, setStoredProfile } from "@/lib/profileCache";
 import { getCardDetailCache, setCardDetailCache } from "@/lib/cardDetailCache";
+import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
+import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -78,6 +80,8 @@ const CardDetail: React.FC = () => {
   const [editingSubgroupId, setEditingSubgroupId] = useState<string | null>(null);
   const [editingSubgroupName, setEditingSubgroupName] = useState("");
   const [legendVisible, setLegendVisible] = useState(false);
+  const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
+  const headerProfile = useUserHeaderProfile(userId);
 
   useEffect(() => {
     if (navState.initialUserId) {
@@ -302,28 +306,22 @@ const CardDetail: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <header className="gradient-primary px-4 pb-8 pt-6">
-        <div className="container">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate("/cards")}
-            className="-ml-2 mb-3 gap-1 text-primary-foreground hover:bg-primary-foreground/10"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Voltar
-          </Button>
-          <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-              <BankLogo brand={card?.brand} size={52} />
-              <div>
-                <h1 className="font-heading text-2xl font-bold text-primary-foreground">{card?.name || "Carregando..."}</h1>
-              </div>
-            </div>
-            <UserAvatar avatarId={profile?.avatar_id} name={profile?.name} size={50} />
-          </div>
+      <AppHeader
+        containerClassName="max-w-6xl"
+        title={card?.name || "Cartao"}
+        greeting={headerProfile.greeting}
+        userName={headerProfile.firstName}
+        avatarId={headerProfile.avatarId}
+        showBack
+        backTo="/cards"
+        accentTheme={accentTheme}
+        onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
+      >
+        <div className="mt-3 flex items-center gap-3">
+          <BankLogo brand={card?.brand} size={40} />
+          <p className="text-xs font-medium text-primary-foreground/80">Detalhe da fatura mensal</p>
         </div>
-      </header>
+      </AppHeader>
 
       <div className="container -mt-4 flex-1 space-y-4 pb-4">
         {card ? (
@@ -336,6 +334,10 @@ const CardDetail: React.FC = () => {
               </Badge>
             </div>
             <div className="flex gap-2">
+              <Button variant="outline" className="gap-2" onClick={() => navigate("/compras")}>
+                <ShoppingCart className="h-4 w-4" />
+                Ver compras
+              </Button>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="destructive" className="gap-2">

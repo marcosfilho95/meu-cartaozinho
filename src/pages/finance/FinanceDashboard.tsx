@@ -1,417 +1,587 @@
-import React, { useEffect, useState, useMemo } from "react";
+
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent } from "@/components/ui/card";
-import { ArrowDownCircle, ArrowUpCircle, Wallet, AlertTriangle, TrendingUp, TrendingDown, ChevronRight } from "lucide-react";
-import { formatCurrency } from "@/lib/constants";
+import { toast } from "sonner";
+import { AppHeader } from "@/components/AppHeader";
 import { FinanceTopNav } from "@/components/finance/FinanceTopNav";
 import { QuickTransactionFab } from "@/components/finance/QuickTransactionFab";
-import { ExpenseDistributionBar } from "@/components/finance/ExpenseDistributionBar";
-import { CategoryTable } from "@/components/finance/CategoryTable";
-import { AppHeader } from "@/components/AppHeader";
-import { cn } from "@/lib/utils";
-import { getStoredAvatarId } from "@/lib/profileAvatar";
-import { getStoredProfile } from "@/lib/profileCache";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { supabase } from "@/integrations/supabase/client";
 import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid } from "recharts";
+import { formatCurrency } from "@/lib/constants";
+import { cn } from "@/lib/utils";
+import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
+import { ensureDefaultAccounts } from "@/lib/financeDefaults";
+import { ensureDefaultCategories } from "@/lib/financeCategoryDefaults";
+import {
+  ArrowDownCircle,
+  ArrowUpCircle,
+  LineChart as LineChartIcon,
+  PieChart as PieChartIcon,
+  Target,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
-const CHART_COLORS = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#F0B27A", "#BB8FCE", "#AEB6BF", "#82E0AA"];
+interface FinanceDashboardProps { userId: string; }
+type MonthTrend = "up" | "down" | "stable";
+type DestinationType = "free" | "reserve" | "goal" | "account";
 
-interface FinanceDashboardProps {
-  userId: string;
-}
+type FinanceTx = {
+  id: string;
+  amount: number;
+  type: "income" | "expense" | "transfer";
+  status: "pending" | "paid" | "overdue" | "canceled";
+  transaction_date: string;
+  account_id: string;
+  category_id: string | null;
+  categories?: { id: string; name: string; color: string | null; parent_id: string | null } | null;
+  accounts?: { id: string; name: string; type: string } | null;
+};
 
+type DistributionItem = { key: string; label: string; value: number; color: string; percentage: number; };
+
+const CATEGORY_COLORS = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#F0B27A", "#BB8FCE", "#AEB6BF", "#82E0AA"];
+const PAYMENT_LABELS: Record<string, string> = {
+  credit_card: "Cartao de credito", checking: "Conta corrente", savings: "Poupanca", cash: "Dinheiro",
+  investment: "Investimento", loan: "Emprestimo", transferencia: "Transferencia", other: "Outro",
+};
+const PAYMENT_COLORS: Record<string, string> = {
+  credit_card: "#7C3AED", checking: "#0284C7", savings: "#0891B2", cash: "#D97706",
+  investment: "#16A34A", loan: "#EF4444", transferencia: "#2563EB", other: "#6B7280",
+};
+
+const monthKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+const startOfMonthString = (date: Date) => `${monthKey(date)}-01`;
+const getLastMonthKeys = (count: number) => {
+  const base = new Date();
+  const keys: string[] = [];
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
+    keys.push(monthKey(d));
+  }
+  return keys;
+};
+const getMonthLabel = (key: string) => new Date(`${key}-15T12:00:00`).toLocaleDateString("pt-BR", { month: "short" }).replace(".", "");
+const trendFromDelta = (delta: number): MonthTrend => (delta > 0.001 ? "up" : delta < -0.001 ? "down" : "stable");
+const buildDistribution = (items: { key: string; label: string; value: number; color: string }[]): DistributionItem[] => {
+  const total = items.reduce((sum, item) => sum + item.value, 0);
+  if (total <= 0) return [];
+  return items.map((item) => ({ ...item, percentage: (item.value / total) * 100 })).sort((a, b) => b.value - a.value);
+};
+const getPaymentKey = (tx: FinanceTx) => {
+  if (tx.type === "transfer") return "transferencia";
+  const accountType = tx.accounts?.type || "other";
+  return PAYMENT_LABELS[accountType] ? accountType : "other";
+};
+
+const SegmentedDistributionBar: React.FC<{ title: string; items: DistributionItem[]; }> = ({ title, items }) => {
+  const [active, setActive] = useState<string | null>(null);
+  if (items.length === 0) {
+    return <Card className="border-0 shadow-card"><CardContent className="p-4 text-sm text-muted-foreground">Sem dados para {title.toLowerCase()}.</CardContent></Card>;
+  }
+  const selected = items.find((item) => item.key === active) || items[0];
+  return (
+    <Card className="border-0 shadow-card">
+      <CardContent className="space-y-3 p-4">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="font-heading text-sm font-bold text-foreground">{title}</h3>
+          <Badge variant="outline" className="text-[11px]">{selected.label}: {selected.percentage.toFixed(1)}%</Badge>
+        </div>
+        <div className="flex h-5 overflow-hidden rounded-full bg-muted">
+          {items.map((item) => (
+            <button key={item.key} type="button" title={`${item.label}: ${formatCurrency(item.value)} (${item.percentage.toFixed(1)}%)`}
+              onMouseEnter={() => setActive(item.key)} onFocus={() => setActive(item.key)} onClick={() => setActive(item.key)}
+              className={cn("h-full transition-opacity", active && active !== item.key ? "opacity-60" : "opacity-100")}
+              style={{ width: `${Math.max(item.percentage, 2)}%`, backgroundColor: item.color }} />
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {items.map((item) => (
+            <button key={item.key} type="button" onClick={() => setActive(item.key)}
+              className={cn("inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] font-medium", active === item.key ? "border-primary/45 bg-primary/10 text-foreground" : "border-border text-muted-foreground")}>
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />{item.label}
+            </button>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const navigate = useNavigate();
-  const [summary, setSummary] = useState({ balance: 0, income: 0, expense: 0, pending: 0, pendingCount: 0 });
-  const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [categoryBreakdown, setCategoryBreakdown] = useState<any[]>([]);
-  const [lastMonthCategoryBreakdown, setLastMonthCategoryBreakdown] = useState<any[]>([]);
-  const [monthlyEvolution, setMonthlyEvolution] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<{ name: string; avatar_id: string | null }>({ name: "", avatar_id: null });
+  const headerProfile = useUserHeaderProfile(userId);
   const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const cached = getStoredProfile(userId);
-    if (cached) {
-      setProfile({ name: cached.name, avatar_id: cached.avatar_id ?? getStoredAvatarId(userId) ?? null });
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [goals, setGoals] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<FinanceTx[]>([]);
+  const [allocations, setAllocations] = useState<any[]>([]);
+  const [allocationSupport, setAllocationSupport] = useState(true);
+
+  const [periodMonths, setPeriodMonths] = useState<1 | 3 | 6 | 12>(6);
+  const [chartRange, setChartRange] = useState<6 | 12>(6);
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [subcategoryFilter, setSubcategoryFilter] = useState("all");
+  const [accountFilter, setAccountFilter] = useState("all");
+  const [paymentFilter, setPaymentFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const [allocationAmount, setAllocationAmount] = useState("");
+  const [destinationType, setDestinationType] = useState<DestinationType>("free");
+  const [destinationGoalId, setDestinationGoalId] = useState("all");
+  const [destinationAccountId, setDestinationAccountId] = useState("all");
+  const [allocationSaving, setAllocationSaving] = useState(false);
+
+  const currentMonth = monthKey(new Date());
+  const previousMonth = monthKey(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1));
+
+  const loadData = async () => {
+    setLoading(true);
+    const now = new Date();
+    const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+
+    try {
+      await ensureDefaultAccounts(userId);
+    } catch {
+      // Non-blocking: dashboard still loads even if bootstrap fails.
     }
-  }, [userId]);
+    try {
+      await ensureDefaultCategories(userId);
+    } catch {
+      // Non-blocking: dashboard still loads even if bootstrap fails.
+    }
+
+    const [accountsRes, categoriesRes, goalsRes, txRes] = await Promise.all([
+      supabase.from("accounts").select("id, name, type, current_balance, is_active, include_in_net_worth").eq("user_id", userId).eq("is_active", true).order("name"),
+      supabase.from("categories").select("id, name, color, kind, parent_id").eq("user_id", userId).order("name"),
+      supabase.from("goals").select("id, name, target_amount, current_amount, is_completed").eq("user_id", userId).order("created_at"),
+      supabase
+        .from("transactions")
+        .select("id, amount, type, status, transaction_date, account_id, category_id, categories(id, name, color, parent_id), accounts:accounts!transactions_account_id_fkey(id, name, type)")
+        .eq("user_id", userId)
+        .is("deleted_at", null)
+        .gte("transaction_date", startOfMonthString(twelveMonthsAgo))
+        .order("transaction_date", { ascending: true }),
+    ]);
+
+    if (accountsRes.error || categoriesRes.error || goalsRes.error || txRes.error) {
+      toast.error("Falha ao carregar dashboard financeiro.");
+      setLoading(false);
+      return;
+    }
+
+    setAccounts(accountsRes.data || []);
+    setCategories(categoriesRes.data || []);
+    setGoals(goalsRes.data || []);
+    setTransactions((txRes.data as FinanceTx[]) || []);
+
+    try {
+      const supabaseAny = supabase as any;
+      const { data, error } = await supabaseAny
+        .from("monthly_surplus_allocations")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("ref_month", currentMonth)
+        .order("created_at", { ascending: false });
+      if (error) { setAllocationSupport(false); setAllocations([]); }
+      else { setAllocationSupport(true); setAllocations(data || []); }
+    } catch {
+      setAllocationSupport(false);
+      setAllocations([]);
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
     if (!userId) return;
-    const load = async () => {
-      setLoading(true);
-      const now = new Date();
-      const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-      const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-      const monthEnd = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}-01`;
-
-      // Last month
-      const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const lastMonthStart = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth() + 1).padStart(2, "0")}-01`;
-      const lastMonthEnd = monthStart;
-
-      // 6 months back for evolution
-      const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-      const sixMonthsStart = `${sixMonthsAgo.getFullYear()}-${String(sixMonthsAgo.getMonth() + 1).padStart(2, "0")}-01`;
-
-      const [profileRes, accsRes, txRes, lastTxRes, evolutionRes, catsRes] = await Promise.all([
-        supabase.from("profiles").select("name, avatar_id").eq("user_id", userId).maybeSingle(),
-        supabase.from("accounts").select("*").eq("user_id", userId).eq("is_active", true).order("name"),
-        supabase.from("transactions").select("*, categories(name, color, icon)").eq("user_id", userId).is("deleted_at", null)
-          .gte("transaction_date", monthStart).lt("transaction_date", monthEnd).order("transaction_date", { ascending: false }),
-        supabase.from("transactions").select("*, categories(name, color)").eq("user_id", userId).is("deleted_at", null)
-          .gte("transaction_date", lastMonthStart).lt("transaction_date", lastMonthEnd),
-        supabase.from("transactions").select("type, amount, status, transaction_date").eq("user_id", userId).is("deleted_at", null)
-          .gte("transaction_date", sixMonthsStart).lt("transaction_date", monthEnd),
-        supabase.from("categories").select("id, name, color").eq("user_id", userId),
-      ]);
-
-      if (profileRes.data) {
-        setProfile({ name: profileRes.data.name || "", avatar_id: profileRes.data.avatar_id });
-      }
-
-      const accs = accsRes.data || [];
-      const txs = txRes.data || [];
-      const lastTxs = lastTxRes.data || [];
-      const allTxs = evolutionRes.data || [];
-      setAccounts(accs);
-      setRecentTransactions(txs.slice(0, 5));
-
-      const totalBalance = accs.reduce((s: number, a: any) => s + (a.include_in_net_worth ? Number(a.current_balance) : 0), 0);
-      const income = txs.filter((t: any) => t.type === "income" && t.status !== "canceled").reduce((s: number, t: any) => s + Number(t.amount), 0);
-      const expense = txs.filter((t: any) => t.type === "expense" && t.status !== "canceled").reduce((s: number, t: any) => s + Number(t.amount), 0);
-      const pendingTxs = txs.filter((t: any) => t.status === "pending");
-      const pending = pendingTxs.reduce((s: number, t: any) => s + Number(t.amount), 0);
-      setSummary({ balance: totalBalance, income, expense, pending, pendingCount: pendingTxs.length });
-
-      // Category breakdown (current month expenses)
-      const catMap: Record<string, { name: string; color: string; value: number }> = {};
-      txs.filter((t: any) => t.type === "expense" && t.status !== "canceled").forEach((t: any) => {
-        const catName = t.categories?.name || "Sem categoria";
-        const catColor = t.categories?.color || "#AEB6BF";
-        const catId = t.category_id || "uncategorized";
-        if (!catMap[catId]) catMap[catId] = { name: catName, color: catColor, value: 0 };
-        catMap[catId].value += Number(t.amount);
-      });
-      const breakdown = Object.entries(catMap).map(([id, data]) => ({ id, ...data })).sort((a, b) => b.value - a.value);
-      setCategoryBreakdown(breakdown);
-
-      // Last month breakdown
-      const lastCatMap: Record<string, number> = {};
-      lastTxs.filter((t: any) => t.type === "expense" && t.status !== "canceled").forEach((t: any) => {
-        const catId = t.category_id || "uncategorized";
-        lastCatMap[catId] = (lastCatMap[catId] || 0) + Number(t.amount);
-      });
-      setLastMonthCategoryBreakdown(
-        Object.entries(lastCatMap).map(([id, value]) => ({ id, value }))
-      );
-
-      // Monthly evolution (6 months)
-      const monthMap: Record<string, { income: number; expense: number }> = {};
-      allTxs.forEach((t: any) => {
-        if (t.status === "canceled") return;
-        const m = t.transaction_date.slice(0, 7);
-        if (!monthMap[m]) monthMap[m] = { income: 0, expense: 0 };
-        if (t.type === "income") monthMap[m].income += Number(t.amount);
-        if (t.type === "expense") monthMap[m].expense += Number(t.amount);
-      });
-      const evolution = Object.entries(monthMap)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([month, data]) => ({
-          month: new Date(month + "-15").toLocaleDateString("pt-BR", { month: "short" }),
-          receitas: data.income,
-          despesas: data.expense,
-        }));
-      setMonthlyEvolution(evolution);
-
-      setLoading(false);
-    };
-    load();
+    loadData();
   }, [userId]);
 
-  const firstName = (profile.name || "").trim().split(/\s+/)[0] || "Usuário";
-  const netFlow = summary.income - summary.expense;
+  const parentCategories = useMemo(() => categories.filter((category: any) => category.kind === "expense" && !category.parent_id), [categories]);
+  const subcategories = useMemo(() => (categoryFilter === "all" ? [] : categories.filter((category: any) => category.parent_id === categoryFilter)), [categories, categoryFilter]);
 
-  // Category table rows
-  const categoryTableRows = useMemo(() => {
-    return categoryBreakdown.map((cat) => {
-      const lastMonth = lastMonthCategoryBreakdown.find((lc) => lc.id === cat.id)?.value || 0;
-      return { id: cat.id, name: cat.name, color: cat.color, currentMonth: cat.value, lastMonth };
+  useEffect(() => {
+    if (categoryFilter === "all") { setSubcategoryFilter("all"); return; }
+    if (subcategoryFilter === "all") return;
+    if (!subcategories.some((item: any) => item.id === subcategoryFilter)) setSubcategoryFilter("all");
+  }, [categoryFilter, subcategories, subcategoryFilter]);
+
+  const categoryMatch = (tx: FinanceTx) => {
+    if (categoryFilter === "all" && subcategoryFilter === "all") return true;
+    if (!tx.category_id) return false;
+    if (subcategoryFilter !== "all") return tx.category_id === subcategoryFilter;
+    if (categoryFilter === "all") return true;
+    const childIds = categories.filter((cat: any) => cat.parent_id === categoryFilter).map((cat: any) => cat.id);
+    return tx.category_id === categoryFilter || childIds.includes(tx.category_id);
+  };
+
+  const dimensionalFilteredTx = useMemo(() => transactions.filter((tx) => {
+    if (accountFilter !== "all" && tx.account_id !== accountFilter) return false;
+    if (paymentFilter !== "all" && getPaymentKey(tx) !== paymentFilter) return false;
+    if (statusFilter !== "all" && tx.status !== statusFilter) return false;
+    if (!categoryMatch(tx)) return false;
+    return true;
+  }), [transactions, accountFilter, paymentFilter, statusFilter, categoryFilter, subcategoryFilter, categories]);
+
+  const periodKeys = useMemo(() => getLastMonthKeys(periodMonths), [periodMonths]);
+  const periodFilteredTx = useMemo(() => {
+    const keySet = new Set(periodKeys);
+    return dimensionalFilteredTx.filter((tx) => keySet.has(tx.transaction_date.slice(0, 7)));
+  }, [dimensionalFilteredTx, periodKeys]);
+
+  const currentMonthTx = useMemo(() => dimensionalFilteredTx.filter((tx) => tx.transaction_date.slice(0, 7) === currentMonth), [dimensionalFilteredTx, currentMonth]);
+  const previousMonthTx = useMemo(() => dimensionalFilteredTx.filter((tx) => tx.transaction_date.slice(0, 7) === previousMonth), [dimensionalFilteredTx, previousMonth]);
+
+  const currentIncome = useMemo(() => currentMonthTx.filter((tx) => tx.type === "income" && tx.status !== "canceled").reduce((sum, tx) => sum + Number(tx.amount), 0), [currentMonthTx]);
+  const currentExpense = useMemo(() => currentMonthTx.filter((tx) => tx.type === "expense" && tx.status !== "canceled").reduce((sum, tx) => sum + Number(tx.amount), 0), [currentMonthTx]);
+  const previousIncome = useMemo(() => previousMonthTx.filter((tx) => tx.type === "income" && tx.status !== "canceled").reduce((sum, tx) => sum + Number(tx.amount), 0), [previousMonthTx]);
+  const previousExpense = useMemo(() => previousMonthTx.filter((tx) => tx.type === "expense" && tx.status !== "canceled").reduce((sum, tx) => sum + Number(tx.amount), 0), [previousMonthTx]);
+
+  const monthBalance = currentIncome - currentExpense;
+  const previousBalance = previousIncome - previousExpense;
+  const balanceDelta = monthBalance - previousBalance;
+  const trendLabel = (current: number, previous: number) => {
+    const delta = current - previous;
+    const trend = trendFromDelta(delta);
+    if (trend === "stable") return "Estavel";
+    return `${trend === "up" ? "Subiu" : "Caiu"} ${formatCurrency(Math.abs(delta))}`;
+  };
+
+  const evolutionKeys = useMemo(() => getLastMonthKeys(chartRange), [chartRange]);
+  const evolutionData = useMemo(() => {
+    const map: Record<string, { income: number; expense: number }> = {};
+    evolutionKeys.forEach((key) => { map[key] = { income: 0, expense: 0 }; });
+    dimensionalFilteredTx.forEach((tx) => {
+      const key = tx.transaction_date.slice(0, 7);
+      if (!map[key] || tx.status === "canceled") return;
+      if (tx.type === "income") map[key].income += Number(tx.amount);
+      if (tx.type === "expense") map[key].expense += Number(tx.amount);
     });
-  }, [categoryBreakdown, lastMonthCategoryBreakdown]);
+    return evolutionKeys.map((key) => ({ key, month: getMonthLabel(key), receitas: map[key].income, despesas: map[key].expense, saldo: map[key].income - map[key].expense }));
+  }, [dimensionalFilteredTx, evolutionKeys]);
+  const expenseTxCurrent = useMemo(() => currentMonthTx.filter((tx) => tx.type === "expense" && tx.status !== "canceled"), [currentMonthTx]);
 
-  const totalExpense = categoryBreakdown.reduce((s, c) => s + c.value, 0);
+  const categoryDistribution = useMemo(() => {
+    const grouped: Record<string, { label: string; value: number; color: string }> = {};
+    expenseTxCurrent.forEach((tx, index) => {
+      const id = tx.category_id || "uncategorized";
+      const label = tx.categories?.name || "Sem categoria";
+      const color = tx.categories?.color || CATEGORY_COLORS[index % CATEGORY_COLORS.length];
+      if (!grouped[id]) grouped[id] = { label, value: 0, color };
+      grouped[id].value += Number(tx.amount);
+    });
+    return buildDistribution(Object.entries(grouped).map(([key, data]) => ({ key, ...data })));
+  }, [expenseTxCurrent]);
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    );
-  }
+  const paymentDistribution = useMemo(() => {
+    const grouped: Record<string, { label: string; value: number; color: string }> = {};
+    expenseTxCurrent.forEach((tx) => {
+      const key = getPaymentKey(tx);
+      const label = PAYMENT_LABELS[key] || PAYMENT_LABELS.other;
+      const color = PAYMENT_COLORS[key] || PAYMENT_COLORS.other;
+      if (!grouped[key]) grouped[key] = { label, value: 0, color };
+      grouped[key].value += Number(tx.amount);
+    });
+    return buildDistribution(Object.entries(grouped).map(([key, data]) => ({ key, ...data })));
+  }, [expenseTxCurrent]);
+
+  const categoryRows = useMemo(() => {
+    const currentMap: Record<string, number> = {};
+    const previousMap: Record<string, number> = {};
+
+    currentMonthTx.filter((tx) => tx.type === "expense" && tx.status !== "canceled").forEach((tx) => {
+      const id = tx.category_id || "uncategorized";
+      currentMap[id] = (currentMap[id] || 0) + Number(tx.amount);
+    });
+    previousMonthTx.filter((tx) => tx.type === "expense" && tx.status !== "canceled").forEach((tx) => {
+      const id = tx.category_id || "uncategorized";
+      previousMap[id] = (previousMap[id] || 0) + Number(tx.amount);
+    });
+
+    const currentTotal = Object.values(currentMap).reduce((sum, value) => sum + value, 0);
+    return Object.entries(currentMap).map(([id, currentValue], index) => {
+      const category = categories.find((item: any) => item.id === id);
+      const previousValue = previousMap[id] || 0;
+      const delta = currentValue - previousValue;
+      return {
+        id,
+        label: category?.name || "Sem categoria",
+        color: category?.color || CATEGORY_COLORS[index % CATEGORY_COLORS.length],
+        currentValue,
+        percentage: currentTotal > 0 ? (currentValue / currentTotal) * 100 : 0,
+        delta,
+        trend: trendFromDelta(delta),
+      };
+    }).sort((a, b) => b.currentValue - a.currentValue);
+  }, [currentMonthTx, previousMonthTx, categories]);
+
+  const totalNetWorth = useMemo(() => accounts.reduce((sum, account) => sum + (account.include_in_net_worth ? Number(account.current_balance) : 0), 0), [accounts]);
+  const monthAllocated = useMemo(() => allocations.reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0), [allocations]);
+  const freeSurplus = monthBalance - monthAllocated;
+  const paymentOptions = useMemo(() => Array.from(new Set(transactions.map((tx) => getPaymentKey(tx)))), [transactions]);
+
+  const handleAllocateSurplus = async () => {
+    const amount = Number(allocationAmount.replace(",", "."));
+    if (!amount || amount <= 0) return toast.error("Informe um valor valido para alocar.");
+    if (amount > Math.max(freeSurplus, 0)) return toast.error("O valor excede o saldo livre do mes.");
+    if (destinationType === "goal" && destinationGoalId === "all") return toast.error("Selecione uma meta.");
+    if (destinationType === "account" && destinationAccountId === "all") return toast.error("Selecione uma conta de destino.");
+
+    setAllocationSaving(true);
+    try {
+      let finalGoalId: string | null = null;
+      let finalAccountId: string | null = null;
+      let label = "Livre";
+
+      if (destinationType === "goal") {
+        finalGoalId = destinationGoalId;
+        const goal = goals.find((item) => item.id === destinationGoalId);
+        label = goal?.name || "Meta";
+        const { error } = await supabase.from("goals").update({ current_amount: Number(goal?.current_amount || 0) + amount }).eq("id", destinationGoalId);
+        if (error) throw error;
+      }
+
+      if (destinationType === "reserve") {
+        let reserveGoal = goals.find((goal) => String(goal.name || "").toLowerCase().includes("reserva"));
+        if (!reserveGoal) {
+          const insert = await supabase.from("goals").insert({ user_id: userId, name: "Reserva de emergencia", target_amount: amount * 6, current_amount: 0 }).select("id, name, current_amount").single();
+          if (insert.error) throw insert.error;
+          reserveGoal = insert.data;
+        }
+        finalGoalId = reserveGoal.id;
+        label = reserveGoal.name;
+        const { error } = await supabase.from("goals").update({ current_amount: Number(reserveGoal.current_amount || 0) + amount }).eq("id", reserveGoal.id);
+        if (error) throw error;
+      }
+
+      if (destinationType === "account") {
+        finalAccountId = destinationAccountId;
+        const account = accounts.find((item) => item.id === destinationAccountId);
+        label = account?.name || "Conta";
+        const { error } = await supabase.from("accounts").update({ current_balance: Number(account?.current_balance || 0) + amount }).eq("id", destinationAccountId);
+        if (error) throw error;
+      }
+
+      if (allocationSupport) {
+        const supabaseAny = supabase as any;
+        const { error } = await supabaseAny.from("monthly_surplus_allocations").insert({ user_id: userId, ref_month: currentMonth, amount, destination_type: destinationType, goal_id: finalGoalId, account_id: finalAccountId, label });
+        if (error) throw error;
+      }
+
+      toast.success("Saldo alocado com sucesso.");
+      setAllocationAmount("");
+      await loadData();
+    } catch (error: any) {
+      toast.error(error?.message || "Nao foi possivel salvar a alocacao.");
+    } finally {
+      setAllocationSaving(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background pb-24">
       <AppHeader
+        containerClassName="max-w-6xl"
         title="Organizador Financeiro"
-        subtitle={`Olá, ${firstName}`}
-        avatarId={profile.avatar_id}
+        greeting={headerProfile.greeting}
+        userName={headerProfile.firstName}
+        avatarId={headerProfile.avatarId}
         showBack
         backTo="/"
         accentTheme={accentTheme}
         onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
       >
-        {/* Big balance in header */}
         <div className="mt-4">
-          <p className="text-primary-foreground/70 text-xs font-medium">Saldo total</p>
-          <p className="text-3xl font-extrabold font-heading text-primary-foreground">
-            {formatCurrency(summary.balance)}
-          </p>
+          <p className="text-xs font-medium text-primary-foreground/70">Patrimonio total</p>
+          <p className="font-heading text-3xl font-extrabold text-primary-foreground">{formatCurrency(totalNetWorth)}</p>
         </div>
       </AppHeader>
 
       <FinanceTopNav />
 
-      <div className="mx-auto max-w-lg px-4 space-y-5 animate-fade-in">
-        {/* Summary row */}
-        <div className="grid grid-cols-3 gap-3">
-          <Card className="border-0 shadow-card overflow-hidden">
-            <CardContent className="p-3 text-center">
-              <ArrowUpCircle className="mx-auto h-4.5 w-4.5 text-success mb-1" />
-              <p className="text-[10px] text-muted-foreground font-medium">Receitas</p>
-              <p className="text-sm font-bold text-success">{formatCurrency(summary.income)}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-card overflow-hidden">
-            <CardContent className="p-3 text-center">
-              <ArrowDownCircle className="mx-auto h-4.5 w-4.5 text-destructive mb-1" />
-              <p className="text-[10px] text-muted-foreground font-medium">Despesas</p>
-              <p className="text-sm font-bold text-destructive">{formatCurrency(summary.expense)}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-card overflow-hidden">
-            <CardContent className="p-3 text-center">
-              {netFlow >= 0 ? (
-                <TrendingUp className="mx-auto h-4.5 w-4.5 text-success mb-1" />
-              ) : (
-                <TrendingDown className="mx-auto h-4.5 w-4.5 text-destructive mb-1" />
-              )}
-              <p className="text-[10px] text-muted-foreground font-medium">Balanço</p>
-              <p className={cn("text-sm font-bold", netFlow >= 0 ? "text-success" : "text-destructive")}>
-                {netFlow >= 0 ? "+" : ""}{formatCurrency(netFlow)}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Expense Distribution Bar */}
-        {categoryBreakdown.length > 0 && (
-          <section>
-            <h2 className="font-heading text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
-              Distribuição de gastos
-            </h2>
-            <Card className="border-0 shadow-card">
-              <CardContent className="p-4">
-                <ExpenseDistributionBar items={categoryBreakdown} total={totalExpense} />
-              </CardContent>
-            </Card>
-          </section>
-        )}
-
-        {/* Pie chart + Evolution side by side on desktop, stacked on mobile */}
-        {(categoryBreakdown.length > 0 || monthlyEvolution.length > 1) && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Pie Chart */}
-            {categoryBreakdown.length > 0 && (
-              <section>
-                <h2 className="font-heading text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
-                  Por categoria
-                </h2>
-                <Card className="border-0 shadow-card">
-                  <CardContent className="p-4">
-                    <div className="h-48">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={categoryBreakdown}
-                            dataKey="value"
-                            nameKey="name"
-                            innerRadius="50%"
-                            outerRadius="80%"
-                            paddingAngle={2}
-                            isAnimationActive
-                            animationDuration={800}
-                          >
-                            {categoryBreakdown.map((item, index) => (
-                              <Cell key={item.id} fill={item.color || CHART_COLORS[index % CHART_COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip
-                            formatter={(value: number) => formatCurrency(value)}
-                            contentStyle={{
-                              borderRadius: "12px",
-                              border: "1px solid hsl(var(--border))",
-                              background: "hsl(var(--card))",
-                              boxShadow: "var(--shadow-card)",
-                              fontSize: "12px",
-                              padding: "6px 10px",
-                            }}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </CardContent>
-                </Card>
-              </section>
-            )}
-
-            {/* Monthly Evolution */}
-            {monthlyEvolution.length > 1 && (
-              <section>
-                <h2 className="font-heading text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
-                  Evolução mensal
-                </h2>
-                <Card className="border-0 shadow-card">
-                  <CardContent className="p-4">
-                    <div className="h-48">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={monthlyEvolution}>
-                          <defs>
-                            <linearGradient id="incomeGrad" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="hsl(152, 55%, 48%)" stopOpacity={0.3} />
-                              <stop offset="95%" stopColor="hsl(152, 55%, 48%)" stopOpacity={0} />
-                            </linearGradient>
-                            <linearGradient id="expenseGrad" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="hsl(0, 72%, 55%)" stopOpacity={0.3} />
-                              <stop offset="95%" stopColor="hsl(0, 72%, 55%)" stopOpacity={0} />
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                          <XAxis dataKey="month" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                          <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                          <Tooltip
-                            formatter={(value: number, name: string) => [formatCurrency(value), name === "receitas" ? "Receitas" : "Despesas"]}
-                            contentStyle={{
-                              borderRadius: "12px",
-                              border: "1px solid hsl(var(--border))",
-                              background: "hsl(var(--card))",
-                              fontSize: "12px",
-                            }}
-                          />
-                          <Area type="monotone" dataKey="receitas" stroke="hsl(152, 55%, 48%)" fill="url(#incomeGrad)" strokeWidth={2} />
-                          <Area type="monotone" dataKey="despesas" stroke="hsl(0, 72%, 55%)" fill="url(#expenseGrad)" strokeWidth={2} />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </CardContent>
-                </Card>
-              </section>
-            )}
-          </div>
-        )}
-
-        {/* Category Table */}
-        {categoryTableRows.length > 0 && (
-          <section>
-            <h2 className="font-heading text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
-              Gastos por categoria
-            </h2>
-            <CategoryTable rows={categoryTableRows} />
-          </section>
-        )}
-
-        {/* Accounts */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-heading text-xs font-bold text-muted-foreground uppercase tracking-wider">
-              Minhas contas
-            </h2>
-            <button onClick={() => navigate("/financas/contas")} className="text-xs text-primary font-medium flex items-center gap-0.5 hover:underline">
-              Ver todas <ChevronRight className="h-3 w-3" />
-            </button>
-          </div>
-          {accounts.length === 0 ? (
-            <Card className="border-dashed border-2">
-              <CardContent className="p-6 text-center text-muted-foreground text-sm">
-                <Wallet className="mx-auto h-8 w-8 mb-2 opacity-40" />
-                Nenhuma conta cadastrada ainda.<br />
-                Vá em <span className="font-medium text-primary">Contas</span> para adicionar.
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-2">
-              {accounts.slice(0, 4).map((a: any) => (
-                <Card key={a.id} className="border-0 shadow-card">
-                  <CardContent className="flex items-center justify-between p-3.5">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
-                        <Wallet className="h-4 w-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{a.name}</p>
-                        <p className="text-[10px] text-muted-foreground">{a.institution || a.type}</p>
-                      </div>
-                    </div>
-                    <p className={cn("text-sm font-bold", Number(a.current_balance) >= 0 ? "text-success" : "text-destructive")}>
-                      {formatCurrency(Number(a.current_balance))}
-                    </p>
-                  </CardContent>
-                </Card>
-              ))}
+      <div className="mx-auto max-w-6xl space-y-5 px-4">
+        <Card className="border-0 shadow-elevated">
+          <CardContent className="space-y-4 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="text-[11px]">Filtros</Badge>
+              <span className="text-xs text-muted-foreground">{periodFilteredTx.length} transacoes no periodo</span>
             </div>
-          )}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+              <div>
+                <Label className="text-[11px] text-muted-foreground">Periodo</Label>
+                <Select value={String(periodMonths)} onValueChange={(value) => setPeriodMonths(Number(value) as 1 | 3 | 6 | 12)}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">1 mes</SelectItem><SelectItem value="3">3 meses</SelectItem><SelectItem value="6">6 meses</SelectItem><SelectItem value="12">12 meses</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-[11px] text-muted-foreground">Conta</Label>
+                <Select value={accountFilter} onValueChange={setAccountFilter}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="all">Todas</SelectItem>{accounts.map((account) => (<SelectItem key={account.id} value={account.id}>{account.name}</SelectItem>))}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-[11px] text-muted-foreground">Categoria</Label>
+                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="all">Todas</SelectItem>{parentCategories.map((category: any) => (<SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>))}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-[11px] text-muted-foreground">Subcategoria</Label>
+                <Select value={subcategoryFilter} onValueChange={setSubcategoryFilter}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="all">Todas</SelectItem>{subcategories.map((category: any) => (<SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>))}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-[11px] text-muted-foreground">Forma de pagamento</Label>
+                <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="all">Todas</SelectItem>{paymentOptions.map((option) => (<SelectItem key={option} value={option}>{PAYMENT_LABELS[option] || option}</SelectItem>))}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-[11px] text-muted-foreground">Status</Label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="paid">Pago</SelectItem><SelectItem value="pending">Pendente</SelectItem><SelectItem value="overdue">Atrasado</SelectItem></SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <section className="grid grid-cols-1 gap-3 md:grid-cols-4">
+          <Card className="border-0 shadow-card md:col-span-2"><CardContent className="p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Saldo do mes</p>
+            <p className={cn("mt-1 font-heading text-3xl font-extrabold", monthBalance >= 0 ? "text-success" : "text-destructive")}>{formatCurrency(monthBalance)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Receitas - Despesas</p>
+            <div className="mt-3 inline-flex items-center gap-2 rounded-lg border border-border px-2.5 py-1 text-xs">
+              {balanceDelta >= 0 ? <TrendingUp className="h-3.5 w-3.5 text-success" /> : <TrendingDown className="h-3.5 w-3.5 text-destructive" />}
+              <span className="font-semibold">Vs mes anterior: {trendLabel(monthBalance, previousBalance)}</span>
+            </div>
+          </CardContent></Card>
+          <Card className="border-0 shadow-card"><CardContent className="p-4 text-center"><ArrowUpCircle className="mx-auto h-4.5 w-4.5 text-success" /><p className="mt-1 text-[11px] text-muted-foreground">Receitas</p><p className="text-lg font-bold text-success">{formatCurrency(currentIncome)}</p><p className="text-[11px] text-muted-foreground">{trendLabel(currentIncome, previousIncome)}</p></CardContent></Card>
+          <Card className="border-0 shadow-card"><CardContent className="p-4 text-center"><ArrowDownCircle className="mx-auto h-4.5 w-4.5 text-destructive" /><p className="mt-1 text-[11px] text-muted-foreground">Despesas</p><p className="text-lg font-bold text-destructive">{formatCurrency(currentExpense)}</p><p className="text-[11px] text-muted-foreground">{trendLabel(currentExpense, previousExpense)}</p></CardContent></Card>
         </section>
 
-        {/* Recent transactions */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-heading text-xs font-bold text-muted-foreground uppercase tracking-wider">
-              Últimas transações
-            </h2>
-            <button onClick={() => navigate("/financas/transacoes")} className="text-xs text-primary font-medium flex items-center gap-0.5 hover:underline">
-              Ver todas <ChevronRight className="h-3 w-3" />
-            </button>
-          </div>
-          {recentTransactions.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">
-              Nenhuma transação este mês. Use o <span className="text-primary font-bold">+</span> para registrar!
-            </p>
-          ) : (
-            <div className="space-y-1.5">
-              {recentTransactions.map((tx: any) => (
-                <Card key={tx.id} className="border-0 shadow-card">
-                  <CardContent className="flex items-center justify-between p-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className={cn(
-                        "flex h-8 w-8 items-center justify-center rounded-lg shrink-0",
-                        tx.type === "income" ? "bg-success/10" : "bg-destructive/10"
-                      )}>
-                        {tx.type === "income" ? (
-                          <ArrowUpCircle className="h-4 w-4 text-success" />
-                        ) : (
-                          <ArrowDownCircle className="h-4 w-4 text-destructive" />
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{tx.source || "Sem descrição"}</p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {new Date(tx.transaction_date).toLocaleDateString("pt-BR")}
-                          {tx.categories && ` · ${tx.categories.name}`}
-                        </p>
-                      </div>
-                    </div>
-                    <p className={cn("text-sm font-bold shrink-0", tx.type === "income" ? "text-success" : "text-foreground")}>
-                      {tx.type === "income" ? "+" : "-"}{formatCurrency(Number(tx.amount))}
-                    </p>
-                  </CardContent>
-                </Card>
-              ))}
+        <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <Card className="border-0 shadow-card"><CardContent className="space-y-3 p-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-heading text-sm font-bold">Evolucao temporal</h2>
+              <div className="flex gap-1 rounded-lg border border-border p-1">
+                <button type="button" className={cn("rounded-md px-2 py-1 text-xs font-semibold", chartRange === 6 ? "bg-primary text-primary-foreground" : "text-muted-foreground")} onClick={() => setChartRange(6)}>6M</button>
+                <button type="button" className={cn("rounded-md px-2 py-1 text-xs font-semibold", chartRange === 12 ? "bg-primary text-primary-foreground" : "text-muted-foreground")} onClick={() => setChartRange(12)}>12M</button>
+              </div>
             </div>
-          )}
+            <div className="h-60"><ResponsiveContainer width="100%" height="100%"><AreaChart data={evolutionData}>
+              <defs>
+                <linearGradient id="incomeGradDashboard" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="hsl(152, 55%, 48%)" stopOpacity={0.3} /><stop offset="95%" stopColor="hsl(152, 55%, 48%)" stopOpacity={0} /></linearGradient>
+                <linearGradient id="expenseGradDashboard" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="hsl(0, 72%, 55%)" stopOpacity={0.28} /><stop offset="95%" stopColor="hsl(0, 72%, 55%)" stopOpacity={0} /></linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+              <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
+              <Tooltip formatter={(value: number, name: string) => [formatCurrency(value), name === "receitas" ? "Receitas" : "Despesas"]} contentStyle={{ borderRadius: "12px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} />
+              <Area type="monotone" dataKey="receitas" stroke="hsl(152, 55%, 48%)" fill="url(#incomeGradDashboard)" strokeWidth={2} />
+              <Area type="monotone" dataKey="despesas" stroke="hsl(0, 72%, 55%)" fill="url(#expenseGradDashboard)" strokeWidth={2} />
+            </AreaChart></ResponsiveContainer></div>
+          </CardContent></Card>
+
+          <Card className="border-0 shadow-card"><CardContent className="space-y-3 p-4">
+            <div className="flex items-center gap-2"><PieChartIcon className="h-4 w-4 text-primary" /><h2 className="font-heading text-sm font-bold">Categorias do mes</h2></div>
+            {categoryDistribution.length === 0 ? (<p className="text-sm text-muted-foreground">Sem despesas no mes para exibir.</p>) : (
+              <>
+                <div className="h-60"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={categoryDistribution} dataKey="value" nameKey="label" innerRadius="48%" outerRadius="78%" paddingAngle={2}>{categoryDistribution.map((item) => (<Cell key={item.key} fill={item.color} />))}</Pie><Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ borderRadius: "12px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} /></PieChart></ResponsiveContainer></div>
+                <div className="space-y-1.5">{categoryDistribution.slice(0, 6).map((item) => (<div key={item.key} className="flex items-center justify-between rounded-lg border border-border/70 px-2.5 py-1.5 text-xs"><div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} /><span className="font-medium">{item.label}</span></div><span className="font-semibold">{item.percentage.toFixed(1)}%</span></div>))}</div>
+              </>
+            )}
+          </CardContent></Card>
+        </section>
+        <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <SegmentedDistributionBar title="Distribuicao por categoria" items={categoryDistribution} />
+          <SegmentedDistributionBar title="Distribuicao por forma de pagamento" items={paymentDistribution} />
+        </section>
+
+        <section>
+          <Card className="border-0 shadow-card"><CardContent className="space-y-3 p-4">
+            <div className="flex items-center gap-2"><LineChartIcon className="h-4 w-4 text-primary" /><h2 className="font-heading text-sm font-bold">Tabela analitica por categoria</h2></div>
+            {categoryRows.length === 0 ? (<p className="text-sm text-muted-foreground">Sem despesas no mes para compor a tabela.</p>) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-sm">
+                  <thead><tr className="border-b border-border text-left text-[11px] uppercase tracking-wider text-muted-foreground"><th className="py-2 font-semibold">Categoria</th><th className="py-2 text-right font-semibold">Valor</th><th className="py-2 text-right font-semibold">%</th><th className="py-2 text-right font-semibold">Variacao</th><th className="py-2 text-right font-semibold">Tendencia</th></tr></thead>
+                  <tbody>
+                    {categoryRows.map((row) => (
+                      <tr key={row.id} className="border-b border-border/50 last:border-b-0">
+                        <td className="py-2.5"><div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: row.color }} /><span className="font-medium">{row.label}</span></div></td>
+                        <td className="py-2.5 text-right font-semibold">{formatCurrency(row.currentValue)}</td>
+                        <td className="py-2.5 text-right">{row.percentage.toFixed(1)}%</td>
+                        <td className={cn("py-2.5 text-right font-semibold", row.delta > 0 ? "text-destructive" : row.delta < 0 ? "text-success" : "text-muted-foreground")}>{row.delta >= 0 ? "+" : ""}{formatCurrency(row.delta)}</td>
+                        <td className="py-2.5 text-right">{row.trend === "up" && <span className="font-semibold text-destructive">Subiu</span>}{row.trend === "down" && <span className="font-semibold text-success">Caiu</span>}{row.trend === "stable" && <span className="font-semibold text-muted-foreground">Estavel</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent></Card>
+        </section>
+
+        <section>
+          <Card className="border-0 shadow-card"><CardContent className="space-y-4 p-4">
+            <div className="flex items-center gap-2"><Target className="h-4 w-4 text-primary" /><h2 className="font-heading text-sm font-bold">Reservas, metas e destino do saldo</h2></div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div className="rounded-xl border border-border p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Saldo do mes</p><p className={cn("mt-1 text-lg font-extrabold", monthBalance >= 0 ? "text-success" : "text-destructive")}>{formatCurrency(monthBalance)}</p></div>
+              <div className="rounded-xl border border-border p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Ja alocado</p><p className="mt-1 text-lg font-extrabold text-foreground">{formatCurrency(monthAllocated)}</p></div>
+              <div className="rounded-xl border border-border p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Saldo livre</p><p className={cn("mt-1 text-lg font-extrabold", freeSurplus >= 0 ? "text-success" : "text-destructive")}>{formatCurrency(freeSurplus)}</p></div>
+            </div>
+            {!allocationSupport && <div className="rounded-xl border border-warning/40 bg-warning/15 px-3 py-2 text-xs text-[hsl(var(--warning-foreground))]">Historico de alocacoes indisponivel. Aplique a migration para habilitar persistencia completa.</div>}
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
+              <div className="md:col-span-2"><Label className="text-[11px] text-muted-foreground">Valor para alocar</Label><Input value={allocationAmount} onChange={(event) => setAllocationAmount(event.target.value)} placeholder="0,00" /></div>
+              <div><Label className="text-[11px] text-muted-foreground">Destino</Label><Select value={destinationType} onValueChange={(value) => setDestinationType(value as DestinationType)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="free">Deixar livre</SelectItem><SelectItem value="reserve">Reserva emergencia</SelectItem><SelectItem value="goal">Meta</SelectItem><SelectItem value="account">Conta especifica</SelectItem></SelectContent></Select></div>
+              <div><Label className="text-[11px] text-muted-foreground">Meta</Label><Select value={destinationGoalId} onValueChange={setDestinationGoalId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Selecione</SelectItem>{goals.map((goal) => (<SelectItem key={goal.id} value={goal.id}>{goal.name}</SelectItem>))}</SelectContent></Select></div>
+              <div><Label className="text-[11px] text-muted-foreground">Conta</Label><Select value={destinationAccountId} onValueChange={setDestinationAccountId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Selecione</SelectItem>{accounts.map((account) => (<SelectItem key={account.id} value={account.id}>{account.name}</SelectItem>))}</SelectContent></Select></div>
+            </div>
+
+            <Button className="gradient-primary text-primary-foreground" onClick={handleAllocateSurplus} disabled={allocationSaving}>{allocationSaving ? "Salvando..." : "Alocar saldo"}</Button>
+            {allocations.length > 0 && <div className="space-y-2"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Alocacoes do mes</p>{allocations.map((allocation: any) => (<div key={allocation.id} className="flex items-center justify-between rounded-xl border border-border/70 px-3 py-2 text-sm"><span>{allocation.label || allocation.destination_type}</span><span className="font-bold">{formatCurrency(Number(allocation.amount || 0))}</span></div>))}</div>}
+          </CardContent></Card>
+        </section>
+
+        <section>
+          <div className="flex items-center justify-between">
+            <h2 className="font-heading text-xs font-bold uppercase tracking-wider text-muted-foreground">Acesso rapido</h2>
+            <button onClick={() => navigate("/financas/transacoes")} className="text-xs font-semibold text-primary hover:underline">Ver transacoes</button>
+          </div>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            <button onClick={() => navigate("/financas/contas")} className="rounded-xl border border-border bg-card px-3 py-3 text-left shadow-card hover:border-primary/35"><p className="text-sm font-semibold">Contas</p><p className="text-xs text-muted-foreground">Gerencie saldos e contas destino</p></button>
+            <button onClick={() => navigate("/financas/categorias")} className="rounded-xl border border-border bg-card px-3 py-3 text-left shadow-card hover:border-primary/35"><p className="text-sm font-semibold">Categorias</p><p className="text-xs text-muted-foreground">Organize grupos e subgrupos de gasto</p></button>
+          </div>
         </section>
       </div>
 

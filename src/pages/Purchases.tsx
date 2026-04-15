@@ -3,11 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { BankLogo } from "@/components/BankLogo";
+import { AppHeader } from "@/components/AppHeader";
 import { AppFooter } from "@/components/AppFooter";
 import { formatCurrency, formatMonth } from "@/lib/installments";
-import { ArrowLeft, Trash2, ShoppingBag } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { getPurchasesCache, setPurchasesCache } from "@/lib/purchasesCache";
+import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
+import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,6 +46,8 @@ const Purchases: React.FC<PurchasesProps> = ({ initialUserId }) => {
   const [userId, setUserId] = useState<string | null>(initialUserId || null);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
+  const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
+  const headerProfile = useUserHeaderProfile(userId);
 
   useEffect(() => {
     if (initialUserId) {
@@ -107,23 +112,21 @@ const Purchases: React.FC<PurchasesProps> = ({ initialUserId }) => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <header className="gradient-primary px-4 pb-8 pt-6">
-        <div className="container">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate("/cards")}
-            className="mb-3 -ml-2 gap-1 text-primary-foreground hover:bg-primary-foreground/10"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Voltar
-          </Button>
-          <div className="flex items-center gap-3" data-tour="purchases-title">
-            <ShoppingBag className="h-6 w-6 text-primary-foreground" />
-            <h1 className="font-heading text-xl font-bold text-primary-foreground">Minhas Compras</h1>
-          </div>
-        </div>
-      </header>
+      <AppHeader
+        containerClassName="max-w-6xl"
+        title="Compras e ordens"
+        greeting={headerProfile.greeting}
+        userName={headerProfile.firstName}
+        avatarId={headerProfile.avatarId}
+        showBack
+        backTo="/cards"
+        accentTheme={accentTheme}
+        onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
+      >
+        <p className="mt-3 text-xs font-medium text-primary-foreground/80" data-tour="purchases-title">
+          Historico de compras registradas no Meu Cartaozinho
+        </p>
+      </AppHeader>
 
       <div className="container -mt-4 flex-1 space-y-3 pb-4">
         {loading ? (

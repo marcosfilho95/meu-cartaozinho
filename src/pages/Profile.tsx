@@ -121,8 +121,10 @@ const Profile: React.FC = () => {
       <AppHeader
         title="Perfil"
         subtitle="Personalize sua conta"
+        userName={name || "Usuario"}
         avatarId={avatarId}
         showBack
+        preferHistoryBack
         backTo="/"
         accentTheme={accentTheme}
         onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}

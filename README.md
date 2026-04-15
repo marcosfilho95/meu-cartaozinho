@@ -13,6 +13,20 @@ npm install
 npm run dev
 ```
 
+## Setup de auth local (Supabase)
+
+1. Copie `.env.example` para `.env`.
+2. Preencha com os dados do mesmo projeto no Supabase Dashboard:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY` (chave publishable/anon completa)
+3. Nao misture chave de um projeto com URL de outro (isso causa `401 Unauthorized` no login).
+4. Reinicie o servidor apos alterar `.env`.
+5. No Supabase Dashboard (`Authentication > URL Configuration`), inclua:
+   - `Site URL`: `http://localhost:8080`
+   - `Redirect URLs`: `http://localhost:8080/*` e `http://127.0.0.1:8080/*`
+
+Se a tela de login mostrar "Falha de configuracao/conexao do Supabase", revise as variaveis acima.
+
 ## Usar no celular como app (PWA)
 
 O projeto é instalável no celular como aplicativo, desde que esteja publicado com HTTPS.

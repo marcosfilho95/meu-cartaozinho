@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import { ArrowDownCircle, ArrowUpCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { ensureDefaultCategories } from "@/lib/financeCategoryDefaults";
 
 interface AddTransactionDialogProps {
   open: boolean;
@@ -19,8 +21,12 @@ interface AddTransactionDialogProps {
 }
 
 export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
-  open, onOpenChange, userId, defaultType = "expense",
+  open,
+  onOpenChange,
+  userId,
+  defaultType = "expense",
 }) => {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [type, setType] = useState<"income" | "expense">(defaultType);
   const [amount, setAmount] = useState("");
@@ -38,6 +44,11 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
   useEffect(() => {
     if (!open) return;
     const load = async () => {
+      try {
+        await ensureDefaultCategories(userId);
+      } catch {
+        // non-blocking
+      }
       const [accs, cats] = await Promise.all([
         supabase.from("accounts").select("id, name, type").eq("user_id", userId).eq("is_active", true).order("name"),
         supabase.from("categories").select("id, name, kind, color, icon").eq("user_id", userId).order("name"),
@@ -49,13 +60,24 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
     load();
   }, [open, userId]);
 
-  const filteredCategories = categories.filter((c: any) => c.kind === type);
+  const filteredCategories = categories.filter((category: any) => category.kind === type);
+  const hasAccounts = accounts.length > 0;
+  const hasTypeCategories = filteredCategories.length > 0;
 
   const handleSave = async () => {
     const numAmount = parseFloat(amount.replace(",", "."));
-    if (!numAmount || numAmount <= 0) { toast.error("Informe um valor válido"); return; }
-    if (!accountId) { toast.error("Selecione uma conta"); return; }
-    if (!description.trim()) { toast.error("Informe uma descrição"); return; }
+    if (!numAmount || numAmount <= 0) {
+      toast.error("Informe um valor valido");
+      return;
+    }
+    if (!accountId) {
+      toast.error("Selecione uma conta");
+      return;
+    }
+    if (!description.trim()) {
+      toast.error("Informe uma descricao");
+      return;
+    }
 
     setSaving(true);
     const { error } = await supabase.from("transactions").insert({
@@ -76,8 +98,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
       return;
     }
 
-    // Update account balance
-    const account = accounts.find((a: any) => a.id === accountId);
+    const account = accounts.find((item: any) => item.id === accountId);
     if (account) {
       const balanceChange = type === "income" ? numAmount : -numAmount;
       await supabase.from("accounts").update({
@@ -85,7 +106,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
       }).eq("id", accountId);
     }
 
-    toast.success("Transação registrada!");
+    toast.success("Transacao registrada!");
     queryClient.invalidateQueries({ queryKey: ["transactions"] });
     queryClient.invalidateQueries({ queryKey: ["accounts"] });
     queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
@@ -105,12 +126,11 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md rounded-2xl">
+      <DialogContent className="max-w-[760px] rounded-2xl">
         <DialogHeader>
-          <DialogTitle className="font-heading text-lg">Nova Transação</DialogTitle>
+          <DialogTitle className="font-heading text-lg">Nova Transacao</DialogTitle>
         </DialogHeader>
 
-        {/* Type selector */}
         <div className="grid grid-cols-2 gap-2">
           <Button
             type="button"
@@ -130,7 +150,6 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
           </Button>
         </div>
 
-        {/* Amount — big and prominent */}
         <div>
           <Label className="text-xs text-muted-foreground">Valor (R$)</Label>
           <Input
@@ -144,45 +163,74 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
           />
         </div>
 
-        {/* Description */}
         <div>
-          <Label className="text-xs text-muted-foreground">Descrição</Label>
+          <Label className="text-xs text-muted-foreground">Descricao</Label>
           <Input
-            placeholder="Ex: Mercado, Salário..."
+            placeholder="Ex: Mercado, Salario..."
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             className="mt-1"
           />
         </div>
 
-        {/* Account + Category row */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <Label className="text-xs text-muted-foreground">Conta</Label>
             <Select value={accountId} onValueChange={setAccountId}>
               <SelectTrigger className="mt-1"><SelectValue placeholder="Conta" /></SelectTrigger>
               <SelectContent>
-                {accounts.map((a: any) => (
-                  <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                {accounts.map((account: any) => (
+                  <SelectItem key={account.id} value={account.id}>{account.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {!hasAccounts && (
+              <div className="mt-2 rounded-lg border border-dashed border-primary/40 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+                Nenhuma conta criada. Crie em {" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenChange(false);
+                    navigate("/financas/contas");
+                  }}
+                  className="font-semibold text-primary underline"
+                >
+                  Contas
+                </button>
+                .
+              </div>
+            )}
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Categoria</Label>
             <Select value={categoryId} onValueChange={setCategoryId}>
               <SelectTrigger className="mt-1"><SelectValue placeholder="Categoria" /></SelectTrigger>
               <SelectContent>
-                {filteredCategories.map((c: any) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                {filteredCategories.map((category: any) => (
+                  <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {!hasTypeCategories && (
+              <div className="mt-2 rounded-lg border border-dashed border-primary/40 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+                Nenhuma categoria de {type === "expense" ? "despesa" : "receita"}. Crie em {" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenChange(false);
+                    navigate("/financas/categorias");
+                  }}
+                  className="font-semibold text-primary underline"
+                >
+                  Categorias
+                </button>
+                .
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Date + Status row */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <Label className="text-xs text-muted-foreground">Data</Label>
             <Input
@@ -194,7 +242,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Status</Label>
-            <Select value={status} onValueChange={(v) => setStatus(v as any)}>
+            <Select value={status} onValueChange={(value) => setStatus(value as "pending" | "paid")}>
               <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="paid">Pago</SelectItem>
@@ -204,9 +252,8 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
           </div>
         </div>
 
-        {/* Notes */}
         <div>
-          <Label className="text-xs text-muted-foreground">Observações (opcional)</Label>
+          <Label className="text-xs text-muted-foreground">Observacoes (opcional)</Label>
           <Textarea
             placeholder="Alguma nota..."
             value={notes}
@@ -218,7 +265,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
 
         <Button
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || !hasAccounts}
           className="w-full h-12 gradient-primary text-primary-foreground font-semibold text-base"
         >
           {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : "Salvar"}
