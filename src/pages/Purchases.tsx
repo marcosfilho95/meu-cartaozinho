@@ -112,7 +112,7 @@ const Purchases: React.FC<PurchasesProps> = ({ initialUserId }) => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/cards")}
             className="mb-3 -ml-2 gap-1 text-primary-foreground hover:bg-primary-foreground/10"
           >
             <ArrowLeft className="h-4 w-4" />

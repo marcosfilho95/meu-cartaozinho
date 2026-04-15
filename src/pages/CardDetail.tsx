@@ -264,7 +264,7 @@ const CardDetail: React.FC = () => {
       return;
     }
     toast.success("Cartao excluido");
-    navigate("/");
+    navigate("/cards");
   };
 
   const usedSubgroupNames = useMemo(() => new Set(installments.map((inst) => inst.purchases?.person).filter(Boolean)), [installments]);
@@ -307,7 +307,7 @@ const CardDetail: React.FC = () => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/cards")}
             className="-ml-2 mb-3 gap-1 text-primary-foreground hover:bg-primary-foreground/10"
           >
             <ArrowLeft className="h-4 w-4" />
