@@ -75,6 +75,10 @@ const AppRoutes = () => {
         <Route path="/cartao/:cardId" element={<CardDetail />} />
         <Route path="/compras" element={<Purchases initialUserId={session?.user?.id} />} />
         <Route path="/perfil" element={<Profile />} />
+        <Route path="/financas" element={<FinanceDashboard userId={session?.user?.id} />} />
+        <Route path="/financas/contas" element={<AccountsPage userId={session?.user?.id} />} />
+        <Route path="/financas/categorias" element={<CategoriesPage userId={session?.user?.id} />} />
+        <Route path="/financas/transacoes" element={<TransactionsPage userId={session?.user?.id} />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
       <FirstLoginTour userId={session?.user?.id} />
