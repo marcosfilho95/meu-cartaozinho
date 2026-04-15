@@ -393,15 +393,6 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   };
 
   return (
-    <FinanceLayout
-      userId={userId}
-      headerChildren={
-        <div className="mt-4">
-          <p className="text-xs font-medium text-primary-foreground/70">Patrimônio total</p>
-          <p className="font-heading text-3xl font-extrabold text-primary-foreground">{formatCurrency(totalNetWorth)}</p>
-        </div>
-      }
-    >
       <div className="mx-auto max-w-6xl space-y-5 px-4">
         <Card className="border-0 shadow-elevated">
           <CardContent className="space-y-4 p-4">
