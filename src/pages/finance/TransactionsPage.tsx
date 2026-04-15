@@ -85,7 +85,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
   }, [filtered]);
 
   return (
-    <FinanceLayout userId={userId}>
+    <>
       <div className="sticky top-0 z-30 border-b border-border/40 bg-background/95 backdrop-blur-md">
         <div className="mx-auto flex max-w-5xl gap-2 px-4 py-3">
           <div className="relative flex-1">
