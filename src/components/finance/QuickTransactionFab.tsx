@@ -14,11 +14,11 @@ export const QuickTransactionFab: React.FC<QuickTransactionFabProps> = ({ userId
     <>
       <Button
         onClick={() => setOpen(true)}
-        className="fixed bottom-20 right-4 z-50 h-14 w-14 rounded-full shadow-elevated gradient-primary hover:opacity-90 transition-all duration-200 md:bottom-8 md:right-8"
-        size="icon"
+        className="fixed bottom-6 right-4 z-50 h-12 gap-2 rounded-full px-5 shadow-elevated gradient-primary hover:opacity-90 transition-all duration-200 md:right-8"
         aria-label="Nova transação"
       >
-        <Plus className="h-6 w-6 text-primary-foreground" />
+        <Plus className="h-5 w-5 text-primary-foreground" />
+        <span className="text-sm font-semibold text-primary-foreground">Nova Transação</span>
       </Button>
       <AddTransactionDialog open={open} onOpenChange={setOpen} userId={userId} />
     </>

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, LogOut, UserCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { AccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
+import { AccentTheme } from "@/lib/accentTheme";
 
 interface AppHeaderProps {
   title: string;
@@ -42,8 +42,8 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   return (
     <header className="gradient-primary px-4 pb-8 pt-6">
       <div className="mx-auto max-w-lg">
-        {/* Top row: back + actions */}
-        <div className="flex items-center justify-between mb-4">
+        {/* Top row: back/logo + actions */}
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             {showBack && (
               <Button
@@ -84,16 +84,14 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           </div>
         </div>
 
-        {/* Identity row */}
+        {/* Identity row: avatar + name + title */}
         <div className="flex items-center gap-3">
-          {avatarId !== undefined && (
-            <button
-              onClick={() => navigate("/perfil")}
-              className="rounded-full transition-transform hover:scale-105 flex-shrink-0"
-            >
-              <UserAvatar avatarId={avatarId} size={44} />
-            </button>
-          )}
+          <button
+            onClick={() => navigate("/perfil")}
+            className="rounded-full transition-transform hover:scale-105 flex-shrink-0"
+          >
+            <UserAvatar avatarId={avatarId ?? undefined} size={48} />
+          </button>
           <div className="min-w-0">
             {subtitle && (
               <p className="text-primary-foreground/70 text-xs font-medium">{subtitle}</p>
