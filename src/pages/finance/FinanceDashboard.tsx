@@ -717,34 +717,43 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
               {topExpenseCategories.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Sem despesas para montar o gráfico por categoria.</p>
               ) : (
-                <div className="h-72">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={stackedExpenseData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
-                      <Tooltip
-                        formatter={(value: number, name: string) => {
-                          const found = topExpenseCategories.find((cat) => `cat_${cat.id}` === name);
-                          if (found) return [formatCurrency(value), found.label];
-                          return [formatCurrency(value), "Total despesas"];
-                        }}
-                        contentStyle={{ borderRadius: "12px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }}
-                      />
+                <>
+                  <div className="flex gap-4">
+                    <div className="flex-1 h-72">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={stackedExpenseData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                          <YAxis tick={{ fontSize: 11 }} tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
+                          <Tooltip
+                            formatter={(value: number, name: string) => {
+                              const found = topExpenseCategories.find((cat) => `cat_${cat.id}` === name);
+                              if (found) return [formatCurrency(value), found.label];
+                              return [formatCurrency(value), "Total despesas"];
+                            }}
+                            contentStyle={{ borderRadius: "12px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }}
+                          />
+                          {topExpenseCategories.map((cat) => (
+                            <Bar key={cat.id} dataKey={`cat_${cat.id}`} stackId="expense" fill={cat.color} radius={[2, 2, 0, 0]} />
+                          ))}
+                          <Line type="monotone" dataKey="totalDespesas" stroke="#111827" strokeWidth={2.5} dot={{ r: 3 }} />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="shrink-0 flex flex-col justify-center gap-2 min-w-[140px]">
                       {topExpenseCategories.map((cat) => (
-                        <Bar key={cat.id} dataKey={`cat_${cat.id}`} stackId="expense" fill={cat.color} radius={[2, 2, 0, 0]} />
+                        <div key={cat.id} className="flex items-center gap-2 text-xs">
+                          <span className="h-3 w-3 rounded-sm shrink-0" style={{ backgroundColor: cat.color }} />
+                          <span className="font-medium">{cat.label}</span>
+                        </div>
                       ))}
-                      <Line type="monotone" dataKey="totalDespesas" stroke="#111827" strokeWidth={2.5} dot={{ r: 3 }} />
-                      <Legend
-                        verticalAlign="bottom"
-                        formatter={(value) => {
-                          const found = topExpenseCategories.find((cat) => `cat_${cat.id}` === value);
-                          return found ? found.label : "Total despesas";
-                        }}
-                      />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground pt-1">
+                    <span className="inline-block h-[3px] w-5 rounded-full bg-[#111827]" />
+                    <span className="font-medium">Total despesas</span>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
