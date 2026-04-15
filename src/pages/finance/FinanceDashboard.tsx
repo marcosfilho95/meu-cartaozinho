@@ -28,7 +28,7 @@ import {
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
-import { AddGoalDialog } from "@/components/finance/AddGoalDialog";
+import { GoalsSection } from "@/components/finance/GoalsSection";
 import {
   Area,
   AreaChart,
