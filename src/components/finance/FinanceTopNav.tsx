@@ -1,10 +1,11 @@
 import React from "react";
 import { useLocation } from "react-router-dom";
-import { LayoutDashboard, ArrowLeftRight, Wallet, FolderOpen } from "lucide-react";
+import { LayoutDashboard, ArrowLeftRight, Wallet, FolderOpen, Target } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 
 const NAV_ITEMS = [
   { to: "/financas", icon: LayoutDashboard, label: "Resumo" },
+  { to: "/financas/orcamento", icon: Target, label: "Orçamento" },
   { to: "/financas/transacoes", icon: ArrowLeftRight, label: "Transações" },
   { to: "/financas/contas", icon: Wallet, label: "Contas" },
   { to: "/financas/categorias", icon: FolderOpen, label: "Categorias" },
