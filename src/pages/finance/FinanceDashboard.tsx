@@ -196,6 +196,8 @@ const SegmentedDistributionBar: React.FC<{ title: string; items: DistributionIte
     </Card>
   );
 };
+const DEFAULTS_INIT_KEY = "finance_defaults_initialized";
+
 const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -220,22 +222,9 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const previousMonth = monthKey(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1));
   const todayDay = new Date().getDate();
 
-  const loadData = async () => {
-    setLoading(true);
+  const fetchData = React.useCallback(async () => {
     const now = new Date();
     const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-
-    try {
-      await ensureDefaultAccounts(userId);
-    } catch {
-      // Non-blocking: dashboard still loads even if bootstrap fails.
-    }
-    try {
-      await ensureDefaultCategories(userId);
-    } catch {}
-    try {
-      await ensureDefaultGoals(userId);
-    } catch {}
 
     const [accountsRes, categoriesRes, goalsRes, txRes] = await Promise.all([
       supabase.from("accounts").select("id, name, type, due_day, current_balance, is_active, include_in_net_worth").eq("user_id", userId).eq("is_active", true).order("name"),
@@ -252,7 +241,6 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
 
     if (accountsRes.error || categoriesRes.error || goalsRes.error || txRes.error) {
       toast.error("Falha ao carregar dashboard financeiro.");
-      setLoading(false);
       return;
     }
 
@@ -260,14 +248,32 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     setCategories(categoriesRes.data || []);
     setGoals(goalsRes.data || []);
     setTransactions((txRes.data as FinanceTx[]) || []);
+  }, [userId]);
 
+  const loadData = React.useCallback(async () => {
+    setLoading(true);
+
+    // Run default seeding only once per session
+    const initKey = `${DEFAULTS_INIT_KEY}:${userId}`;
+    if (!sessionStorage.getItem(initKey)) {
+      try {
+        await Promise.all([
+          ensureDefaultAccounts(userId),
+          ensureDefaultCategories(userId),
+          ensureDefaultGoals(userId),
+        ]);
+      } catch {}
+      sessionStorage.setItem(initKey, "1");
+    }
+
+    await fetchData();
     setLoading(false);
-  };
+  }, [userId, fetchData]);
 
   useEffect(() => {
     if (!userId) return;
     loadData();
-  }, [userId]);
+  }, [userId, loadData]);
 
   useEffect(() => {
     const onFinanceSync = (event: Event) => {
