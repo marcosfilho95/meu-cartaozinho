@@ -451,18 +451,19 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
           </CardContent>
         </Card>
 
-        <section className="grid grid-cols-1 gap-3 md:grid-cols-4">
-          <Card className="border-0 shadow-card md:col-span-2"><CardContent className="p-4">
+        <section className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <Card className="border-0 shadow-card xl:col-span-2"><CardContent className="p-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Saldo do mês</p>
             <p className={cn("mt-1 font-heading text-3xl font-extrabold", monthBalance >= 0 ? "text-success" : "text-destructive")}>{formatCurrency(monthBalance)}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Receitas - Despesas</p>
-            <div className="mt-3 inline-flex items-center gap-2 rounded-lg border border-border px-2.5 py-1 text-xs">
+            <div className="mt-2 inline-flex items-center gap-2 rounded-lg border border-border px-2.5 py-1 text-xs">
               {balanceDelta >= 0 ? <TrendingUp className="h-3.5 w-3.5 text-success" /> : <TrendingDown className="h-3.5 w-3.5 text-destructive" />}
-              <span className="font-semibold">Vs mês anterior: {trendLabel(monthBalance, previousBalance)}</span>
+              <span className="font-semibold">Vs anterior: {trendLabel(monthBalance, previousBalance)}</span>
             </div>
           </CardContent></Card>
-          <Card className="border-0 shadow-card"><CardContent className="p-4 text-center"><ArrowUpCircle className="mx-auto h-4.5 w-4.5 text-success" /><p className="mt-1 text-[11px] text-muted-foreground">Receitas</p><p className="text-lg font-bold text-success">{formatCurrency(currentIncome)}</p><p className="text-[11px] text-muted-foreground">{trendLabel(currentIncome, previousIncome)}</p></CardContent></Card>
-          <Card className="border-0 shadow-card"><CardContent className="p-4 text-center"><ArrowDownCircle className="mx-auto h-4.5 w-4.5 text-destructive" /><p className="mt-1 text-[11px] text-muted-foreground">Despesas</p><p className="text-lg font-bold text-destructive">{formatCurrency(currentExpense)}</p><p className="text-[11px] text-muted-foreground">{trendLabel(currentExpense, previousExpense)}</p></CardContent></Card>
+          <Card className="border-0 shadow-card"><CardContent className="p-4 text-center"><ArrowUpCircle className="mx-auto h-4.5 w-4.5 text-success" /><p className="mt-1 text-[11px] text-muted-foreground">Receitas</p><p className="text-lg font-bold text-success">{formatCurrency(currentIncome)}</p></CardContent></Card>
+          <Card className="border-0 shadow-card"><CardContent className="p-4 text-center"><ArrowDownCircle className="mx-auto h-4.5 w-4.5 text-destructive" /><p className="mt-1 text-[11px] text-muted-foreground">Despesas</p><p className="text-lg font-bold text-destructive">{formatCurrency(currentExpense)}</p></CardContent></Card>
+          <Card className="border-0 shadow-card border-l-2 border-l-success"><CardContent className="p-4 text-center"><p className="text-[11px] text-muted-foreground">✅ Pago</p><p className="text-lg font-bold text-success">{formatCurrency(paidExpense)}</p></CardContent></Card>
+          <Card className="border-0 shadow-card border-l-2 border-l-warning"><CardContent className="p-4 text-center"><p className="text-[11px] text-muted-foreground">⏳ Pendente</p><p className="text-lg font-bold text-warning">{formatCurrency(pendingExpense)}</p></CardContent></Card>
         </section>
 
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
