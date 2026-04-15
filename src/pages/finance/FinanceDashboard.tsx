@@ -513,6 +513,23 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   // Pending + recent transactions for dashboard
   const pendingTx = useMemo(() => currentMonthTx.filter((tx) => tx.status === "pending" || tx.status === "overdue").sort((a, b) => a.transaction_date.localeCompare(b.transaction_date)), [currentMonthTx]);
   const recentTx = useMemo(() => [...currentMonthTx].sort((a, b) => b.transaction_date.localeCompare(a.transaction_date)).slice(0, 8), [currentMonthTx]);
+  const [bulkPaying, setBulkPaying] = useState(false);
+
+  const handleBulkPayAll = async () => {
+    if (pendingTx.length === 0) return;
+    setBulkPaying(true);
+    try {
+      const ids = pendingTx.map((tx) => tx.id);
+      const { error } = await supabase.from("transactions").update({ status: "paid" as const }).in("id", ids);
+      if (error) throw error;
+      toast.success(`✅ ${ids.length} contas confirmadas!`);
+      await fetchData();
+    } catch (err: any) {
+      toast.error("Erro: " + (err?.message || "falha"));
+    } finally {
+      setBulkPaying(false);
+    }
+  };
 
   const handleToggleStatus = async (tx: FinanceTx) => {
     const newStatus = tx.status === "paid" ? "pending" : "paid";
@@ -520,7 +537,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     try {
       const { error } = await supabase.from("transactions").update({ status: newStatus }).eq("id", tx.id);
       if (error) throw error;
-      toast.success(newStatus === "paid" ? "✅ Marcado como pago!" : "Voltou para pendente");
+      toast.success(newStatus === "paid" ? "✅ Confirmado!" : "Voltou para pendente");
       await fetchData();
     } catch (err: any) {
       toast.error("Erro: " + (err?.message || "falha"));
