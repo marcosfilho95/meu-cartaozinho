@@ -359,17 +359,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const expenseTxCurrent = useMemo(() => currentMonthTx.filter((tx) => tx.type === "expense" && tx.status !== "canceled"), [currentMonthTx]);
   const expenseTxCurrentForVisual = useMemo(() => expenseTxCurrent, [expenseTxCurrent]);
 
-  // Build a stable color map: category_id -> resolved color (same everywhere)
-  const categoryColorMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    categories.forEach((cat: any) => {
-      const label = String(cat.name || "");
-      const baseColor = cat.color || "#AEB6BF";
-      map[cat.id] = resolveBankCategoryColor(label, baseColor);
-    });
-    map["uncategorized"] = "#AEB6BF";
-    return map;
-  }, [categories]);
+  const categoryColorMap = useMemo(() => buildCategoryColorMap(categories), [categories]);
 
   const categoryDistribution = useMemo(() => {
     const grouped: Record<string, { label: string; value: number; color: string }> = {};
