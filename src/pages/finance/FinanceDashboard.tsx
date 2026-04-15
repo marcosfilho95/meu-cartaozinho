@@ -394,18 +394,29 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const expenseTxCurrent = useMemo(() => currentMonthTx.filter((tx) => tx.type === "expense" && tx.status !== "canceled"), [currentMonthTx]);
   const expenseTxCurrentForVisual = useMemo(() => expenseTxCurrent, [expenseTxCurrent]);
 
+  // Build a stable color map: category_id -> resolved color (same everywhere)
+  const categoryColorMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    categories.forEach((cat: any) => {
+      const label = String(cat.name || "");
+      const baseColor = cat.color || "#AEB6BF";
+      map[cat.id] = resolveBankCategoryColor(label, baseColor);
+    });
+    map["uncategorized"] = "#AEB6BF";
+    return map;
+  }, [categories]);
+
   const categoryDistribution = useMemo(() => {
     const grouped: Record<string, { label: string; value: number; color: string }> = {};
-    expenseTxCurrentForVisual.forEach((tx, index) => {
+    expenseTxCurrentForVisual.forEach((tx) => {
       const id = tx.category_id || "uncategorized";
       const label = tx.categories?.name || "Sem categoria";
-      const baseColor = tx.categories?.color || CATEGORY_COLORS[index % CATEGORY_COLORS.length];
-      const color = resolveBankCategoryColor(label, baseColor);
+      const color = categoryColorMap[id] || "#AEB6BF";
       if (!grouped[id]) grouped[id] = { label, value: 0, color };
       grouped[id].value += Number(tx.amount);
     });
     return buildDistribution(Object.entries(grouped).map(([key, data]) => ({ key, ...data })));
-  }, [expenseTxCurrentForVisual]);
+  }, [expenseTxCurrentForVisual, categoryColorMap]);
 
   const paymentDistribution = useMemo(() => {
     const grouped: Record<string, { label: string; value: number; color: string }> = {};
