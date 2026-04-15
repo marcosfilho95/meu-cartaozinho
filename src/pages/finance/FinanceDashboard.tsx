@@ -600,6 +600,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
         </section>
       </div>
       <AddGoalDialog open={goalDialogOpen} onOpenChange={setGoalDialogOpen} userId={userId} onCreated={loadData} />
+    </>
   );
 };
 
