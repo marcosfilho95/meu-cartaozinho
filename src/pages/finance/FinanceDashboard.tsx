@@ -60,8 +60,8 @@ type DistributionItem = { key: string; label: string; value: number; color: stri
 
 const CATEGORY_COLORS = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#F0B27A", "#BB8FCE", "#AEB6BF", "#82E0AA"];
 const PAYMENT_LABELS: Record<string, string> = {
-  credit_card: "Cartao de credito", checking: "Conta corrente", savings: "Poupanca", cash: "Dinheiro",
-  investment: "Investimento", loan: "Emprestimo", transferencia: "Transferencia", other: "Outro",
+  credit_card: "Cartão de crédito", checking: "Conta corrente", savings: "Poupança", cash: "Dinheiro",
+  investment: "Investimento", loan: "Empréstimo", transferencia: "Transferência", other: "Outro",
 };
 const PAYMENT_COLORS: Record<string, string> = {
   credit_card: "#7C3AED", checking: "#0284C7", savings: "#0891B2", cash: "#D97706",
@@ -263,7 +263,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const trendLabel = (current: number, previous: number) => {
     const delta = current - previous;
     const trend = trendFromDelta(delta);
-    if (trend === "stable") return "Estavel";
+    if (trend === "stable") return "Estável";
     return `${trend === "up" ? "Subiu" : "Caiu"} ${formatCurrency(Math.abs(delta))}`;
   };
 
@@ -342,8 +342,8 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
 
   const handleAllocateSurplus = async () => {
     const amount = Number(allocationAmount.replace(",", "."));
-    if (!amount || amount <= 0) return toast.error("Informe um valor valido para alocar.");
-    if (amount > Math.max(freeSurplus, 0)) return toast.error("O valor excede o saldo livre do mes.");
+    if (!amount || amount <= 0) return toast.error("Informe um valor válido para alocar.");
+    if (amount > Math.max(freeSurplus, 0)) return toast.error("O valor excede o saldo livre do mês.");
     if (destinationType === "goal" && destinationGoalId === "all") return toast.error("Selecione uma meta.");
     if (destinationType === "account" && destinationAccountId === "all") return toast.error("Selecione uma conta de destino.");
 
@@ -364,7 +364,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       if (destinationType === "reserve") {
         let reserveGoal = goals.find((goal) => String(goal.name || "").toLowerCase().includes("reserva"));
         if (!reserveGoal) {
-          const insert = await supabase.from("goals").insert({ user_id: userId, name: "Reserva de emergencia", target_amount: amount * 6, current_amount: 0 }).select("id, name, current_amount").single();
+          const insert = await supabase.from("goals").insert({ user_id: userId, name: "Reserva de emergência", target_amount: amount * 6, current_amount: 0 }).select("id, name, current_amount").single();
           if (insert.error) throw insert.error;
           reserveGoal = insert.data;
         }
@@ -392,7 +392,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       setAllocationAmount("");
       await loadData();
     } catch (error: any) {
-      toast.error(error?.message || "Nao foi possivel salvar a alocacao.");
+      toast.error(error?.message || "Não foi possível salvar a alocação.");
     } finally {
       setAllocationSaving(false);
     }
@@ -412,7 +412,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
         onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
       >
         <div className="mt-4">
-          <p className="text-xs font-medium text-primary-foreground/70">Patrimonio total</p>
+          <p className="text-xs font-medium text-primary-foreground/70">Patrimônio total</p>
           <p className="font-heading text-3xl font-extrabold text-primary-foreground">{formatCurrency(totalNetWorth)}</p>
         </div>
       </AppHeader>
@@ -424,15 +424,15 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
           <CardContent className="space-y-4 p-4">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="text-[11px]">Filtros</Badge>
-              <span className="text-xs text-muted-foreground">{periodFilteredTx.length} transacoes no periodo</span>
+              <span className="text-xs text-muted-foreground">{periodFilteredTx.length} transações no período</span>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
               <div>
-                <Label className="text-[11px] text-muted-foreground">Periodo</Label>
+                <Label className="text-[11px] text-muted-foreground">Período</Label>
                 <Select value={String(periodMonths)} onValueChange={(value) => setPeriodMonths(Number(value) as 1 | 3 | 6 | 12)}>
                   <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="1">1 mes</SelectItem><SelectItem value="3">3 meses</SelectItem><SelectItem value="6">6 meses</SelectItem><SelectItem value="12">12 meses</SelectItem>
+                    <SelectItem value="1">1 mês</SelectItem><SelectItem value="3">3 meses</SelectItem><SelectItem value="6">6 meses</SelectItem><SelectItem value="12">12 meses</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -477,12 +477,12 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
 
         <section className="grid grid-cols-1 gap-3 md:grid-cols-4">
           <Card className="border-0 shadow-card md:col-span-2"><CardContent className="p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Saldo do mes</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Saldo do mês</p>
             <p className={cn("mt-1 font-heading text-3xl font-extrabold", monthBalance >= 0 ? "text-success" : "text-destructive")}>{formatCurrency(monthBalance)}</p>
             <p className="mt-1 text-xs text-muted-foreground">Receitas - Despesas</p>
             <div className="mt-3 inline-flex items-center gap-2 rounded-lg border border-border px-2.5 py-1 text-xs">
               {balanceDelta >= 0 ? <TrendingUp className="h-3.5 w-3.5 text-success" /> : <TrendingDown className="h-3.5 w-3.5 text-destructive" />}
-              <span className="font-semibold">Vs mes anterior: {trendLabel(monthBalance, previousBalance)}</span>
+              <span className="font-semibold">Vs mês anterior: {trendLabel(monthBalance, previousBalance)}</span>
             </div>
           </CardContent></Card>
           <Card className="border-0 shadow-card"><CardContent className="p-4 text-center"><ArrowUpCircle className="mx-auto h-4.5 w-4.5 text-success" /><p className="mt-1 text-[11px] text-muted-foreground">Receitas</p><p className="text-lg font-bold text-success">{formatCurrency(currentIncome)}</p><p className="text-[11px] text-muted-foreground">{trendLabel(currentIncome, previousIncome)}</p></CardContent></Card>
@@ -492,7 +492,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <Card className="border-0 shadow-card"><CardContent className="space-y-3 p-4">
             <div className="flex items-center justify-between">
-              <h2 className="font-heading text-sm font-bold">Evolucao temporal</h2>
+              <h2 className="font-heading text-sm font-bold">Evolução temporal</h2>
               <div className="flex gap-1 rounded-lg border border-border p-1">
                 <button type="button" className={cn("rounded-md px-2 py-1 text-xs font-semibold", chartRange === 6 ? "bg-primary text-primary-foreground" : "text-muted-foreground")} onClick={() => setChartRange(6)}>6M</button>
                 <button type="button" className={cn("rounded-md px-2 py-1 text-xs font-semibold", chartRange === 12 ? "bg-primary text-primary-foreground" : "text-muted-foreground")} onClick={() => setChartRange(12)}>12M</button>
@@ -513,8 +513,8 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
           </CardContent></Card>
 
           <Card className="border-0 shadow-card"><CardContent className="space-y-3 p-4">
-            <div className="flex items-center gap-2"><PieChartIcon className="h-4 w-4 text-primary" /><h2 className="font-heading text-sm font-bold">Categorias do mes</h2></div>
-            {categoryDistribution.length === 0 ? (<p className="text-sm text-muted-foreground">Sem despesas no mes para exibir.</p>) : (
+            <div className="flex items-center gap-2"><PieChartIcon className="h-4 w-4 text-primary" /><h2 className="font-heading text-sm font-bold">Categorias do mês</h2></div>
+            {categoryDistribution.length === 0 ? (<p className="text-sm text-muted-foreground">Sem despesas no mês para exibir.</p>) : (
               <>
                 <div className="h-60"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={categoryDistribution} dataKey="value" nameKey="label" innerRadius="48%" outerRadius="78%" paddingAngle={2}>{categoryDistribution.map((item) => (<Cell key={item.key} fill={item.color} />))}</Pie><Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ borderRadius: "12px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} /></PieChart></ResponsiveContainer></div>
                 <div className="space-y-1.5">{categoryDistribution.slice(0, 6).map((item) => (<div key={item.key} className="flex items-center justify-between rounded-lg border border-border/70 px-2.5 py-1.5 text-xs"><div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} /><span className="font-medium">{item.label}</span></div><span className="font-semibold">{item.percentage.toFixed(1)}%</span></div>))}</div>
@@ -523,17 +523,17 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
           </CardContent></Card>
         </section>
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <SegmentedDistributionBar title="Distribuicao por categoria" items={categoryDistribution} />
-          <SegmentedDistributionBar title="Distribuicao por forma de pagamento" items={paymentDistribution} />
+           <SegmentedDistributionBar title="Distribuição por categoria" items={categoryDistribution} />
+           <SegmentedDistributionBar title="Distribuição por forma de pagamento" items={paymentDistribution} />
         </section>
 
         <section>
           <Card className="border-0 shadow-card"><CardContent className="space-y-3 p-4">
-            <div className="flex items-center gap-2"><LineChartIcon className="h-4 w-4 text-primary" /><h2 className="font-heading text-sm font-bold">Tabela analitica por categoria</h2></div>
-            {categoryRows.length === 0 ? (<p className="text-sm text-muted-foreground">Sem despesas no mes para compor a tabela.</p>) : (
+             <div className="flex items-center gap-2"><LineChartIcon className="h-4 w-4 text-primary" /><h2 className="font-heading text-sm font-bold">Tabela analítica por categoria</h2></div>
+             {categoryRows.length === 0 ? (<p className="text-sm text-muted-foreground">Sem despesas no mês para compor a tabela.</p>) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[640px] text-sm">
-                  <thead><tr className="border-b border-border text-left text-[11px] uppercase tracking-wider text-muted-foreground"><th className="py-2 font-semibold">Categoria</th><th className="py-2 text-right font-semibold">Valor</th><th className="py-2 text-right font-semibold">%</th><th className="py-2 text-right font-semibold">Variacao</th><th className="py-2 text-right font-semibold">Tendencia</th></tr></thead>
+                  <thead><tr className="border-b border-border text-left text-[11px] uppercase tracking-wider text-muted-foreground"><th className="py-2 font-semibold">Categoria</th><th className="py-2 text-right font-semibold">Valor</th><th className="py-2 text-right font-semibold">%</th><th className="py-2 text-right font-semibold">Variação</th><th className="py-2 text-right font-semibold">Tendência</th></tr></thead>
                   <tbody>
                     {categoryRows.map((row) => (
                       <tr key={row.id} className="border-b border-border/50 last:border-b-0">
@@ -541,7 +541,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
                         <td className="py-2.5 text-right font-semibold">{formatCurrency(row.currentValue)}</td>
                         <td className="py-2.5 text-right">{row.percentage.toFixed(1)}%</td>
                         <td className={cn("py-2.5 text-right font-semibold", row.delta > 0 ? "text-destructive" : row.delta < 0 ? "text-success" : "text-muted-foreground")}>{row.delta >= 0 ? "+" : ""}{formatCurrency(row.delta)}</td>
-                        <td className="py-2.5 text-right">{row.trend === "up" && <span className="font-semibold text-destructive">Subiu</span>}{row.trend === "down" && <span className="font-semibold text-success">Caiu</span>}{row.trend === "stable" && <span className="font-semibold text-muted-foreground">Estavel</span>}</td>
+                        <td className="py-2.5 text-right">{row.trend === "up" && <span className="font-semibold text-destructive">Subiu</span>}{row.trend === "down" && <span className="font-semibold text-success">Caiu</span>}{row.trend === "stable" && <span className="font-semibold text-muted-foreground">Estável</span>}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -555,15 +555,15 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
           <Card className="border-0 shadow-card"><CardContent className="space-y-4 p-4">
             <div className="flex items-center gap-2"><Target className="h-4 w-4 text-primary" /><h2 className="font-heading text-sm font-bold">Reservas, metas e destino do saldo</h2></div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <div className="rounded-xl border border-border p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Saldo do mes</p><p className={cn("mt-1 text-lg font-extrabold", monthBalance >= 0 ? "text-success" : "text-destructive")}>{formatCurrency(monthBalance)}</p></div>
-              <div className="rounded-xl border border-border p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Ja alocado</p><p className="mt-1 text-lg font-extrabold text-foreground">{formatCurrency(monthAllocated)}</p></div>
+              <div className="rounded-xl border border-border p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Saldo do mês</p><p className={cn("mt-1 text-lg font-extrabold", monthBalance >= 0 ? "text-success" : "text-destructive")}>{formatCurrency(monthBalance)}</p></div>
+              <div className="rounded-xl border border-border p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Já alocado</p><p className="mt-1 text-lg font-extrabold text-foreground">{formatCurrency(monthAllocated)}</p></div>
               <div className="rounded-xl border border-border p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Saldo livre</p><p className={cn("mt-1 text-lg font-extrabold", freeSurplus >= 0 ? "text-success" : "text-destructive")}>{formatCurrency(freeSurplus)}</p></div>
             </div>
-            {!allocationSupport && <div className="rounded-xl border border-warning/40 bg-warning/15 px-3 py-2 text-xs text-[hsl(var(--warning-foreground))]">Historico de alocacoes indisponivel. Aplique a migration para habilitar persistencia completa.</div>}
+            {!allocationSupport && <div className="rounded-xl border border-warning/40 bg-warning/15 px-3 py-2 text-xs text-[hsl(var(--warning-foreground))]">Histórico de alocações indisponível. Aplique a migration para habilitar persistência completa.</div>}
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
               <div className="md:col-span-2"><Label className="text-[11px] text-muted-foreground">Valor para alocar</Label><Input value={allocationAmount} onChange={(event) => setAllocationAmount(event.target.value)} placeholder="0,00" /></div>
-              <div><Label className="text-[11px] text-muted-foreground">Destino</Label><Select value={destinationType} onValueChange={(value) => setDestinationType(value as DestinationType)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="free">Deixar livre</SelectItem><SelectItem value="reserve">Reserva emergencia</SelectItem><SelectItem value="goal">Meta</SelectItem><SelectItem value="account">Conta especifica</SelectItem></SelectContent></Select></div>
+              <div><Label className="text-[11px] text-muted-foreground">Destino</Label><Select value={destinationType} onValueChange={(value) => setDestinationType(value as DestinationType)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="free">Deixar livre</SelectItem><SelectItem value="reserve">Reserva emergência</SelectItem><SelectItem value="goal">Meta</SelectItem><SelectItem value="account">Conta específica</SelectItem></SelectContent></Select></div>
               <div><Label className="text-[11px] text-muted-foreground">Meta</Label><Select value={destinationGoalId} onValueChange={setDestinationGoalId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Selecione</SelectItem>{goals.map((goal) => (<SelectItem key={goal.id} value={goal.id}>{goal.name}</SelectItem>))}</SelectContent></Select></div>
               <div><Label className="text-[11px] text-muted-foreground">Conta</Label><Select value={destinationAccountId} onValueChange={setDestinationAccountId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Selecione</SelectItem>{accounts.map((account) => (<SelectItem key={account.id} value={account.id}>{account.name}</SelectItem>))}</SelectContent></Select></div>
             </div>

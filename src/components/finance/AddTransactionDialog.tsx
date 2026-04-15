@@ -67,7 +67,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
   const handleSave = async () => {
     const numAmount = parseFloat(amount.replace(",", "."));
     if (!numAmount || numAmount <= 0) {
-      toast.error("Informe um valor valido");
+      toast.error("Informe um valor válido");
       return;
     }
     if (!accountId) {
@@ -75,7 +75,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
       return;
     }
     if (!description.trim()) {
-      toast.error("Informe uma descricao");
+      toast.error("Informe uma descrição");
       return;
     }
 
@@ -106,7 +106,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
       }).eq("id", accountId);
     }
 
-    toast.success("Transacao registrada!");
+    toast.success("Transação registrada!");
     queryClient.invalidateQueries({ queryKey: ["transactions"] });
     queryClient.invalidateQueries({ queryKey: ["accounts"] });
     queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
@@ -128,7 +128,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[760px] rounded-2xl">
         <DialogHeader>
-          <DialogTitle className="font-heading text-lg">Nova Transacao</DialogTitle>
+          <DialogTitle className="font-heading text-lg">Nova Transação</DialogTitle>
         </DialogHeader>
 
         <div className="grid grid-cols-2 gap-2">
@@ -164,9 +164,9 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
         </div>
 
         <div>
-          <Label className="text-xs text-muted-foreground">Descricao</Label>
+          <Label className="text-xs text-muted-foreground">Descrição</Label>
           <Input
-            placeholder="Ex: Mercado, Salario..."
+            placeholder="Ex: Mercado, Salário..."
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             className="mt-1"
@@ -253,7 +253,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
         </div>
 
         <div>
-          <Label className="text-xs text-muted-foreground">Observacoes (opcional)</Label>
+          <Label className="text-xs text-muted-foreground">Observações (opcional)</Label>
           <Textarea
             placeholder="Alguma nota..."
             value={notes}
