@@ -116,7 +116,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
   // Reset when type changes
   useEffect(() => {
     setCategoryId("");
-    if (type === "income") {
+    if (type === "income" && mode === "installment") {
       setMode("single");
     }
   }, [type]);
@@ -427,11 +427,14 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
           </div>
 
           {/* ── 7. Transaction mode ── */}
-          {type === "expense" && (
-            <div>
-              <Label className="text-xs text-muted-foreground mb-2 block">Tipo de gasto</Label>
-              <div className="grid grid-cols-3 gap-1.5">
-                {MODE_OPTIONS.map((m) => (
+          <div>
+            <Label className="text-xs text-muted-foreground mb-2 block">
+              {type === "income" ? "Tipo de receita" : "Tipo de gasto"}
+            </Label>
+            <div className={cn("grid gap-1.5", type === "income" ? "grid-cols-2" : "grid-cols-3")}>
+              {MODE_OPTIONS
+                .filter((m) => type === "expense" || m.value !== "installment")
+                .map((m) => (
                   <button
                     key={m.value}
                     type="button"
@@ -444,12 +447,11 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
                     )}
                   >
                     {m.icon}
-                    {m.label}
+                    {m.value === "single" && type === "income" ? "Variável" : m.value === "recurrence" && type === "income" ? "Fixo/Recorrente" : m.label}
                   </button>
                 ))}
-              </div>
             </div>
-          )}
+          </div>
 
           {/* ── 8. Installment details ── */}
           {mode === "installment" && type === "expense" && (
