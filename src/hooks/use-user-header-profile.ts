@@ -27,7 +27,7 @@ type HeaderProfile = {
 
 export const useUserHeaderProfile = (userId: string | null | undefined): HeaderProfile => {
   const [name, setName] = useState("");
-  const [avatarId, setAvatarIdState] = useState(DEFAULT_AVATAR_ID);
+  const [avatarId, setAvatarIdState] = useState<string>(DEFAULT_AVATAR_ID);
 
   useEffect(() => {
     if (!userId) return;

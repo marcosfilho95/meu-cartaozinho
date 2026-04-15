@@ -42,12 +42,12 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   children,
 }) => {
   const navigate = useNavigate();
-  const resolvedUserName = (userName || "").trim() || "Usuario";
+  const resolvedUserName = (userName || "").trim() || "Usuário";
   const greetingLine = greeting ? `${greeting}, ${resolvedUserName}` : subtitle;
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    toast.success("Ate logo!");
+    toast.success("Até logo!");
   };
 
   const handleBack = () => {
@@ -63,7 +63,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
   return (
     <header className="gradient-primary px-4 pb-7 pt-5">
-      <div className={cn("mx-auto max-w-lg", containerClassName)}>
+      <div className={cn("mx-auto max-w-2xl", containerClassName)}>
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             {showBack && (
