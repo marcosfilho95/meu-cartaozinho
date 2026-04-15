@@ -181,7 +181,6 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Resumo rápido</p>
           <div className="mt-2 flex items-end justify-between gap-3">
             <div>
-              <p className="text-xs text-muted-foreground">Saldo geral</p>
               <p className="font-heading text-3xl font-extrabold text-foreground">{formatCurrency(stats.totalBalance)}</p>
             </div>
             <div className="rounded-2xl bg-secondary/70 px-3 py-2 text-right">
@@ -192,7 +191,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
               </p>
             </div>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">Saldo do mês = Receitas − Despesas</p>
+          
         </section>
 
         <section className="space-y-3">
@@ -232,7 +231,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
                         <div>
                           <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/75">{module.badge}</p>
                           <h3 className="font-heading text-lg font-extrabold leading-tight">{module.title}</h3>
-                          <p className="text-xs text-white/80">{module.description}</p>
+                          
                         </div>
                       </div>
                       <div className="inline-flex items-center gap-1 rounded-xl bg-white/15 px-2.5 py-1 text-[11px] font-semibold">
