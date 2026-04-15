@@ -14,41 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      card_subgroups: {
-        Row: {
-          card_id: string
-          created_at: string
-          id: string
-          name: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          card_id: string
-          created_at?: string
-          id?: string
-          name: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          card_id?: string
-          created_at?: string
-          id?: string
-          name?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "card_subgroups_card_id_fkey"
-            columns: ["card_id"]
-            isOneToOne: false
-            referencedRelation: "cards"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       cards: {
         Row: {
           brand: string | null
@@ -143,29 +108,32 @@ export type Database = {
         Row: {
           avatar_id: string | null
           created_at: string
+          email: string | null
           id: string
           name: string
           updated_at: string
-          username: string | null
           user_id: string
+          username: string | null
         }
         Insert: {
           avatar_id?: string | null
           created_at?: string
+          email?: string | null
           id?: string
           name?: string
           updated_at?: string
-          username?: string | null
           user_id: string
+          username?: string | null
         }
         Update: {
           avatar_id?: string | null
           created_at?: string
+          email?: string | null
           id?: string
           name?: string
           updated_at?: string
-          username?: string | null
           user_id?: string
+          username?: string | null
         }
         Relationships: []
       }
@@ -180,7 +148,6 @@ export type Database = {
           notes: string | null
           person: string | null
           start_month: string
-          subgroup_id: string | null
           total_amount: number
           user_id: string
         }
@@ -194,7 +161,6 @@ export type Database = {
           notes?: string | null
           person?: string | null
           start_month: string
-          subgroup_id?: string | null
           total_amount: number
           user_id: string
         }
@@ -208,7 +174,6 @@ export type Database = {
           notes?: string | null
           person?: string | null
           start_month?: string
-          subgroup_id?: string | null
           total_amount?: number
           user_id?: string
         }
@@ -220,13 +185,6 @@ export type Database = {
             referencedRelation: "cards"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "purchases_subgroup_id_fkey"
-            columns: ["subgroup_id"]
-            isOneToOne: false
-            referencedRelation: "card_subgroups"
-            referencedColumns: ["id"]
-          },
         ]
       }
     }
@@ -235,10 +193,8 @@ export type Database = {
     }
     Functions: {
       get_login_email_by_username: {
-        Args: {
-          p_username: string
-        }
-        Returns: string | null
+        Args: { p_username: string }
+        Returns: string
       }
     }
     Enums: {
