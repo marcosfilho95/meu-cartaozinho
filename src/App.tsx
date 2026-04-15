@@ -9,6 +9,7 @@ import { applyAccentTheme, getStoredAccentTheme } from "@/lib/accentTheme";
 import { FirstLoginTour } from "@/components/FirstLoginTour";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
+import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import CardDetail from "./pages/CardDetail";
 import Purchases from "./pages/Purchases";
@@ -71,7 +72,8 @@ const AppRoutes = () => {
   return (
     <>
       <Routes>
-        <Route path="/" element={<Dashboard initialUserId={session?.user?.id} />} />
+        <Route path="/" element={<Home userId={session?.user?.id} />} />
+        <Route path="/cards" element={<Dashboard initialUserId={session?.user?.id} />} />
         <Route path="/cartao/:cardId" element={<CardDetail />} />
         <Route path="/compras" element={<Purchases initialUserId={session?.user?.id} />} />
         <Route path="/perfil" element={<Profile />} />
