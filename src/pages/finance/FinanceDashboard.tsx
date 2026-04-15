@@ -2,9 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { AppHeader } from "@/components/AppHeader";
-import { FinanceTopNav } from "@/components/finance/FinanceTopNav";
-import { QuickTransactionFab } from "@/components/finance/QuickTransactionFab";
+
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,10 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
 import { formatCurrency } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
 import { ensureDefaultAccounts } from "@/lib/financeDefaults";
 import { ensureDefaultCategories } from "@/lib/financeCategoryDefaults";
 import {
@@ -127,8 +123,6 @@ const SegmentedDistributionBar: React.FC<{ title: string; items: DistributionIte
 };
 const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const navigate = useNavigate();
-  const headerProfile = useUserHeaderProfile(userId);
-  const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
   const [loading, setLoading] = useState(true);
 
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -399,26 +393,6 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      <AppHeader
-        containerClassName="max-w-6xl"
-        title="Organizador Financeiro"
-        greeting={headerProfile.greeting}
-        userName={headerProfile.firstName}
-        avatarId={headerProfile.avatarId}
-        showBack
-        backTo="/"
-        accentTheme={accentTheme}
-        onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
-      >
-        <div className="mt-4">
-          <p className="text-xs font-medium text-primary-foreground/70">Patrimônio total</p>
-          <p className="font-heading text-3xl font-extrabold text-primary-foreground">{formatCurrency(totalNetWorth)}</p>
-        </div>
-      </AppHeader>
-
-      <FinanceTopNav />
-
       <div className="mx-auto max-w-6xl space-y-5 px-4">
         <Card className="border-0 shadow-elevated">
           <CardContent className="space-y-4 p-4">
@@ -584,9 +558,6 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
           </div>
         </section>
       </div>
-
-      <QuickTransactionFab userId={userId} />
-    </div>
   );
 };
 

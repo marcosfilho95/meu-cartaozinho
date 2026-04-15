@@ -4,17 +4,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FinanceTopNav } from "@/components/finance/FinanceTopNav";
-import { QuickTransactionFab } from "@/components/finance/QuickTransactionFab";
+
 import { ArrowDownCircle, ArrowUpCircle, Loader2, Search, Trash2 } from "lucide-react";
 import { formatCurrency, TRANSACTION_STATUS_COLORS, TRANSACTION_STATUS_LABELS } from "@/lib/constants";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
-import { AppHeader } from "@/components/AppHeader";
-import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
-import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
 import { getFinanceTransactionsCache, setFinanceTransactionsCache } from "@/lib/financePageCache";
 
 interface TransactionsPageProps {
@@ -26,9 +22,6 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
-  const headerProfile = useUserHeaderProfile(userId);
-
   const cachedTransactions = userId ? getFinanceTransactionsCache<any[]>(userId) || [] : [];
   const { data: transactions = [], isLoading } = useQuery({
     queryKey: ["transactions", userId],
@@ -92,21 +85,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
   }, [filtered]);
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      <AppHeader
-        containerClassName="max-w-5xl"
-        title="Transações"
-        greeting={headerProfile.greeting}
-        userName={headerProfile.firstName}
-        avatarId={headerProfile.avatarId}
-        showBack
-        backTo="/financas"
-        accentTheme={accentTheme}
-        onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
-      />
-
-      <FinanceTopNav />
-
+    <>
       <div className="sticky top-0 z-30 border-b border-border/40 bg-background/95 backdrop-blur-md">
         <div className="mx-auto flex max-w-5xl gap-2 px-4 py-3">
           <div className="relative flex-1">
@@ -211,9 +190,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
           ))
         )}
       </div>
-
-      <QuickTransactionFab userId={userId} />
-    </div>
+    </>
   );
 };
 

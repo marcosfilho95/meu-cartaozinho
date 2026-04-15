@@ -6,8 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FinanceTopNav } from "@/components/finance/FinanceTopNav";
-import { QuickTransactionFab } from "@/components/finance/QuickTransactionFab";
+
 import {
   Plus,
   Pencil,
@@ -30,9 +29,6 @@ import { ACCOUNT_TYPE_LABELS, formatCurrency } from "@/lib/constants";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
-import { AppHeader } from "@/components/AppHeader";
-import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
-import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
 import { ensureDefaultAccounts } from "@/lib/financeDefaults";
 import { getFinanceAccountsCache, setFinanceAccountsCache } from "@/lib/financePageCache";
 
@@ -71,8 +67,6 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<any>(null);
   const [saving, setSaving] = useState(false);
-  const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
-  const headerProfile = useUserHeaderProfile(userId);
 
   const [name, setName] = useState("");
   const [type, setType] = useState<string>("checking");
@@ -195,31 +189,7 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      <AppHeader
-        containerClassName="max-w-5xl"
-        title="Contas"
-        greeting={headerProfile.greeting}
-        userName={headerProfile.firstName}
-        avatarId={headerProfile.avatarId}
-        showBack
-        backTo="/financas"
-        accentTheme={accentTheme}
-        onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
-      >
-        <div className="mt-3 flex items-center justify-between">
-          <div>
-            <p className="text-primary-foreground/70 text-xs">Saldo total</p>
-            <p className="text-2xl font-extrabold font-heading text-primary-foreground">{formatCurrency(totalBalance)}</p>
-          </div>
-          <Button size="sm" onClick={openCreate} className="bg-white/20 hover:bg-white/30 text-primary-foreground backdrop-blur-sm gap-1 rounded-xl">
-            <Plus className="h-4 w-4" /> Nova
-          </Button>
-        </div>
-      </AppHeader>
-
-      <FinanceTopNav />
-
+    <>
       <div className="mx-auto max-w-5xl px-4 space-y-3">
         {loading && accounts.length === 0 ? (
           <div className="flex justify-center py-12">
@@ -336,9 +306,7 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
           </div>
         </DialogContent>
       </Dialog>
-
-      <QuickTransactionFab userId={userId} />
-    </div>
+    </>
   );
 };
 
