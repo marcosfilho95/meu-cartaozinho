@@ -124,7 +124,6 @@ const SegmentedDistributionBar: React.FC<{ title: string; items: DistributionIte
 const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [loading, setLoading] = useState(true);
 
   const [accounts, setAccounts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
