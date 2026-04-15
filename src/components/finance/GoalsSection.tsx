@@ -32,6 +32,7 @@ import { AddGoalDialog } from "./AddGoalDialog";
 interface GoalsSectionProps {
   userId: string;
   goals: any[];
+  accounts: any[];
   totalBalance: number;
   monthBalance: number;
   onReload: () => void;
@@ -49,6 +50,7 @@ type GoalTx = {
 export const GoalsSection: React.FC<GoalsSectionProps> = ({
   userId,
   goals,
+  accounts,
   totalBalance,
   monthBalance,
   onReload,
