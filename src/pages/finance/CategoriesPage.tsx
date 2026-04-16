@@ -154,12 +154,18 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
   return (
     <>
       <div className="mx-auto max-w-5xl px-4">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full max-w-md grid-cols-2 mb-4 rounded-xl">
-            <TabsTrigger value="expense" className="rounded-lg">Despesas</TabsTrigger>
-            <TabsTrigger value="income" className="rounded-lg">Receitas</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className="flex items-center justify-between mb-4">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid w-full max-w-md grid-cols-2 rounded-xl">
+              <TabsTrigger value="expense" className="rounded-lg">Despesas</TabsTrigger>
+              <TabsTrigger value="income" className="rounded-lg">Receitas</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Button onClick={openCreate} className="h-9 gap-1.5 rounded-xl gradient-primary text-primary-foreground font-semibold">
+            <Plus className="h-4 w-4" />
+            Nova categoria
+          </Button>
+        </div>
 
         {loading && categories.length === 0 ? (
           <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
@@ -179,16 +185,14 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
                     <div className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: category.color }} />
                   </div>
                   <p className="flex-1 text-sm font-medium">{category.name}</p>
-                  {!category.is_system && (
-                    <div className="flex gap-0.5">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => openEdit(category)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-destructive" onClick={() => handleDelete(category.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  )}
+                  <div className="flex gap-0.5">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => openEdit(category)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-destructive" onClick={() => handleDelete(category.id)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}

@@ -676,6 +676,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_default_accounts_for_user: {
+        Args: { p_user_id: string }
+        Returns: undefined
+      }
+      create_default_categories_for_user: {
+        Args: { p_user_id: string }
+        Returns: undefined
+      }
       get_login_email_by_username: {
         Args: { p_username: string }
         Returns: string

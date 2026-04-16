@@ -1,4 +1,4 @@
-﻿import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 
 type CategoryKind = "expense" | "income" | "transfer";
 type ParentDef = { name: string; kind: CategoryKind; color: string; icon: string };
@@ -212,4 +212,3 @@ export const ensureDefaultCategories = async (userId: string) => {
   if (childError) throw childError;
   return true;
 };
-
