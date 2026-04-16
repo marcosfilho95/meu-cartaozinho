@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { fetchFinanceTransactions } from "@/lib/financeShared";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -103,11 +104,8 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const monthStart = `${refMonth}-01`;
-    const nextMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
-    const monthEnd = getMonthKey(nextMonth) + "-01";
 
-    const [budgetsRes, catsRes, txRes] = await Promise.all([
+    const [budgetsRes, catsRes, txsAll] = await Promise.all([
       supabase
         .from("budgets")
         .select("id, category_id, limit_amount, alert_threshold_pct, ref_month")
@@ -118,13 +116,7 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
         .select("id, name, color, kind, icon")
         .eq("user_id", userId)
         .order("name"),
-      supabase
-        .from("transactions")
-        .select("category_id, amount, type, status")
-        .eq("user_id", userId)
-        .is("deleted_at", null)
-        .gte("transaction_date", monthStart)
-        .lt("transaction_date", monthEnd),
+      fetchFinanceTransactions(userId, 18),
     ]);
 
     setBudgets(budgetsRes.data || []);
@@ -133,7 +125,7 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
     // Calculate expenses per category
     const expMap: Record<string, number> = {};
     let income = 0;
-    (txRes.data || []).forEach((tx: any) => {
+    txsAll.filter((tx) => tx.transaction_date.startsWith(refMonth)).forEach((tx) => {
       if (tx.status === "canceled") return;
       if (tx.type === "income") {
         income += Number(tx.amount);

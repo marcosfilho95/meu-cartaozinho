@@ -1,5 +1,5 @@
 ﻿
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -14,17 +14,30 @@ import { ensureDefaultAccounts } from "@/lib/financeDefaults";
 import { ensureDefaultCategories } from "@/lib/financeCategoryDefaults";
 import { ensureDefaultGoals } from "@/lib/financeGoalDefaults";
 import {
-  AlertCircle,
-  ArrowDownCircle,
-  ArrowUpCircle,
-  Check,
-  Clock,
-  LineChart as LineChartIcon,
-  Loader2 as Loader2Icon,
-  PieChart as PieChartIcon,
-  TrendingDown,
-  TrendingUp,
-} from "lucide-react";
+  CATEGORY_COLORS,
+  FinanceTx,
+  PAYMENT_LABELS,
+  applyFinanceDimensionFilters,
+  fetchFinanceTransactions,
+  getCycleScopedTransactions,
+  getLastMonthKeys,
+  getMonthLabel,
+  getPaymentKey,
+  isBankCategory,
+  isGenericCardCategory,
+  monthKey,
+  resolveBankCategoryColor,
+  getPreviousCycleScopedTransactions,
+} from "@/lib/financeShared";
+import {
+  getDashboardSummary,
+  getExpenseHistory,
+  getExpensesByCategory,
+  getMonthlyExpenses,
+  getMonthlyIncome,
+  trendFromDelta,
+} from "@/lib/financeSelectors";
+import { AlertCircle, ArrowDownCircle, ArrowUpCircle, Check, Clock, LineChart as LineChartIcon, Loader2 as Loader2Icon, PieChart as PieChartIcon, TrendingDown, TrendingUp } from "lucide-react";
 import { GoalsSection } from "@/components/finance/GoalsSection";
 import {
   Area,
@@ -33,7 +46,6 @@ import {
   CartesianGrid,
   Cell,
   ComposedChart,
-  Legend,
   Line,
   Pie,
   PieChart,
@@ -44,158 +56,7 @@ import {
 } from "recharts";
 
 interface FinanceDashboardProps { userId: string; }
-type MonthTrend = "up" | "down" | "stable";
 
-
-type FinanceTx = {
-  id: string;
-  amount: number;
-  type: "income" | "expense" | "transfer";
-  status: "pending" | "paid" | "overdue" | "canceled";
-  transaction_date: string;
-  due_date?: string | null;
-  account_id: string;
-  category_id: string | null;
-  categories?: { id: string; name: string; color: string | null; parent_id: string | null } | null;
-  accounts?: { id: string; name: string; type: string; due_day?: number | null } | null;
-};
-
-type DistributionItem = { key: string; label: string; value: number; color: string; percentage: number; };
-
-const CATEGORY_COLORS = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#F0B27A", "#BB8FCE", "#AEB6BF", "#82E0AA"];
-const BANK_COLORS: Record<string, string> = {
-  nubank: "#8A05BE",
-  "mercado pago": "#009EE3",
-  mercadopago: "#009EE3",
-  picpay: "#21C25E",
-  itau: "#EC7000",
-  "banco do brasil": "#F7C400",
-  bb: "#F7C400",
-  bradesco: "#CC092F",
-  santander: "#EC0000",
-  caixa: "#005CA8",
-  c6: "#111111",
-  inter: "#FF7A00",
-};
-const PAYMENT_LABELS: Record<string, string> = {
-  credit_card: "Cartão de crédito", checking: "Conta corrente", savings: "Poupança", cash: "Dinheiro",
-  investment: "Investimento", loan: "Empréstimo", transferencia: "Transferência", other: "Outro",
-};
-const PAYMENT_COLORS: Record<string, string> = {
-  credit_card: "#7C3AED", checking: "#0284C7", savings: "#0891B2", cash: "#D97706",
-  investment: "#16A34A", loan: "#EF4444", transferencia: "#2563EB", other: "#6B7280",
-};
-
-const monthKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-const addMonthsToKey = (key: string, amount: number) => {
-  const [year, month] = key.split("-").map(Number);
-  const d = new Date(year, (month || 1) - 1 + amount, 1);
-  return monthKey(d);
-};
-const txDueDay = (tx: FinanceTx) => {
-  const fromDueDate = tx.due_date ? Number(String(tx.due_date).slice(8, 10)) : 0;
-  const fromAccount = Number(tx.accounts?.due_day || 0);
-  const resolved = fromDueDate || fromAccount || 31;
-  return Math.max(1, Math.min(31, resolved));
-};
-
-const isExpenseInDynamicCycle = (tx: FinanceTx, currentMonth: string, todayDay: number) => {
-  const month = tx.transaction_date.slice(0, 7);
-  const due = txDueDay(tx);
-  const activeMonth = todayDay > due ? addMonthsToKey(currentMonth, 1) : currentMonth;
-  const carry = month < activeMonth && (tx.status === "pending" || tx.status === "overdue");
-  return month === activeMonth || carry;
-};
-
-const isExpenseInDynamicPreviousCycle = (tx: FinanceTx, currentMonth: string, todayDay: number) => {
-  const month = tx.transaction_date.slice(0, 7);
-  const due = txDueDay(tx);
-  const activeMonth = todayDay > due ? addMonthsToKey(currentMonth, 1) : currentMonth;
-  const previousActiveMonth = addMonthsToKey(activeMonth, -1);
-  const carry = month < previousActiveMonth && (tx.status === "pending" || tx.status === "overdue");
-  return month === previousActiveMonth || carry;
-};
-const startOfMonthString = (date: Date) => `${monthKey(date)}-01`;
-const getLastMonthKeys = (count: number, baseDate: Date = new Date()) => {
-  const base = baseDate;
-  const keys: string[] = [];
-  for (let i = count - 1; i >= 0; i -= 1) {
-    const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
-    keys.push(monthKey(d));
-  }
-  return keys;
-};
-const getMonthLabel = (key: string) => new Date(`${key}-15T12:00:00`).toLocaleDateString("pt-BR", { month: "short" }).replace(".", "");
-const trendFromDelta = (delta: number): MonthTrend => (delta > 0.001 ? "up" : delta < -0.001 ? "down" : "stable");
-const buildDistribution = (items: { key: string; label: string; value: number; color: string }[]): DistributionItem[] => {
-  const total = items.reduce((sum, item) => sum + item.value, 0);
-  if (total <= 0) return [];
-  return items.map((item) => ({ ...item, percentage: (item.value / total) * 100 })).sort((a, b) => b.value - a.value);
-};
-const getPaymentKey = (tx: FinanceTx) => {
-  if (tx.type === "transfer") return "transferencia";
-  const accountType = tx.accounts?.type || "other";
-  return PAYMENT_LABELS[accountType] ? accountType : "other";
-};
-const normalizeLabel = (value: string) =>
-  value
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-
-const resolveBankCategoryColor = (label: string, fallback: string) => {
-  const normalized = normalizeLabel(label);
-  const direct = BANK_COLORS[normalized];
-  if (direct) return direct;
-  const byContains = Object.entries(BANK_COLORS).find(([key]) => normalized.includes(key));
-  return byContains?.[1] || fallback;
-};
-
-const isGenericCardCategory = (label: string) => {
-  const normalized = normalizeLabel(label);
-  return normalized === "cartao" || normalized === "cartoes";
-};
-
-const isBankCategory = (label: string) => {
-  const normalized = normalizeLabel(label);
-  if (isGenericCardCategory(normalized)) return false;
-  return Object.keys(BANK_COLORS).some((key) => normalized.includes(normalizeLabel(key)));
-};
-
-const SegmentedDistributionBar: React.FC<{ title: string; items: DistributionItem[]; }> = ({ title, items }) => {
-  const [active, setActive] = useState<string | null>(null);
-  if (items.length === 0) {
-    return <Card className="border-0 shadow-card"><CardContent className="p-4 text-sm text-muted-foreground">Sem dados para {title.toLowerCase()}.</CardContent></Card>;
-  }
-  const selected = items.find((item) => item.key === active) || items[0];
-  return (
-    <Card className="border-0 shadow-card">
-      <CardContent className="space-y-3 p-4">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="font-heading text-sm font-bold text-foreground">{title}</h3>
-          <Badge variant="outline" className="text-[11px]">{selected.label}: {selected.percentage.toFixed(1)}%</Badge>
-        </div>
-        <div className="flex h-5 overflow-hidden rounded-full bg-muted">
-          {items.map((item) => (
-            <button key={item.key} type="button" title={`${item.label}: ${formatCurrency(item.value)} (${item.percentage.toFixed(1)}%)`}
-              onMouseEnter={() => setActive(item.key)} onFocus={() => setActive(item.key)} onClick={() => setActive(item.key)}
-              className={cn("h-full transition-opacity", active && active !== item.key ? "opacity-60" : "opacity-100")}
-              style={{ width: `${Math.max(item.percentage, 2)}%`, backgroundColor: item.color }} />
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {items.map((item) => (
-            <button key={item.key} type="button" onClick={() => setActive(item.key)}
-              className={cn("inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] font-medium", active === item.key ? "border-primary/45 bg-primary/10 text-foreground" : "border-border text-muted-foreground")}>
-              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />{item.label}
-            </button>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
 const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -220,10 +81,8 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const previousMonth = monthKey(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1));
   const todayDay = new Date().getDate();
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
-    const now = new Date();
-    const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
 
     try {
       await ensureDefaultAccounts(userId);
@@ -237,37 +96,35 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       await ensureDefaultGoals(userId);
     } catch {}
 
-    const [accountsRes, categoriesRes, goalsRes, txRes] = await Promise.all([
-      supabase.from("accounts").select("id, name, type, due_day, current_balance, is_active, include_in_net_worth").eq("user_id", userId).eq("is_active", true).order("name"),
-      supabase.from("categories").select("id, name, color, kind, parent_id").eq("user_id", userId).order("name"),
-      supabase.from("goals").select("id, name, target_amount, current_amount, is_completed").eq("user_id", userId).order("created_at"),
-      supabase
-        .from("transactions")
-        .select("id, amount, type, status, transaction_date, due_date, account_id, category_id, categories(id, name, color, parent_id), accounts:accounts!transactions_account_id_fkey(id, name, type, due_day)")
-        .eq("user_id", userId)
-        .is("deleted_at", null)
-        .gte("transaction_date", startOfMonthString(twelveMonthsAgo))
-        .order("transaction_date", { ascending: true }),
-    ]);
+    try {
+      const [accountsRes, categoriesRes, goalsRes, txResult] = await Promise.all([
+        supabase.from("accounts").select("id, name, type, due_day, current_balance, is_active, include_in_net_worth").eq("user_id", userId).eq("is_active", true).order("name"),
+        supabase.from("categories").select("id, name, color, kind, parent_id").eq("user_id", userId).order("name"),
+        supabase.from("goals").select("id, name, target_amount, current_amount, is_completed").eq("user_id", userId).order("created_at"),
+        fetchFinanceTransactions(userId, 12),
+      ]);
 
-    if (accountsRes.error || categoriesRes.error || goalsRes.error || txRes.error) {
+      if (accountsRes.error || categoriesRes.error || goalsRes.error) {
+        toast.error("Falha ao carregar dashboard financeiro.");
+        setLoading(false);
+        return;
+      }
+
+      setAccounts(accountsRes.data || []);
+      setCategories(categoriesRes.data || []);
+      setGoals(goalsRes.data || []);
+      setTransactions(txResult || []);
+    } catch (error) {
       toast.error("Falha ao carregar dashboard financeiro.");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setAccounts(accountsRes.data || []);
-    setCategories(categoriesRes.data || []);
-    setGoals(goalsRes.data || []);
-    setTransactions((txRes.data as FinanceTx[]) || []);
-
-    setLoading(false);
-  };
+  }, [userId]);
 
   useEffect(() => {
     if (!userId) return;
     loadData();
-  }, [userId]);
+  }, [userId, loadData]);
 
   useEffect(() => {
     const onFinanceSync = (event: Event) => {
@@ -306,49 +163,51 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     if (!subcategories.some((item: any) => item.id === subcategoryFilter)) setSubcategoryFilter("all");
   }, [categoryFilter, subcategories, subcategoryFilter]);
 
-  const categoryMatch = (tx: FinanceTx) => {
-    if (categoryFilter === "all" && subcategoryFilter === "all") return true;
-    if (!tx.category_id) return false;
-    if (subcategoryFilter !== "all") return tx.category_id === subcategoryFilter;
-    if (categoryFilter === "all") return true;
-    const childIds = categories.filter((cat: any) => cat.parent_id === categoryFilter).map((cat: any) => cat.id);
-    return tx.category_id === categoryFilter || childIds.includes(tx.category_id);
-  };
+  const dimensionalFilteredTx = useMemo(
+    () =>
+      applyFinanceDimensionFilters(transactions, {
+        accountFilter,
+        paymentFilter,
+        statusFilter,
+        categoryFilter,
+        subcategoryFilter,
+        categories,
+      }),
+    [transactions, accountFilter, paymentFilter, statusFilter, categoryFilter, subcategoryFilter, categories],
+  );
 
-  const dimensionalFilteredTx = useMemo(() => transactions.filter((tx) => {
-    if (accountFilter !== "all" && tx.account_id !== accountFilter) return false;
-    if (paymentFilter !== "all" && getPaymentKey(tx) !== paymentFilter) return false;
-    if (statusFilter !== "all" && tx.status !== statusFilter) return false;
-    if (!categoryMatch(tx)) return false;
-    return true;
-  }), [transactions, accountFilter, paymentFilter, statusFilter, categoryFilter, subcategoryFilter, categories]);
+  const baseTxForSummary = useMemo(
+    () => (accountFilter === "all" ? transactions : transactions.filter((tx) => tx.account_id === accountFilter)),
+    [transactions, accountFilter],
+  );
+  const txForCharts = useMemo(
+    () => (viewMode === "simple" ? baseTxForSummary : dimensionalFilteredTx),
+    [viewMode, baseTxForSummary, dimensionalFilteredTx],
+  );
 
   const periodKeys = useMemo(() => getLastMonthKeys(periodMonths), [periodMonths]);
   const periodFilteredTx = useMemo(() => {
     const keySet = new Set(periodKeys);
-    return dimensionalFilteredTx.filter((tx) => keySet.has(tx.transaction_date.slice(0, 7)));
-  }, [dimensionalFilteredTx, periodKeys]);
+    return txForCharts.filter((tx) => keySet.has(tx.transaction_date.slice(0, 7)));
+  }, [txForCharts, periodKeys]);
 
-  const currentMonthTx = useMemo(() => {
-    return dimensionalFilteredTx.filter((tx) => {
-      if (tx.type === "income") return tx.transaction_date.slice(0, 7) === currentMonth;
-      return isExpenseInDynamicCycle(tx, currentMonth, todayDay);
-    });
-  }, [dimensionalFilteredTx, currentMonth, todayDay]);
+  const currentMonthTx = useMemo(
+    () => getCycleScopedTransactions(baseTxForSummary, currentMonth, todayDay),
+    [baseTxForSummary, currentMonth, todayDay],
+  );
 
-  const previousMonthTx = useMemo(() => {
-    return dimensionalFilteredTx.filter((tx) => {
-      if (tx.type === "income") return tx.transaction_date.slice(0, 7) === previousMonth;
-      return isExpenseInDynamicPreviousCycle(tx, currentMonth, todayDay);
-    });
-  }, [dimensionalFilteredTx, previousMonth, currentMonth, todayDay]);
+  const previousMonthTx = useMemo(
+    () => getPreviousCycleScopedTransactions(baseTxForSummary, currentMonth, previousMonth, todayDay),
+    [baseTxForSummary, previousMonth, currentMonth, todayDay],
+  );
 
-  const currentIncome = useMemo(() => currentMonthTx.filter((tx) => tx.type === "income" && tx.status !== "canceled").reduce((sum, tx) => sum + Number(tx.amount), 0), [currentMonthTx]);
-  const currentExpense = useMemo(() => currentMonthTx.filter((tx) => tx.type === "expense" && tx.status !== "canceled").reduce((sum, tx) => sum + Number(tx.amount), 0), [currentMonthTx]);
-  const paidExpense = useMemo(() => currentMonthTx.filter((tx) => tx.type === "expense" && tx.status === "paid").reduce((sum, tx) => sum + Number(tx.amount), 0), [currentMonthTx]);
-  const pendingExpense = useMemo(() => currentMonthTx.filter((tx) => tx.type === "expense" && (tx.status === "pending" || tx.status === "overdue")).reduce((sum, tx) => sum + Number(tx.amount), 0), [currentMonthTx]);
-  const previousIncome = useMemo(() => previousMonthTx.filter((tx) => tx.type === "income" && tx.status !== "canceled").reduce((sum, tx) => sum + Number(tx.amount), 0), [previousMonthTx]);
-  const previousExpense = useMemo(() => previousMonthTx.filter((tx) => tx.type === "expense" && tx.status !== "canceled").reduce((sum, tx) => sum + Number(tx.amount), 0), [previousMonthTx]);
+  const currentIncome = useMemo(() => getMonthlyIncome(currentMonthTx), [currentMonthTx]);
+  const currentExpense = useMemo(() => getMonthlyExpenses(currentMonthTx), [currentMonthTx]);
+  const currentSummary = useMemo(() => getDashboardSummary(currentMonthTx), [currentMonthTx]);
+  const paidExpense = currentSummary.paidExpense;
+  const pendingExpense = currentSummary.pendingExpense;
+  const previousIncome = useMemo(() => getMonthlyIncome(previousMonthTx), [previousMonthTx]);
+  const previousExpense = useMemo(() => getMonthlyExpenses(previousMonthTx), [previousMonthTx]);
 
   const monthBalance = currentIncome - currentExpense;
   const previousBalance = previousIncome - previousExpense;
@@ -377,41 +236,18 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const evolutionData = useMemo(() => {
     const map: Record<string, { income: number; expense: number }> = {};
     evolutionKeys.forEach((key) => { map[key] = { income: 0, expense: 0 }; });
-    dimensionalFilteredTx.forEach((tx) => {
+    txForCharts.forEach((tx) => {
       const key = tx.transaction_date.slice(0, 7);
       if (!map[key] || tx.status === "canceled") return;
       if (tx.type === "income") map[key].income += Number(tx.amount);
       if (tx.type === "expense") map[key].expense += Number(tx.amount);
     });
     return evolutionKeys.map((key) => ({ key, month: getMonthLabel(key), receitas: map[key].income, despesas: map[key].expense, saldo: map[key].income - map[key].expense }));
-  }, [dimensionalFilteredTx, evolutionKeys]);
+  }, [txForCharts, evolutionKeys]);
   const expenseTxCurrent = useMemo(() => currentMonthTx.filter((tx) => tx.type === "expense" && tx.status !== "canceled"), [currentMonthTx]);
   const expenseTxCurrentForVisual = useMemo(() => expenseTxCurrent, [expenseTxCurrent]);
 
-  const categoryDistribution = useMemo(() => {
-    const grouped: Record<string, { label: string; value: number; color: string }> = {};
-    expenseTxCurrentForVisual.forEach((tx, index) => {
-      const id = tx.category_id || "uncategorized";
-      const label = tx.categories?.name || "Sem categoria";
-      const baseColor = tx.categories?.color || CATEGORY_COLORS[index % CATEGORY_COLORS.length];
-      const color = resolveBankCategoryColor(label, baseColor);
-      if (!grouped[id]) grouped[id] = { label, value: 0, color };
-      grouped[id].value += Number(tx.amount);
-    });
-    return buildDistribution(Object.entries(grouped).map(([key, data]) => ({ key, ...data })));
-  }, [expenseTxCurrentForVisual]);
-
-  const paymentDistribution = useMemo(() => {
-    const grouped: Record<string, { label: string; value: number; color: string }> = {};
-    expenseTxCurrentForVisual.forEach((tx) => {
-      const key = getPaymentKey(tx);
-      const label = PAYMENT_LABELS[key] || PAYMENT_LABELS.other;
-      const color = PAYMENT_COLORS[key] || PAYMENT_COLORS.other;
-      if (!grouped[key]) grouped[key] = { label, value: 0, color };
-      grouped[key].value += Number(tx.amount);
-    });
-    return buildDistribution(Object.entries(grouped).map(([key, data]) => ({ key, ...data })));
-  }, [expenseTxCurrentForVisual]);
+  const categoryDistribution = useMemo(() => getExpensesByCategory(expenseTxCurrentForVisual), [expenseTxCurrentForVisual]);
 
   const categoryRows = useMemo(() => {
     const currentMap: Record<string, number> = {};
@@ -448,52 +284,9 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const totalNetWorth = useMemo(() => accounts.reduce((sum, account) => sum + (account.include_in_net_worth ? Number(account.current_balance) : 0), 0), [accounts]);
   const paymentOptions = useMemo(() => Array.from(new Set(transactions.map((tx) => getPaymentKey(tx)))), [transactions]);
 
-  const topExpenseCategories = useMemo(() => {
-    const byCategory: Record<string, { label: string; color: string; total: number }> = {};
-    dimensionalFilteredTx.forEach((tx, index) => {
-      const key = tx.transaction_date.slice(0, 7);
-      if (!evolutionKeys.includes(key)) return;
-      if (tx.type !== "expense" || tx.status === "canceled") return;
-      const id = tx.category_id || "uncategorized";
-      const label = tx.categories?.name || "Sem categoria";
-      const baseColor = tx.categories?.color || CATEGORY_COLORS[index % CATEGORY_COLORS.length];
-      const color = resolveBankCategoryColor(label, baseColor);
-      if (!byCategory[id]) byCategory[id] = { label, color, total: 0 };
-      byCategory[id].total += Number(tx.amount);
-    });
-
-    return Object.entries(byCategory)
-      .sort((a, b) => b[1].total - a[1].total)
-      .slice(0, 4)
-      .map(([id, meta]) => ({ id, ...meta }));
-  }, [dimensionalFilteredTx, evolutionKeys]);
-
-  const stackedExpenseData = useMemo(() => {
-    const byMonth: Record<string, any> = {};
-
-    evolutionKeys.forEach((key) => {
-      byMonth[key] = {
-        month: getMonthLabel(key),
-        totalDespesas: 0,
-      };
-      topExpenseCategories.forEach((cat) => {
-        byMonth[key][`cat_${cat.id}`] = 0;
-      });
-    });
-
-    dimensionalFilteredTx.forEach((tx) => {
-      const key = tx.transaction_date.slice(0, 7);
-      if (!byMonth[key]) return;
-      if (tx.type !== "expense" || tx.status === "canceled") return;
-
-      byMonth[key].totalDespesas += Number(tx.amount);
-      const catId = tx.category_id || "uncategorized";
-      const slot = topExpenseCategories.find((cat) => cat.id === catId);
-      if (slot) byMonth[key][`cat_${slot.id}`] += Number(tx.amount);
-    });
-
-    return evolutionKeys.map((key) => byMonth[key]);
-  }, [dimensionalFilteredTx, evolutionKeys, topExpenseCategories]);
+  const expenseHistory = useMemo(() => getExpenseHistory(txForCharts, evolutionKeys), [txForCharts, evolutionKeys]);
+  const topExpenseCategories = expenseHistory.categories;
+  const stackedExpenseData = expenseHistory.stacked;
 
   // Pending + recent transactions for dashboard
   const pendingTx = useMemo(() => currentMonthTx.filter((tx) => tx.status === "pending" || tx.status === "overdue").sort((a, b) => a.transaction_date.localeCompare(b.transaction_date)), [currentMonthTx]);
@@ -652,52 +445,62 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
             {categoryDistribution.length === 0 ? (<p className="text-sm text-muted-foreground">Sem despesas no mês para exibir.</p>) : (
               <>
                 <div className="h-60"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={categoryDistribution} dataKey="value" nameKey="label" innerRadius="48%" outerRadius="78%" paddingAngle={2}>{categoryDistribution.map((item) => (<Cell key={item.key} fill={item.color} />))}</Pie><Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ borderRadius: "12px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} /></PieChart></ResponsiveContainer></div>
-                <div className="space-y-1.5">{categoryDistribution.slice(0, 6).map((item) => (<div key={item.key} className="flex items-center justify-between rounded-lg border border-border/70 px-2.5 py-1.5 text-xs"><div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} /><span className="font-medium">{item.label}</span></div><span className="font-semibold">{item.percentage.toFixed(1)}%</span></div>))}</div>
+                <div className="space-y-1.5">{categoryDistribution.map((item) => (<div key={item.key} className="flex items-center justify-between rounded-lg border border-border/70 px-2.5 py-1.5 text-xs"><div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} /><span className="font-medium">{item.label}</span></div><span className="font-semibold">{item.percentage.toFixed(1)}%</span></div>))}</div>
               </>
             )}
           </CardContent></Card>
         </section>
-        <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <section className="grid grid-cols-1 gap-4">
           <Card className="border-0 shadow-card">
             <CardContent className="space-y-3 p-4">
               <h2 className="font-heading text-sm font-bold">Volume de despesas e tendência</h2>
               {topExpenseCategories.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Sem despesas para montar o gráfico por categoria.</p>
               ) : (
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={stackedExpenseData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
-                      <Tooltip
-                        formatter={(value: number, name: string) => {
-                          const found = topExpenseCategories.find((cat) => `cat_${cat.id}` === name);
-                          if (found) return [formatCurrency(value), found.label];
-                          return [formatCurrency(value), "Total despesas"];
-                        }}
-                        contentStyle={{ borderRadius: "12px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }}
-                      />
-                      <Legend
-                        formatter={(value) => {
-                          const found = topExpenseCategories.find((cat) => `cat_${cat.id}` === value);
-                          return found ? found.label : "Total despesas";
-                        }}
-                      />
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_240px]">
+                    <div className="h-72">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={stackedExpenseData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                          <YAxis tick={{ fontSize: 11 }} tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
+                          <Tooltip
+                            formatter={(value: number, name: string) => {
+                              const found = topExpenseCategories.find((cat) => `cat_${cat.id}` === name);
+                              if (found) return [formatCurrency(value), found.label];
+                              return [formatCurrency(value), "Total despesas"];
+                            }}
+                            contentStyle={{ borderRadius: "12px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }}
+                          />
+                          {topExpenseCategories.map((cat) => (
+                            <Bar key={cat.id} dataKey={`cat_${cat.id}`} stackId="expense" fill={cat.color} radius={[2, 2, 0, 0]} />
+                          ))}
+                          <Line type="monotone" dataKey="totalDespesas" stroke="#111827" strokeWidth={2.5} dot={{ r: 3 }} />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="space-y-2 rounded-xl border border-border/70 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Categorias</p>
                       {topExpenseCategories.map((cat) => (
-                        <Bar key={cat.id} dataKey={`cat_${cat.id}`} stackId="expense" fill={cat.color} radius={[2, 2, 0, 0]} />
+                        <div key={cat.id} className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cat.color }} />
+                            <span className="font-medium">{cat.label}</span>
+                          </div>
+                          <span className="font-semibold">{formatCurrency(cat.total)}</span>
+                        </div>
                       ))}
-                      <Line type="monotone" dataKey="totalDespesas" stroke="#111827" strokeWidth={2.5} dot={{ r: 3 }} />
-                    </ComposedChart>
-                  </ResponsiveContainer>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-center gap-2 border-t border-border/60 pt-2 text-xs font-semibold text-muted-foreground">
+                    <span className="inline-block h-[3px] w-6 rounded-full bg-[#111827]" />
+                    <span>Total despesas</span>
+                  </div>
                 </div>
               )}
             </CardContent>
           </Card>
-          <div className="space-y-4">
-            <SegmentedDistributionBar title="Distribuição por categoria" items={categoryDistribution} />
-            {!isSimple && <SegmentedDistributionBar title="Distribuição por forma de pagamento" items={paymentDistribution} />}
-          </div>
         </section>
 
         {/* Pending bills */}

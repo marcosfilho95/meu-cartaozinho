@@ -33,6 +33,8 @@ import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatCurrency } from "@/lib/constants";
 import { BankLogo } from "@/components/BankLogo";
+import { BANK_COLORS, normalizeLabel } from "@/lib/financeShared";
+import { getAutoCategoryColor } from "@/lib/financeCategoryColors";
 
 type TxType = "income" | "expense";
 type PaymentMethod = "pix" | "boleto" | "credit" | "debit" | "cash";
@@ -75,27 +77,7 @@ const BANK_OPTIONS = [
   { brand: "mercadopago", label: "Mercado Pago" },
 ] as const;
 
-const BANK_COLORS: Record<string, string> = {
-  nubank: "#8A05BE",
-  "mercado pago": "#009EE3",
-  mercadopago: "#009EE3",
-  picpay: "#21C25E",
-  itau: "#EC7000",
-  "banco do brasil": "#F7C400",
-  bb: "#F7C400",
-  bradesco: "#CC092F",
-  santander: "#EC0000",
-  caixa: "#005CA8",
-  c6: "#111111",
-  inter: "#FF7A00",
-};
-
-const normalize = (value: string) =>
-  value
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+const normalize = normalizeLabel;
 
 const BANK_LABEL_BY_BRAND: Record<string, string> = BANK_OPTIONS.reduce((acc, item) => {
   acc[normalize(item.brand)] = item.label;
@@ -268,7 +250,10 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
     };
     const targetType = typeMap[paymentMethod] || "checking";
     const match = accounts.find((a: any) => a.type === targetType);
-    return match?.id || accounts[0]?.id || null;
+    if (match?.id) return match.id;
+
+    const fallbackNonCredit = accounts.find((a: any) => a.type !== "credit_card");
+    return fallbackNonCredit?.id || accounts[0]?.id || null;
   }, [accounts, paymentMethod, needsCard, selectedCardMeta]);
 
   const numAmount = parseFloat(amount.replace(",", ".")) || 0;
@@ -314,7 +299,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
     const brandColor =
       BANK_COLORS[normalize(selectedCardMeta.brand || "")] ||
       BANK_COLORS[normalize(targetName)] ||
-      "#7C3AED";
+      getAutoCategoryColor({ name: targetName, categories });
 
     const { data: childInsert, error: childError } = await supabase
       .from("categories")
@@ -433,7 +418,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
         const { error } = await supabase.from("transactions").insert({
           user_id: userId,
           account_id: accountId,
-          category_id: categoryId || null,
+          category_id: resolvedCategoryId,
           type,
           amount: numAmount,
           transaction_date: transactionDate,
@@ -466,6 +451,11 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
+      try {
+        window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId } }));
+      } catch {
+        // ignore browser event failures
+      }
       onOpenChange(false);
       resetForm();
     } catch (err: any) {

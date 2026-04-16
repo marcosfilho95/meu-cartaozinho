@@ -1,6 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import { clearFinancePageCaches } from "@/lib/financePageCache";
 import { clearDashboardCache } from "@/lib/dashboardCache";
+import { BANK_COLORS, normalizeLabel } from "@/lib/financeShared";
+import { getAutoCategoryColor } from "@/lib/financeCategoryColors";
 
 type SyncInstallment = {
   id: string;
@@ -24,27 +26,7 @@ type SyncPurchase = {
   } | null;
 };
 
-const BANK_COLORS: Record<string, string> = {
-  nubank: "#8A05BE",
-  "mercado pago": "#009EE3",
-  mercadopago: "#009EE3",
-  picpay: "#21C25E",
-  itau: "#EC7000",
-  "banco do brasil": "#F7C400",
-  bb: "#F7C400",
-  bradesco: "#CC092F",
-  santander: "#EC0000",
-  caixa: "#005CA8",
-  c6: "#111111",
-  inter: "#FF7A00",
-};
-
-const normalize = (value: string) =>
-  value
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+const normalize = normalizeLabel;
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
@@ -118,7 +100,7 @@ const ensureCardsCategory = async (userId: string) => {
   return { parentId: inserted.id, rows };
 };
 
-const resolveBankColor = (cardName?: string | null, brand?: string | null) => {
+const resolveBankColor = (cardName?: string | null, brand?: string | null, existingCategories: Array<{ name?: string | null; color?: string | null }> = []) => {
   const normalizedName = normalize(cardName || "");
   const normalizedBrand = normalize(brand || "");
   const candidate = `${normalizedName} ${normalizedBrand}`.trim();
@@ -128,13 +110,13 @@ const resolveBankColor = (cardName?: string | null, brand?: string | null) => {
   const byContains = Object.entries(BANK_COLORS).find(([key]) => candidate.includes(key));
   if (byContains) return byContains[1];
 
-  return "#7C3AED";
+  return getAutoCategoryColor({ name: cardName || brand || "Cartão", categories: existingCategories });
 };
 
 const ensureCardSubcategory = async (userId: string, cardName: string, brand?: string | null) => {
   const { parentId, rows } = await ensureCardsCategory(userId);
   const normalizedCard = normalize(cardName || "Cartão");
-  const bankColor = resolveBankColor(cardName, brand);
+  const bankColor = resolveBankColor(cardName, brand, rows);
 
   const child = rows.find(
     (item) =>

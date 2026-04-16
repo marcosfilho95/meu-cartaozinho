@@ -6,6 +6,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 import {
   Plus,
@@ -70,6 +80,8 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<any>(null);
   const [saving, setSaving] = useState(false);
+  const [accountToDelete, setAccountToDelete] = useState<any | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [name, setName] = useState("");
   const [type, setType] = useState<string>("checking");
@@ -182,13 +194,16 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Excluir esta conta? Todas as transações vinculadas serão removidas.")) return;
+    setDeleting(true);
     const { error } = await supabase.from("accounts").delete().eq("id", id);
     if (error) {
       toast.error(error.message);
+      setDeleting(false);
       return;
     }
     toast.success("Conta excluída");
+    setDeleting(false);
+    setAccountToDelete(null);
     loadAccounts();
   };
 
@@ -251,7 +266,7 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
                       <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => openEdit(account)}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-destructive" onClick={() => handleDelete(account.id)}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-destructive" onClick={() => setAccountToDelete(account)}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
@@ -339,6 +354,32 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!accountToDelete} onOpenChange={(open) => !open && setAccountToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir conta?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A conta <span className="font-semibold text-foreground">{accountToDelete?.name}</span> será removida.
+              Todas as transações vinculadas também serão excluídas. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                if (!accountToDelete?.id) return;
+                handleDelete(accountToDelete.id);
+              }}
+              disabled={deleting}
+            >
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Excluir conta"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };

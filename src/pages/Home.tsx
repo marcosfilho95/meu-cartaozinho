@@ -7,6 +7,8 @@ import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/acce
 import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
 import { formatCurrency } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { fetchFinanceTransactions, getCycleScopedTransactions, monthKey } from "@/lib/financeShared";
+import { getDashboardSummary } from "@/lib/financeSelectors";
 import {
   ArrowDownCircle,
   ArrowUpCircle,
@@ -77,40 +79,28 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
       setLoading(true);
       try {
         const now = new Date();
-        const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-        const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-        const monthEnd = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}-01`;
         const currentRefMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+        const currentMonth = monthKey(now);
+        const todayDay = now.getDate();
 
-        const [accsRes, txRes, installRes] = await Promise.all([
+        const [accsRes, txsRaw, installRes] = await Promise.all([
           supabase.from("accounts").select("*").eq("user_id", userId).eq("is_active", true),
-          supabase
-            .from("transactions")
-            .select("*")
-            .eq("user_id", userId)
-            .is("deleted_at", null)
-            .gte("transaction_date", monthStart)
-            .lt("transaction_date", monthEnd),
+          fetchFinanceTransactions(userId, 18),
           supabase.from("installments").select("amount, status, ref_month").eq("user_id", userId).eq("ref_month", currentRefMonth),
         ]);
 
         const accs = accsRes.data || [];
-        const txs = txRes.data || [];
+        const txs = getCycleScopedTransactions(txsRaw, currentMonth, todayDay);
         const installs = installRes.data || [];
 
         const totalBalance = accs.reduce((sum, account) => {
           return sum + (account.include_in_net_worth ? Number(account.current_balance) : 0);
         }, 0);
 
-        const monthIncome = txs
-          .filter((tx: any) => tx.type === "income" && tx.status !== "canceled")
-          .reduce((sum: number, tx: any) => sum + Number(tx.amount), 0);
-
-        const monthExpense = txs
-          .filter((tx: any) => tx.type === "expense" && tx.status !== "canceled")
-          .reduce((sum: number, tx: any) => sum + Number(tx.amount), 0);
-
-        const pendingTxs = txs.filter((tx: any) => tx.status === "pending");
+        const monthSummary = getDashboardSummary(txs);
+        const monthIncome = monthSummary.totalIncome;
+        const monthExpense = monthSummary.totalExpense;
+        const pendingTxs = txs.filter((tx: any) => tx.status === "pending" || tx.status === "overdue");
         const pendingCount = pendingTxs.length;
         const pendingAmount = pendingTxs.reduce((sum: number, tx: any) => sum + Number(tx.amount), 0);
         const cardTotal = installs.reduce((sum: number, item: any) => sum + Number(item.amount), 0);

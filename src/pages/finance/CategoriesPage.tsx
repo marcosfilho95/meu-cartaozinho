@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getFinanceCategoriesCache, setFinanceCategoriesCache } from "@/lib/financePageCache";
 import { ensureDefaultCategories } from "@/lib/financeCategoryDefaults";
+import { getAutoCategoryColor, getBrandLockedColor } from "@/lib/financeCategoryColors";
 
 interface CategoriesPageProps {
   userId: string;
@@ -27,7 +28,6 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
 
   const [name, setName] = useState("");
   const [kind, setKind] = useState<string>("expense");
-  const [color, setColor] = useState("#E65A8D");
   const [parentId, setParentId] = useState("none");
 
   const load = async () => {
@@ -56,7 +56,6 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
     setEditing(null);
     setName("");
     setKind(activeTab);
-    setColor("#E65A8D");
     setParentId("none");
     setDialogOpen(true);
   };
@@ -65,7 +64,6 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
     setEditing(category);
     setName(category.name);
     setKind(category.kind);
-    setColor(category.color || "#E65A8D");
     setParentId(category.parent_id || "none");
     setDialogOpen(true);
   };
@@ -97,7 +95,18 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
     }
 
     setSaving(true);
-    const payload: any = { user_id: userId, name: name.trim(), kind, color, parent_id: parentId === "none" ? null : parentId };
+    const generatedColor = getAutoCategoryColor({
+      name: name.trim(),
+      categories,
+      editingId: editing?.id || null,
+    });
+    const payload: any = {
+      user_id: userId,
+      name: name.trim(),
+      kind,
+      parent_id: parentId === "none" ? null : parentId,
+      color: editing && editing.color && !getBrandLockedColor(name.trim()) ? editing.color : generatedColor,
+    };
 
     if (editing) {
       const { error } = await supabase.from("categories").update(payload).eq("id", editing.id);
@@ -197,7 +206,7 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
               <Label className="text-xs text-muted-foreground">Nome</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Alimentação" className="mt-1" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div>
               <div>
                 <Label className="text-xs text-muted-foreground">Tipo</Label>
                 <Select value={kind} onValueChange={setKind}>
@@ -208,10 +217,7 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Cor</Label>
-                <Input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="mt-1 h-10 p-1 cursor-pointer" />
-              </div>
+              <p className="mt-1.5 text-[11px] text-muted-foreground">A cor é definida automaticamente e mantida em todo o app.</p>
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">Grupo pai (opcional)</Label>

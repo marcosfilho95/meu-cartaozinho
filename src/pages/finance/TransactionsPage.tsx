@@ -12,31 +12,14 @@ import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { getFinanceTransactionsCache, setFinanceTransactionsCache } from "@/lib/financePageCache";
+import { FinanceTx, fetchFinanceTransactions, getCycleScopedTransactions, monthKey } from "@/lib/financeShared";
+import { getDashboardSummary } from "@/lib/financeSelectors";
 
 interface TransactionsPageProps {
   userId: string;
 }
 
-const monthKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-const addMonthsToKey = (key: string, amount: number) => {
-  const [year, month] = key.split("-").map(Number);
-  const d = new Date(year, (month || 1) - 1 + amount, 1);
-  return monthKey(d);
-};
-const txDueDay = (tx: any) => {
-  const fromDueDate = tx?.due_date ? Number(String(tx.due_date).slice(8, 10)) : 0;
-  const fromAccount = Number(tx?.accounts?.due_day || 0);
-  const resolved = fromDueDate || fromAccount || 31;
-  return Math.max(1, Math.min(31, resolved));
-};
-
-const isExpenseInDynamicCycle = (tx: any, currentMonth: string, todayDay: number) => {
-  const month = String(tx.transaction_date || "").slice(0, 7);
-  const due = txDueDay(tx);
-  const activeMonth = todayDay > due ? addMonthsToKey(currentMonth, 1) : currentMonth;
-  const carry = month < activeMonth && (tx.status === "pending" || tx.status === "overdue");
-  return month === activeMonth || carry;
-};
+const VISIBLE_BATCH_SIZE = 120;
 
 const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
   const queryClient = useQueryClient();
@@ -45,24 +28,15 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [viewMode, setViewMode] = useState<"billing" | "calendar">("billing");
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(VISIBLE_BATCH_SIZE);
 
-  const cachedTransactions = userId ? getFinanceTransactionsCache<any[]>(userId) || [] : [];
+  const cachedTransactions = userId ? getFinanceTransactionsCache<FinanceTx[]>(userId) || [] : [];
   const currentMonth = monthKey(new Date());
   const todayDay = new Date().getDate();
 
   const { data: transactions = [], isLoading, refetch } = useQuery({
     queryKey: ["transactions", userId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("transactions")
-        .select("*, accounts!transactions_account_id_fkey(name, type, due_day, current_balance), categories(name, color)")
-        .eq("user_id", userId)
-        .is("deleted_at", null)
-        .order("transaction_date", { ascending: false })
-        .limit(200);
-      if (error) throw error;
-      return data || [];
-    },
+    queryFn: () => fetchFinanceTransactions(userId, 18),
     enabled: !!userId,
     initialData: cachedTransactions,
     refetchOnWindowFocus: false,
@@ -87,28 +61,17 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
 
   const scopedTransactions = useMemo(() => {
     if (viewMode === "calendar") {
-      return transactions.filter((tx: any) => tx.transaction_date?.startsWith(currentMonth));
+      return transactions.filter((tx) => tx.transaction_date?.startsWith(currentMonth));
     }
 
-    return transactions.filter((tx: any) => {
-      if (tx.type === "income") return String(tx.transaction_date || "").slice(0, 7) === currentMonth;
-      return isExpenseInDynamicCycle(tx, currentMonth, todayDay);
-    });
+    return getCycleScopedTransactions(transactions, currentMonth, todayDay);
   }, [transactions, viewMode, currentMonth, todayDay]);
 
-  const monthSummary = useMemo(() => {
-    const monthTx = scopedTransactions.filter((tx: any) => tx.status !== "canceled");
-    const totalIncome = monthTx.filter((tx: any) => tx.type === "income").reduce((s: number, tx: any) => s + Number(tx.amount), 0);
-    const totalExpense = monthTx.filter((tx: any) => tx.type === "expense").reduce((s: number, tx: any) => s + Number(tx.amount), 0);
-    const paidExpense = monthTx.filter((tx: any) => tx.type === "expense" && tx.status === "paid").reduce((s: number, tx: any) => s + Number(tx.amount), 0);
-    const pendingExpense = monthTx.filter((tx: any) => tx.type === "expense" && tx.status === "pending").reduce((s: number, tx: any) => s + Number(tx.amount), 0);
-    const overdueExpense = monthTx.filter((tx: any) => tx.type === "expense" && tx.status === "overdue").reduce((s: number, tx: any) => s + Number(tx.amount), 0);
-    return { totalIncome, totalExpense, paidExpense, pendingExpense, overdueExpense, balance: totalIncome - totalExpense };
-  }, [scopedTransactions]);
+  const monthSummary = useMemo(() => getDashboardSummary(scopedTransactions), [scopedTransactions]);
 
   const filtered = useMemo(
     () =>
-      scopedTransactions.filter((tx: any) => {
+      scopedTransactions.filter((tx) => {
         if (typeFilter !== "all" && tx.type !== typeFilter) return false;
         if (statusFilter !== "all" && tx.status !== statusFilter) return false;
         if (search) {
@@ -116,11 +79,13 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
           if (!(tx.source || "").toLowerCase().includes(s) && !(tx.notes || "").toLowerCase().includes(s)) return false;
         }
         return true;
-      }),
+      }).sort((a, b) => b.transaction_date.localeCompare(a.transaction_date)),
     [scopedTransactions, typeFilter, statusFilter, search],
   );
 
-  const handleToggleStatus = async (tx: any) => {
+  const visibleTransactions = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
+
+  const handleToggleStatus = async (tx: FinanceTx) => {
     const newStatus = tx.status === "paid" ? "pending" : "paid";
     setTogglingId(tx.id);
     
@@ -179,14 +144,24 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
   };
 
   const grouped = useMemo(() => {
-    const groups: Record<string, any[]> = {};
-    filtered.forEach((tx: any) => {
+    const groups: Record<string, FinanceTx[]> = {};
+    visibleTransactions.forEach((tx) => {
       const date = tx.transaction_date;
       if (!groups[date]) groups[date] = [];
       groups[date].push(tx);
     });
     return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
-  }, [filtered]);
+  }, [visibleTransactions]);
+
+  React.useEffect(() => {
+    setVisibleCount(VISIBLE_BATCH_SIZE);
+  }, [search, typeFilter, statusFilter, viewMode, currentMonth]);
+
+  React.useEffect(() => {
+    if (visibleCount > filtered.length) {
+      setVisibleCount(Math.max(VISIBLE_BATCH_SIZE, filtered.length));
+    }
+  }, [visibleCount, filtered.length]);
 
   const monthLabel =
     viewMode === "billing"
@@ -244,7 +219,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
           <Card className="border-0 shadow-card">
             <CardContent className="p-3 text-center">
               <p className="text-[10px] text-muted-foreground flex items-center justify-center gap-1"><Clock className="h-3 w-3 text-warning" />Pendente</p>
-              <p className="text-sm font-bold text-warning">{formatCurrency(monthSummary.pendingExpense + monthSummary.overdueExpense)}</p>
+              <p className="text-sm font-bold text-warning">{formatCurrency(monthSummary.pendingExpense)}</p>
             </CardContent>
           </Card>
         </div>
@@ -300,8 +275,9 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
             <p className="text-sm">Nenhuma transação encontrada.</p>
           </div>
         ) : (
-          grouped.map(([date, txs]) => (
-            <div key={date}>
+          <>
+            {grouped.map(([date, txs]) => (
+              <div key={date}>
               <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 {new Date(date + "T12:00:00").toLocaleDateString("pt-BR", {
                   weekday: "short",
@@ -310,7 +286,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
                 })}
               </p>
               <div className="space-y-1.5">
-                {txs.map((tx: any) => {
+                {txs.map((tx) => {
                   const isPaid = tx.status === "paid";
                   const isToggling = togglingId === tx.id;
 
@@ -401,7 +377,15 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
                 })}
               </div>
             </div>
-          ))
+            ))}
+            {visibleCount < filtered.length && (
+              <div className="pt-2 text-center">
+                <Button variant="outline" onClick={() => setVisibleCount((prev) => prev + VISIBLE_BATCH_SIZE)}>
+                  Carregar mais ({Math.min(VISIBLE_BATCH_SIZE, filtered.length - visibleCount)} de {filtered.length - visibleCount})
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </>
