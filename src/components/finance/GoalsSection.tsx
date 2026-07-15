@@ -31,6 +31,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/constants";
+import { getGoalMonthlyRequirement, type PlanningGoal } from "@/lib/financePlanning";
+import { getErrorMessage } from "@/lib/supabaseUntyped";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -46,12 +48,21 @@ import {
 } from "lucide-react";
 import { AddGoalDialog } from "./AddGoalDialog";
 
+type GoalItem = PlanningGoal & { id: string; goal_type?: string; priority?: number };
+type GoalAccount = {
+  id: string;
+  name: string;
+  type: string;
+  current_balance?: number | null;
+};
+
 interface GoalsSectionProps {
   userId: string;
-  goals: any[];
-  accounts: any[];
-  totalBalance: number;
-  monthBalance: number;
+  goals: GoalItem[];
+  accounts: GoalAccount[];
+  monthlySurplus: number;
+  allocatedThisMonth: number;
+  refMonth: string;
   onReload: () => void;
 }
 
@@ -62,14 +73,16 @@ type GoalTx = {
   type: "deposit" | "withdraw";
   description: string | null;
   created_at: string;
+  ref_month?: string | null;
 };
 
 export const GoalsSection: React.FC<GoalsSectionProps> = ({
   userId,
   goals,
   accounts,
-  totalBalance,
-  monthBalance,
+  monthlySurplus,
+  allocatedThisMonth,
+  refMonth,
   onReload,
 }) => {
   const [goalDialogOpen, setGoalDialogOpen] = useState(false);
@@ -80,8 +93,8 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
   const [expandedGoalId, setExpandedGoalId] = useState<string | null>(null);
   const [goalTxs, setGoalTxs] = useState<GoalTx[]>([]);
   const [loadingTxs, setLoadingTxs] = useState(false);
-  const [goalToDelete, setGoalToDelete] = useState<any | null>(null);
-  const [withdrawGoal, setWithdrawGoal] = useState<any | null>(null);
+  const [goalToDelete, setGoalToDelete] = useState<GoalItem | null>(null);
+  const [withdrawGoal, setWithdrawGoal] = useState<GoalItem | null>(null);
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [withdrawing, setWithdrawing] = useState(false);
 
@@ -90,10 +103,13 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
     [goals],
   );
   const visibleGoals = useMemo(
-    () => goals.filter((goal) => Number(goal.current_amount || 0) > 0),
+    () => goals.filter((goal) => !goal.is_completed || Number(goal.current_amount || 0) > 0),
     [goals],
   );
-  const availableBalance = totalBalance - totalReserved;
+  const totalTargets = useMemo(
+    () => goals.reduce((sum, goal) => sum + Number(goal.target_amount || 0), 0),
+    [goals],
+  );
 
   useEffect(() => {
     if (!expandedGoalId) {
@@ -104,14 +120,14 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
     const load = async () => {
       setLoadingTxs(true);
       try {
-        const { data, error } = await (supabase as any)
+        const { data, error } = await supabase
           .from("goal_transactions")
           .select("*")
           .eq("goal_id", expandedGoalId)
           .order("created_at", { ascending: false })
           .limit(20);
         if (error) throw error;
-        setGoalTxs(data || []);
+        setGoalTxs((data || []) as GoalTx[]);
       } catch {
         setGoalTxs([]);
       } finally {
@@ -123,8 +139,22 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
   }, [expandedGoalId]);
 
   const primaryAccount = useMemo(() => {
-    return accounts.find((a: any) => a.type === "checking") || accounts[0] || null;
+    const liquidAccounts = accounts
+      .filter((account) => ["checking", "savings", "cash"].includes(account.type))
+      .sort((left, right) => Number(right.current_balance || 0) - Number(left.current_balance || 0));
+    return liquidAccounts[0] || null;
   }, [accounts]);
+  const availableFromClosing = Math.max(monthlySurplus - allocatedThisMonth, 0);
+  const availableInAccount = Math.max(Number(primaryAccount?.current_balance || 0), 0);
+  const availableBalance = Math.min(availableFromClosing, availableInAccount);
+  const totalProgress = totalTargets > 0 ? Math.min((totalReserved / totalTargets) * 100, 100) : 0;
+  const referenceLabel = new Date(`${refMonth}-15T12:00:00`).toLocaleDateString("pt-BR", {
+    month: "long",
+    year: "numeric",
+  });
+
+  const isMissingPlanningRpc = (error: { code?: string; message?: string } | null) =>
+    Boolean(error && (error.code === "PGRST202" || /function|schema cache|reserve_goal_funds|withdraw_goal_funds|delete_goal/i.test(error.message || "")));
 
   const handleAllocate = async () => {
     const amount = parseFloat(allocAmount.replace(",", "."));
@@ -149,36 +179,60 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
     try {
       const goal = goals.find((g) => g.id === selectedGoalId);
       if (!goal) throw new Error("Meta não encontrada.");
+      const remaining = Math.max(Number(goal.target_amount) - Number(goal.current_amount), 0);
+      if (amount > remaining) throw new Error(`Faltam ${formatCurrency(remaining)} para concluir esta meta.`);
 
-      const { error: gErr } = await supabase
-        .from("goals")
-        .update({ current_amount: Number(goal.current_amount || 0) + amount })
-        .eq("id", selectedGoalId);
-      if (gErr) throw gErr;
+      const rpcResult = await supabase.rpc("reserve_goal_funds", {
+        p_goal_id: selectedGoalId,
+        p_account_id: primaryAccount.id,
+        p_amount: amount,
+        p_ref_month: refMonth,
+        p_description: `Reserva do fechamento de ${referenceLabel}`,
+      });
+      if (rpcResult.error && !isMissingPlanningRpc(rpcResult.error)) throw rpcResult.error;
 
-      const { error: aErr } = await supabase
-        .from("accounts")
-        .update({ current_balance: Number(primaryAccount.current_balance || 0) - amount })
-        .eq("id", primaryAccount.id);
-      if (aErr) throw aErr;
-
-      const { error: tErr } = await (supabase as any)
-        .from("goal_transactions")
-        .insert({
+      if (rpcResult.error) {
+        const { error: gErr } = await supabase
+          .from("goals")
+          .update({
+            current_amount: Number(goal.current_amount || 0) + amount,
+            is_completed: Number(goal.current_amount || 0) + amount >= Number(goal.target_amount),
+          })
+          .eq("id", selectedGoalId);
+        if (gErr) throw gErr;
+        const { error: aErr } = await supabase
+          .from("accounts")
+          .update({ current_balance: Number(primaryAccount.current_balance || 0) - amount })
+          .eq("id", primaryAccount.id);
+        if (aErr) throw aErr;
+        let { error: tErr } = await supabase.from("goal_transactions").insert({
           user_id: userId,
           goal_id: selectedGoalId,
+          account_id: primaryAccount.id,
           amount,
           type: "deposit",
-          description: `Reserva de ${primaryAccount.name}`,
+          description: `Reserva do fechamento de ${referenceLabel}`,
+          ref_month: refMonth,
         });
-      if (tErr) throw tErr;
+        if (tErr && /account_id|ref_month/i.test(tErr.message)) {
+          const fallback = await supabase.from("goal_transactions").insert({
+            user_id: userId,
+            goal_id: selectedGoalId,
+            amount,
+            type: "deposit",
+            description: `Reserva do fechamento de ${referenceLabel}`,
+          });
+          tErr = fallback.error;
+        }
+        if (tErr) throw tErr;
+      }
 
       toast.success(`${formatCurrency(amount)} reservado para "${goal.name}".`);
       setAllocAmount("");
       setSelectedGoalId("");
       onReload();
-    } catch (err: any) {
-      toast.error(err?.message || "Erro ao reservar.");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Erro ao reservar."));
     } finally {
       setSaving(false);
     }
@@ -189,14 +243,30 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
 
     setDeletingId(goalToDelete.id);
     try {
-      const { error } = await supabase.from("goals").delete().eq("id", goalToDelete.id);
-      if (error) throw error;
-      toast.success("Meta excluída.");
+      if (!primaryAccount) throw new Error("Nenhuma conta disponível para receber o valor guardado.");
+      const rpcResult = await supabase.rpc("delete_goal_and_release_funds", {
+        p_goal_id: goalToDelete.id,
+        p_account_id: primaryAccount.id,
+      });
+      if (rpcResult.error && !isMissingPlanningRpc(rpcResult.error)) throw rpcResult.error;
+      if (rpcResult.error) {
+        const released = Number(goalToDelete.current_amount || 0);
+        if (released > 0) {
+          const { error: accountError } = await supabase
+            .from("accounts")
+            .update({ current_balance: Number(primaryAccount.current_balance || 0) + released })
+            .eq("id", primaryAccount.id);
+          if (accountError) throw accountError;
+        }
+        const { error } = await supabase.from("goals").delete().eq("id", goalToDelete.id);
+        if (error) throw error;
+      }
+      toast.success("Cofrinho excluído e valor devolvido para a conta.");
       if (expandedGoalId === goalToDelete.id) setExpandedGoalId(null);
       setGoalToDelete(null);
       onReload();
-    } catch (err: any) {
-      toast.error(err?.message || "Erro ao excluir meta.");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Erro ao excluir cofrinho."));
     } finally {
       setDeletingId(null);
     }
@@ -213,33 +283,54 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
 
     setWithdrawing(true);
     try {
-      const { error: gErr } = await supabase
-        .from("goals")
-        .update({ current_amount: Number(withdrawGoal.current_amount) - amount })
-        .eq("id", withdrawGoal.id);
-      if (gErr) throw gErr;
-
-      if (primaryAccount) {
-        await supabase
+      if (!primaryAccount) throw new Error("Nenhuma conta disponível para receber a retirada.");
+      const rpcResult = await supabase.rpc("withdraw_goal_funds", {
+        p_goal_id: withdrawGoal.id,
+        p_account_id: primaryAccount.id,
+        p_amount: amount,
+        p_ref_month: refMonth,
+        p_description: `Retirada para ${primaryAccount.name}`,
+      });
+      if (rpcResult.error && !isMissingPlanningRpc(rpcResult.error)) throw rpcResult.error;
+      if (rpcResult.error) {
+        const { error: gErr } = await supabase
+          .from("goals")
+          .update({ current_amount: Number(withdrawGoal.current_amount) - amount, is_completed: false })
+          .eq("id", withdrawGoal.id);
+        if (gErr) throw gErr;
+        const { error: accountError } = await supabase
           .from("accounts")
           .update({ current_balance: Number(primaryAccount.current_balance || 0) + amount })
           .eq("id", primaryAccount.id);
+        if (accountError) throw accountError;
+        let { error: txError } = await supabase.from("goal_transactions").insert({
+          user_id: userId,
+          goal_id: withdrawGoal.id,
+          account_id: primaryAccount.id,
+          amount,
+          type: "withdraw",
+          description: `Retirada para ${primaryAccount.name}`,
+          ref_month: refMonth,
+        });
+        if (txError && /account_id|ref_month/i.test(txError.message)) {
+          const fallback = await supabase.from("goal_transactions").insert({
+            user_id: userId,
+            goal_id: withdrawGoal.id,
+            amount,
+            type: "withdraw",
+            description: `Retirada para ${primaryAccount.name}`,
+          });
+          txError = fallback.error;
+        }
+        if (txError) throw txError;
       }
-
-      await (supabase as any).from("goal_transactions").insert({
-        user_id: userId,
-        goal_id: withdrawGoal.id,
-        amount,
-        type: "withdraw",
-        description: `Retirada para ${primaryAccount?.name || "conta"}`,
-      });
 
       toast.success(`${formatCurrency(amount)} retirado de "${withdrawGoal.name}".`);
       setWithdrawGoal(null);
       setWithdrawAmount("");
       onReload();
-    } catch (err: any) {
-      toast.error(err?.message || "Erro ao retirar.");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Erro ao retirar."));
     } finally {
       setWithdrawing(false);
     }
@@ -253,7 +344,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
             <div className="mb-1 flex items-center gap-2">
               <Wallet className="h-4 w-4 text-success" />
               <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Disponível
+                Disponível do fechamento
               </p>
             </div>
             <p
@@ -264,7 +355,9 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
             >
               {formatCurrency(availableBalance)}
             </p>
-            <p className="mt-0.5 text-[10px] text-muted-foreground">Livre para usar</p>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">
+              Sobra de {referenceLabel} ainda não reservada
+            </p>
           </CardContent>
         </Card>
 
@@ -273,7 +366,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
             <div className="mb-1 flex items-center gap-2">
               <PiggyBank className="h-4 w-4 text-primary" />
               <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Reservado
+                Guardado nos cofrinhos
               </p>
             </div>
             <p className="font-heading text-2xl font-extrabold text-primary">{formatCurrency(totalReserved)}</p>
@@ -288,11 +381,13 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
             <div className="mb-1 flex items-center gap-2">
               <Shield className="h-4 w-4 text-foreground/60" />
               <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Total geral
+                Progresso dos sonhos
               </p>
             </div>
-            <p className="font-heading text-2xl font-extrabold text-foreground">{formatCurrency(totalBalance)}</p>
-            <p className="mt-0.5 text-[10px] text-muted-foreground">Disponível + reservado</p>
+            <p className="font-heading text-2xl font-extrabold text-foreground">{totalProgress.toFixed(0)}%</p>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">
+              {formatCurrency(totalReserved)} de {formatCurrency(totalTargets)}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -300,7 +395,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
       <Card className="overflow-hidden border-0 shadow-elevated" data-allocate>
         <div className="gradient-primary px-4 py-3">
           <h2 className="flex items-center gap-2 font-heading text-base font-bold text-primary-foreground">
-            <PiggyBank className="h-5 w-5" /> Reservar para meta
+            <PiggyBank className="h-5 w-5" /> Distribuir a sobra de {referenceLabel}
           </h2>
         </div>
         <CardContent className="space-y-3 p-4">
@@ -347,7 +442,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
           </div>
           {availableBalance > 0 && (
             <p className="text-center text-[11px] text-muted-foreground">
-              Saldo disponível para reservar: <span className="font-bold text-success">{formatCurrency(availableBalance)}</span>
+              Capacidade restante deste fechamento: <span className="font-bold text-success">{formatCurrency(availableBalance)}</span>
             </p>
           )}
         </CardContent>
@@ -355,14 +450,14 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
 
       <div className="flex items-center justify-between">
         <h2 className="flex items-center gap-2 font-heading text-sm font-bold">
-          <Target className="h-4 w-4 text-primary" /> Minhas metas
+          <Target className="h-4 w-4 text-primary" /> Meus cofrinhos
         </h2>
         <Button
           size="sm"
           className="gradient-primary h-9 gap-1.5 rounded-xl border border-primary/30 px-3 text-xs font-bold text-primary-foreground shadow-md shadow-primary/30 hover:brightness-105"
           onClick={() => setGoalDialogOpen(true)}
         >
-          <Plus className="h-3.5 w-3.5" /> Nova meta
+          <Plus className="h-3.5 w-3.5" /> Novo cofrinho
         </Button>
       </div>
 
@@ -370,14 +465,14 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
         <Card className="border-2 border-dashed border-border">
           <CardContent className="py-8 text-center">
             <PiggyBank className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
-            <p className="text-sm font-medium text-muted-foreground">Nenhuma meta com valor reservado ainda.</p>
-            <p className="mt-1 text-xs text-muted-foreground">Reserve um valor em uma meta para ela aparecer aqui.</p>
+            <p className="text-sm font-medium text-muted-foreground">Nenhum cofrinho criado ainda.</p>
+            <p className="mt-1 text-xs text-muted-foreground">Crie um objetivo para transformar sua sobra mensal em um plano.</p>
             <Button
               size="sm"
               className="gradient-primary mt-4 gap-1.5 border border-primary/30 text-primary-foreground shadow-md shadow-primary/30 hover:brightness-105"
               onClick={() => setGoalDialogOpen(true)}
             >
-              <Plus className="h-3.5 w-3.5" /> Criar primeira meta
+              <Plus className="h-3.5 w-3.5" /> Criar primeiro cofrinho
             </Button>
           </CardContent>
         </Card>
@@ -389,6 +484,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
             const progress = Math.min((current / target) * 100, 100);
             const isCompleted = progress >= 100;
             const isExpanded = expandedGoalId === goal.id;
+            const monthlyRequirement = getGoalMonthlyRequirement(goal, refMonth);
 
             return (
               <Card
@@ -410,6 +506,11 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                             ? `Prazo: ${new Date(goal.deadline + "T12:00:00").toLocaleDateString("pt-BR")}`
                             : "Sem prazo definido"}
                         </p>
+                        {monthlyRequirement > 0 && !isCompleted && (
+                          <p className="mt-0.5 text-[11px] font-semibold text-primary">
+                            Ritmo sugerido: {formatCurrency(monthlyRequirement)}/mês
+                          </p>
+                        )}
                       </div>
                       <div className="flex items-center gap-1">
                         <Button
