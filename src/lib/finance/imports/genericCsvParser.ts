@@ -47,18 +47,32 @@ const detectDelimiter = (headerLine: string) => {
 
 const DATE_KEYS = ["data", "date", "dt", "data lançamento", "data lancamento", "data movim", "data movimento"];
 const DESC_KEYS = ["descricao", "descrição", "description", "historico", "histórico", "detalhe", "detalhes", "title", "titulo", "título", "estabelecimento", "lançamento", "lancamento", "movimento"];
-const AMOUNT_KEYS = ["valor", "amount", "value", "montante", "valor (r$)", "valor r$"];
+const AMOUNT_KEYS = [
+  "valor (em r$)",
+  "valor em r$",
+  "valor r$",
+  "valor (r$)",
+  "valor brl",
+  "valor",
+  "amount",
+  "value",
+  "montante",
+];
+const AMOUNT_BLOCK = ["us$", "usd", "u$s", "dolar", "dólar", "cotacao", "cotação", "quantidade", "qtd"];
 const CREDIT_KEYS = ["credito", "crédito", "credit", "entrada", "entradas"];
 const DEBIT_KEYS = ["debito", "débito", "debit", "saida", "saída", "saidas", "saídas"];
 
-const findColumn = (header: string[], candidates: string[]) => {
+const findColumn = (header: string[], candidates: string[], blocklist: string[] = []) => {
   const normalized = header.map((h) => normalizeText(h).toLowerCase());
+  const isBlocked = (col: string) => blocklist.some((b) => col.includes(b));
   for (const candidate of candidates) {
     const idx = normalized.indexOf(candidate);
-    if (idx >= 0) return idx;
+    if (idx >= 0 && !isBlocked(normalized[idx])) return idx;
   }
-  for (let i = 0; i < normalized.length; i += 1) {
-    if (candidates.some((c) => normalized[i].includes(c))) return i;
+  for (const candidate of candidates) {
+    for (let i = 0; i < normalized.length; i += 1) {
+      if (normalized[i].includes(candidate) && !isBlocked(normalized[i])) return i;
+    }
   }
   return -1;
 };
@@ -87,7 +101,9 @@ export const genericCsvParser: FinancialFileParser = {
     const header = splitCsvLine(firstLine, detectDelimiter(firstLine));
     const hasDate = findColumn(header, DATE_KEYS) >= 0;
     const hasDesc = findColumn(header, DESC_KEYS) >= 0;
-    const hasAmount = findColumn(header, AMOUNT_KEYS) >= 0 || (findColumn(header, CREDIT_KEYS) >= 0 && findColumn(header, DEBIT_KEYS) >= 0);
+    const hasAmount =
+      findColumn(header, AMOUNT_KEYS, AMOUNT_BLOCK) >= 0 ||
+      (findColumn(header, CREDIT_KEYS) >= 0 && findColumn(header, DEBIT_KEYS) >= 0);
     const score = (isCsvName ? 0.2 : 0) + (hasDelimiter ? 0.15 : 0) + (hasDate ? 0.2 : 0) + (hasDesc ? 0.15 : 0) + (hasAmount ? 0.2 : 0);
 
     return {
@@ -107,7 +123,7 @@ export const genericCsvParser: FinancialFileParser = {
     const header = splitCsvLine(lines[0], delimiter);
     const dateIdx = findColumn(header, DATE_KEYS);
     const descIdx = findColumn(header, DESC_KEYS);
-    const amountIdx = findColumn(header, AMOUNT_KEYS);
+    const amountIdx = findColumn(header, AMOUNT_KEYS, AMOUNT_BLOCK);
     const creditIdx = findColumn(header, CREDIT_KEYS);
     const debitIdx = findColumn(header, DEBIT_KEYS);
 

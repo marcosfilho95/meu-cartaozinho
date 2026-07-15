@@ -27,14 +27,43 @@ export const parseIsoDate = (value: string) => {
 
 export const parseBrazilianMoney = (value: string) => {
   const trimmed = value.trim();
-  const isNegative = trimmed.includes("-");
-  const cleaned = trimmed
+  if (!trimmed) throw new Error(`Valor invalido: ${value}`);
+  const isNegative = /-/.test(trimmed) || /^\(.*\)$/.test(trimmed);
+  let raw = trimmed
+    .replace(/[()]/g, "")
     .replace(/-/g, "")
     .replace(/^R\$\s*/i, "")
-    .replace(/\s/g, "")
-    .replace(/\./g, "")
-    .replace(",", ".");
-  const parsed = Number(cleaned);
+    .replace(/[Uu][Ss]?\$\s*/g, "")
+    .replace(/\s/g, "");
+  if (!raw) throw new Error(`Valor invalido: ${value}`);
+
+  const hasComma = raw.includes(",");
+  const hasDot = raw.includes(".");
+  let normalized: string;
+  if (hasComma && hasDot) {
+    // Assume last punctuation is the decimal separator.
+    const lastComma = raw.lastIndexOf(",");
+    const lastDot = raw.lastIndexOf(".");
+    if (lastComma > lastDot) {
+      // BR style: 1.234,56
+      normalized = raw.replace(/\./g, "").replace(",", ".");
+    } else {
+      // US style: 1,234.56
+      normalized = raw.replace(/,/g, "");
+    }
+  } else if (hasComma) {
+    // BR decimal: 1234,56
+    normalized = raw.replace(/\./g, "").replace(",", ".");
+  } else if (hasDot) {
+    // Ambiguous dot. If last dot has 1-2 digits after it treat as decimal, else as thousand.
+    const lastDot = raw.lastIndexOf(".");
+    const decimals = raw.length - lastDot - 1;
+    normalized = decimals >= 1 && decimals <= 2 ? raw : raw.replace(/\./g, "");
+  } else {
+    normalized = raw;
+  }
+
+  const parsed = Number(normalized);
   if (!Number.isFinite(parsed)) throw new Error(`Valor invalido: ${value}`);
   return (isNegative ? -Math.abs(parsed) : parsed).toFixed(2);
 };
