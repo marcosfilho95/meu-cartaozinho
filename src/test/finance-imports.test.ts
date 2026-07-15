@@ -21,7 +21,18 @@ describe("financial imports", () => {
     expect(rows[1].installmentCurrent).toBe(1);
     expect(rows[1].installmentTotal).toBe(5);
     expect(rows[1].descriptionNormalized).toBe("UP TRAINING");
-    expect(rows[2].categorySuggestion).toBe("Vestuário");
+    expect(rows[2].categorySuggestion).toBe("Vestuario");
+  });
+
+  it("classifies common market descriptions as food", async () => {
+    const csv = `date,title,amount
+2026-06-24,Mercadinho Sao Luiz,"151,32"
+2026-06-21,Mercadinho Sao Luiz,"32,00"
+2026-06-25,MP *HOLYPIZZA,"70,00"`;
+
+    const rows = await parseNubankCsvRows(csv);
+
+    expect(rows.map((row) => row.categorySuggestion)).toEqual(["Alimentacao", "Alimentacao", "Alimentacao"]);
   });
 
   it("parses Mercado Pago textual statement movements", async () => {

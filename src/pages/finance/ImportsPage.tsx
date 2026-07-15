@@ -55,6 +55,16 @@ type CategoryOption = {
   parent_id?: string | null;
 };
 
+type CategorizationRule = {
+  id: string;
+  category_id: string | null;
+  match_type: "contains" | "starts_with" | "equals" | "regex";
+  pattern: string;
+  direction?: "CREDIT" | "DEBIT" | null;
+  priority: number;
+  is_active: boolean;
+};
+
 type ExistingTx = {
   id: string;
   external_id?: string | null;
@@ -97,6 +107,7 @@ const FORMAT_OPTIONS: Array<{ value: FinancialFileFormat; label: string }> = [
 ];
 
 const normalizeCategoryName = (value: string) => normalizeLabel(value).replace(/\s+/g, " ");
+const normalizeRulePattern = (value: string) => normalizeLabel(value).replace(/\s+/g, " ").trim();
 
 const transactionTypeFromRow = (row: NormalizedTransaction): "income" | "expense" | "transfer" => {
   if (row.possibleInternalTransfer) return "transfer";
@@ -130,6 +141,36 @@ const resolveSuggestedCategoryId = (row: NormalizedTransaction, categories: Cate
   return byContains?.id || "";
 };
 
+const ruleMatchesRow = (rule: CategorizationRule, row: NormalizedTransaction) => {
+  if (rule.direction && rule.direction !== row.direction) return false;
+
+  const haystack = normalizeRulePattern(`${row.descriptionNormalized} ${row.descriptionOriginal} ${row.merchantName || ""}`);
+  const pattern = normalizeRulePattern(rule.pattern);
+  if (!pattern) return false;
+
+  if (rule.match_type === "equals") return haystack === pattern;
+  if (rule.match_type === "starts_with") return haystack.startsWith(pattern);
+  if (rule.match_type === "regex") {
+    try {
+      return new RegExp(rule.pattern, "i").test(`${row.descriptionNormalized} ${row.descriptionOriginal} ${row.merchantName || ""}`);
+    } catch {
+      return false;
+    }
+  }
+
+  return haystack.includes(pattern);
+};
+
+const resolveSmartCategoryId = (row: NormalizedTransaction, categories: CategoryOption[], rules: CategorizationRule[]) => {
+  const type = transactionTypeFromRow(row);
+  const matchedRule = [...rules]
+    .filter((rule) => rule.is_active && rule.category_id)
+    .sort((a, b) => a.priority - b.priority)
+    .find((rule) => ruleMatchesRow(rule, row) && categories.some((category) => category.id === rule.category_id && category.kind === type));
+
+  return matchedRule?.category_id || resolveSuggestedCategoryId(row, categories);
+};
+
 const resolveDefaultAccountId = (row: NormalizedTransaction, accounts: AccountOption[]) => {
   const institution = normalizeLabel(row.institution.replace("_", " "));
   const byInstitution = accounts.find((account) => normalizeLabel(`${account.institution || ""} ${account.name}`).includes(institution));
@@ -147,6 +188,7 @@ const supportedHint = "Suporte funcional: Nubank CSV oficial, PDF oficial Mercad
 const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
+  const [categorizationRules, setCategorizationRules] = useState<CategorizationRule[]>([]);
   const [fileName, setFileName] = useState("");
   const [fileHash, setFileHash] = useState("");
   const [fileSize, setFileSize] = useState<number | null>(null);
@@ -170,7 +212,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
   const loadSupportData = useCallback(async () => {
     await Promise.all([ensureDefaultAccounts(userId), ensureDefaultCategories(userId)]);
 
-    const [accountsRes, categoriesRes] = await Promise.all([
+    const [accountsRes, categoriesRes, rulesRes] = await Promise.all([
       supabase
         .from("accounts")
         .select("id, name, type, institution")
@@ -178,13 +220,21 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
         .eq("is_active", true)
         .order("name"),
       supabase.from("categories").select("id, name, kind, parent_id").eq("user_id", userId).order("name"),
+      untypedSupabase
+        .from("categorization_rules")
+        .select("id, category_id, match_type, pattern, direction, priority, is_active")
+        .eq("user_id", userId)
+        .eq("is_active", true)
+        .order("priority"),
     ]);
 
     const nextAccounts = (accountsRes.data || []) as AccountOption[];
     const nextCategories = (categoriesRes.data || []) as CategoryOption[];
+    const nextRules = (rulesRes.data || []) as CategorizationRule[];
     setAccounts(nextAccounts);
     setCategories(nextCategories);
-    return { nextAccounts, nextCategories };
+    setCategorizationRules(nextRules);
+    return { nextAccounts, nextCategories, nextRules };
   }, [userId]);
 
   const existingTransactions = useCallback(async () => {
@@ -219,7 +269,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
     setParsedInfo(null);
 
     try {
-      const [{ nextAccounts, nextCategories }, existing] = await Promise.all([
+      const [{ nextAccounts, nextCategories, nextRules }, existing] = await Promise.all([
         loadSupportData(),
         existingTransactions(),
       ]);
@@ -248,7 +298,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
         localId: `${row.fingerprint}-${index}`,
         selected: !row.possibleDuplicate,
         accountId: resolveDefaultAccountId(row, nextAccounts),
-        categoryId: resolveSuggestedCategoryId(row, nextCategories),
+        categoryId: resolveSmartCategoryId(row, nextCategories, nextRules),
         status: "paid" as const,
       }));
 
@@ -307,6 +357,58 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
 
   const updateRow = (localId: string, patch: Partial<ReviewRow>) => {
     setRows((current) => current.map((row) => (row.localId === localId ? { ...row, ...patch } : row)));
+  };
+
+  const learnCategorizationRules = async (confirmedRows: ReviewRow[]) => {
+    const existingKeys = new Set(
+      categorizationRules.map((rule) => `${normalizeRulePattern(rule.pattern)}|${rule.category_id || ""}|${rule.direction || ""}`),
+    );
+    const nextRules = new Map<string, {
+      user_id: string;
+      name: string;
+      category_id: string;
+      match_type: "contains";
+      pattern: string;
+      merchant_name: string;
+      direction: "CREDIT" | "DEBIT";
+      is_active: boolean;
+      priority: number;
+    }>();
+
+    confirmedRows.forEach((row) => {
+      if (!row.categoryId || row.possibleInternalTransfer) return;
+      const merchant = normalizeRulePattern(row.merchantName || row.descriptionNormalized || row.descriptionOriginal);
+      if (!merchant || merchant.length < 4 || merchant === "OUTROS") return;
+
+      const key = `${merchant}|${row.categoryId}|${row.direction}`;
+      if (existingKeys.has(key) || nextRules.has(key)) return;
+
+      nextRules.set(key, {
+        user_id: userId,
+        name: `Auto: ${merchant.slice(0, 48)}`,
+        category_id: row.categoryId,
+        match_type: "contains",
+        pattern: merchant,
+        merchant_name: merchant,
+        direction: row.direction,
+        is_active: true,
+        priority: 25,
+      });
+    });
+
+    if (nextRules.size === 0) return;
+
+    const { data, error } = await untypedSupabase
+      .from("categorization_rules")
+      .insert(Array.from(nextRules.values()))
+      .select("id, category_id, match_type, pattern, direction, priority, is_active");
+
+    if (error) {
+      toast.warning("Importação salva, mas não consegui gravar as novas regras inteligentes.");
+      return;
+    }
+
+    setCategorizationRules((current) => [...current, ...((data || []) as CategorizationRule[])]);
   };
 
   const handleConfirm = async () => {
@@ -402,6 +504,8 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
 
       const { error: txError } = await untypedSupabase.from("transactions").insert(txPayload);
       if (txError) throw txError;
+
+      await learnCategorizationRules(selectedRows);
 
       toast.success(`${selectedRows.length} movimentações importadas.`);
       setRows([]);

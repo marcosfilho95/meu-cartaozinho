@@ -61,25 +61,71 @@ export const detectInstallment = (description: string) => {
   };
 };
 
+const hasAny = (normalized: string, terms: string[]) => terms.some((term) => normalized.includes(term));
+
 export const suggestCategoryName = (description: string, direction: TransactionDirection) => {
   const normalized = normalizeText(description);
   if (direction === "CREDIT") {
     if (normalized.includes("RENDIMENTO")) return "Rendimentos";
-    if (normalized.includes("SALARIO") || normalized.includes("SALARIO")) return "Salario";
+    if (normalized.includes("SALARIO")) return "Salario";
     return "Outros (Receita)";
   }
 
-  if (["DOMINO", "IFOOD", "RAPPI", "SALADEX", "RESTAURANTE", "LANCH", "PIZZA"].some((term) => normalized.includes(term))) {
+  if (
+    hasAny(normalized, [
+      "ACAI",
+      "ATACADAO",
+      "BAR ",
+      "BEBIDA",
+      "BISTRO",
+      "BOB S",
+      "BOLARIA",
+      "BURGER",
+      "CAFE",
+      "CARREFOUR",
+      "CHURRASC",
+      "COCO BAMBU",
+      "COMETA",
+      "DELIVERY",
+      "DOMINO",
+      "EXTRA",
+      "HORTIFRUT",
+      "IFOOD",
+      "LANCH",
+      "MCDONALD",
+      "MERCADINHO",
+      "MERCADO",
+      "PADARIA",
+      "PANIFICADORA",
+      "PIZZA",
+      "PIZZARIA",
+      "RAPPI",
+      "RESTAURANTE",
+      "SALADEX",
+      "SAO LUIZ",
+      "SUPERMERCADO",
+      "SUPER DO POVO",
+      "TIO ARMENIO",
+      "UBER EATS",
+    ])
+  ) {
     return "Alimentacao";
   }
-  if (["RENNER", "VESTUARIO", "ROUPA"].some((term) => normalized.includes(term))) return "Vestuário";
-  if (["ENEL", "COELCE"].some((term) => normalized.includes(term))) return "Energia";
-  if (normalized.includes("CAGECE")) return "Agua";
-  if (["TIM", "VIVO", "CLARO", "OI"].some((term) => normalized.includes(term))) return "Internet";
-  if (["UBER", "99 ", "99POP", "99APP", "TAXI"].some((term) => normalized.includes(term))) return "Transporte";
-  if (["NETFLIX", "SPOTIFY", "MAX", "DISNEY", "PRIME VIDEO"].some((term) => normalized.includes(term))) return "Assinaturas";
-  if (["FARMACIA", "DROGARIA", "DROGA"].some((term) => normalized.includes(term))) return "Farmacia";
-  if (["PIX ENVIADO", "TRANSFERENCIA", "TED", "DOC"].some((term) => normalized.includes(term))) return "Entre Contas";
+
+  if (hasAny(normalized, ["AMARO", "C&A", "CEA", "CENTAURO", "MARISA", "RENNER", "RIACHUELO", "SHEIN", "VESTUARIO", "ROUPA"])) {
+    return "Vestuario";
+  }
+  if (hasAny(normalized, ["ENEL", "COELCE"])) return "Energia";
+  if (hasAny(normalized, ["CAGECE", "AGUA"])) return "Agua";
+  if (hasAny(normalized, ["ALGAR", "CLARO", "INTERNET", "NET ", "OI ", "TIM ", "VIVO"])) return "Internet";
+  if (hasAny(normalized, ["99 ", "99APP", "99POP", "AZUL", "GOL", "LATAM", "METRO", "ONIBUS", "POSTO", "TAXI", "UBER"])) return "Transporte";
+  if (hasAny(normalized, ["AMAZON PRIME", "CANVA", "DISNEY", "GOOGLE", "MAX", "NETFLIX", "PRIME VIDEO", "SPOTIFY", "YOUTUBE"])) {
+    return "Assinaturas";
+  }
+  if (hasAny(normalized, ["DISTRIMEDICAL", "DROGA", "DROGARIA", "FARMACIA", "PAGUE MENOS", "RAIA"])) return "Farmacia";
+  if (hasAny(normalized, ["CURSO", "ESCOLA", "FACULDADE", "LIVRARIA", "TREINAMENTO", "UP TRAINING"])) return "Educacao";
+  if (hasAny(normalized, ["CINEMA", "INGRESSO", "KOP", "LAZER", "PLAY", "SHOW"])) return "Lazer";
+  if (hasAny(normalized, ["PIX ENVIADO", "PIX RECEBIDO", "TRANSFERENCIA", "TED", "DOC"])) return "Entre Contas";
   return "Outros";
 };
 
