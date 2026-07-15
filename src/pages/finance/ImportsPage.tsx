@@ -118,17 +118,47 @@ const FORMAT_LABEL: Record<FinancialFileFormat, string> = {
 const normalizeCategoryName = (value: string) => normalizeLabel(value).replace(/\s+/g, " ");
 const normalizeRulePattern = (value: string) => normalizeLabel(value).replace(/\s+/g, " ").trim();
 
+// Detecta pagamento de fatura de cartão (dinheiro entrando pra quitar a dívida).
+// Isso NÃO é receita — é uma transferência da conta corrente pro cartão.
+const CARD_PAYMENT_KEYWORDS = [
+  "PAGAMENTO RECEBIDO",
+  "PAGAMENTO DE FATURA",
+  "PAGAMENTO EFETUADO",
+  "PGTO FATURA",
+  "PGTO. FATURA",
+  "PAGTO FATURA",
+  "PAGAMENTO CARTAO",
+  "PAGAMENTO DE CARTAO",
+];
+
+const isCardBillPayment = (row: NormalizedTransaction) => {
+  if (row.sourceType !== "CREDIT_CARD") return false;
+  if (row.direction !== "CREDIT") return false;
+  const hay = normalizeLabel(`${row.descriptionOriginal} ${row.descriptionNormalized}`).toUpperCase();
+  return CARD_PAYMENT_KEYWORDS.some((k) => hay.includes(k));
+};
+
+// Estorno / reembolso / crédito na fatura que NÃO é pagamento.
+// Trata como redutor da despesa original (valor negativo na categoria do comerciante).
+const isCardRefund = (row: NormalizedTransaction) =>
+  row.sourceType === "CREDIT_CARD" && row.direction === "CREDIT" && !isCardBillPayment(row);
+
 const transactionTypeFromRow = (row: NormalizedTransaction): "income" | "expense" | "transfer" => {
+  if (isCardBillPayment(row)) return "transfer";
+  if (isCardRefund(row)) return "expense"; // classifica na categoria da compra (será negativo no salvamento)
   if (row.possibleInternalTransfer) return "transfer";
   return row.direction === "CREDIT" ? "income" : "expense";
 };
 
 const rowIcon = (row: NormalizedTransaction) => {
+  if (isCardBillPayment(row)) return ArrowRightLeft;
   if (row.possibleInternalTransfer) return ArrowRightLeft;
   return row.direction === "CREDIT" ? ArrowUpCircle : ArrowDownCircle;
 };
 
 const rowAmountClass = (row: NormalizedTransaction) => {
+  if (isCardBillPayment(row)) return "text-primary";
+  if (isCardRefund(row)) return "text-emerald-600/70 dark:text-emerald-400/70";
   if (row.possibleInternalTransfer) return "text-primary";
   return row.direction === "CREDIT" ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400";
 };
@@ -414,8 +444,17 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
 
   const duplicatedRows = rows.filter((r) => r.possibleDuplicate).length;
   const internalTransfers = rows.filter((r) => r.possibleInternalTransfer).length;
-  const totalCredits = selectedRows.filter((r) => r.direction === "CREDIT").reduce((s, r) => s + Number(r.amount), 0);
-  const totalDebits = selectedRows.filter((r) => r.direction === "DEBIT").reduce((s, r) => s + Number(r.amount), 0);
+  // Entradas = créditos REAIS (não conta pagamento de fatura nem estorno de cartão).
+  const totalCredits = selectedRows
+    .filter((r) => r.direction === "CREDIT" && !isCardBillPayment(r) && !isCardRefund(r))
+    .reduce((s, r) => s + Number(r.amount), 0);
+  // Saídas = despesas MENOS estornos (líquido real do mês).
+  const totalRefunds = selectedRows.filter(isCardRefund).reduce((s, r) => s + Number(r.amount), 0);
+  const totalDebitsGross = selectedRows.filter((r) => r.direction === "DEBIT").reduce((s, r) => s + Number(r.amount), 0);
+  const totalDebits = Math.max(0, totalDebitsGross - totalRefunds);
+  const totalCardPayments = selectedRows.filter(isCardBillPayment).reduce((s, r) => s + Number(r.amount), 0);
+  const cardPaymentsCount = selectedRows.filter(isCardBillPayment).length;
+  const refundsCount = selectedRows.filter(isCardRefund).length;
 
   const updateRow = (localId: string, patch: Partial<ReviewRow>) => {
     setRows((cur) => cur.map((r) => (r.localId === localId ? { ...r, ...patch } : r)));
@@ -630,12 +669,15 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
 
       const txPayload = selectedRows.map((row) => {
         const type = transactionTypeFromRow(row);
+        // Estornos entram como valor NEGATIVO na categoria original — redutor de despesa.
+        // Pagamento de fatura vira transferência (não conta como receita).
+        const amountValue = isCardRefund(row) ? -Math.abs(Number(row.amount)) : Number(row.amount);
         return {
           user_id: userId,
           account_id: row.accountId,
           category_id: row.categoryId || null,
           type,
-          amount: Number(row.amount),
+          amount: amountValue,
           transaction_date: row.transactionDate,
           due_date: row.postingDate || row.transactionDate,
           status: row.status,
@@ -835,12 +877,31 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
               <SummaryTile label="Linhas" value={String(rows.length)} />
               <SummaryTile label="Entradas" value={formatCurrency(totalCredits)} accent="income" />
-              <SummaryTile label="Saídas" value={formatCurrency(totalDebits)} accent="expense" />
+              <SummaryTile
+                label={totalRefunds > 0 ? "Saídas (líq.)" : "Saídas"}
+                value={formatCurrency(totalDebits)}
+                accent="expense"
+                hint={totalRefunds > 0 ? `Bruto ${formatCurrency(totalDebitsGross)} − estornos ${formatCurrency(totalRefunds)}` : undefined}
+              />
+              {cardPaymentsCount > 0 && (
+                <SummaryTile
+                  label="Pagto fatura"
+                  value={formatCurrency(totalCardPayments)}
+                  hint={`${cardPaymentsCount} pagamento(s) — não conta como receita`}
+                />
+              )}
+              {refundsCount > 0 && (
+                <SummaryTile
+                  label="Estornos"
+                  value={formatCurrency(totalRefunds)}
+                  accent="income"
+                  hint={`${refundsCount} crédito(s) — reduz a categoria original`}
+                />
+              )}
               <SummaryTile label="Duplicadas" value={String(duplicatedRows)} accent={duplicatedRows > 0 ? "warn" : undefined} />
-              <SummaryTile label="Transferências" value={String(internalTransfers)} />
             </div>
 
             {parsedInfo.warnings.length > 0 && (
@@ -1033,6 +1094,16 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
                               transferência
                             </Badge>
                           )}
+                          {isCardBillPayment(row) && (
+                            <Badge className="rounded-md border-primary/30 bg-primary/10 px-1.5 py-0 text-[9px] font-normal text-primary hover:bg-primary/10">
+                              pagamento de fatura
+                            </Badge>
+                          )}
+                          {isCardRefund(row) && (
+                            <Badge className="rounded-md border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0 text-[9px] font-normal text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400">
+                              estorno (reduz categoria)
+                            </Badge>
+                          )}
                         </div>
                       </div>
 
@@ -1101,8 +1172,8 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
   );
 };
 
-const SummaryTile: React.FC<{ label: string; value: string; accent?: "income" | "expense" | "warn" }> = ({ label, value, accent }) => (
-  <div className="rounded-lg border border-border/60 bg-background p-3">
+const SummaryTile: React.FC<{ label: string; value: string; accent?: "income" | "expense" | "warn"; hint?: string }> = ({ label, value, accent, hint }) => (
+  <div className="rounded-lg border border-border/60 bg-background p-3" title={hint}>
     <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
     <p
       className={cn(
@@ -1114,6 +1185,7 @@ const SummaryTile: React.FC<{ label: string; value: string; accent?: "income" | 
     >
       {value}
     </p>
+    {hint && <p className="mt-0.5 text-[10px] leading-tight text-muted-foreground">{hint}</p>}
   </div>
 );
 
