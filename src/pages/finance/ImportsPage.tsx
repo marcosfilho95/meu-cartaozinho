@@ -444,8 +444,17 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
 
   const duplicatedRows = rows.filter((r) => r.possibleDuplicate).length;
   const internalTransfers = rows.filter((r) => r.possibleInternalTransfer).length;
-  const totalCredits = selectedRows.filter((r) => r.direction === "CREDIT").reduce((s, r) => s + Number(r.amount), 0);
-  const totalDebits = selectedRows.filter((r) => r.direction === "DEBIT").reduce((s, r) => s + Number(r.amount), 0);
+  // Entradas = créditos REAIS (não conta pagamento de fatura nem estorno de cartão).
+  const totalCredits = selectedRows
+    .filter((r) => r.direction === "CREDIT" && !isCardBillPayment(r) && !isCardRefund(r))
+    .reduce((s, r) => s + Number(r.amount), 0);
+  // Saídas = despesas MENOS estornos (líquido real do mês).
+  const totalRefunds = selectedRows.filter(isCardRefund).reduce((s, r) => s + Number(r.amount), 0);
+  const totalDebitsGross = selectedRows.filter((r) => r.direction === "DEBIT").reduce((s, r) => s + Number(r.amount), 0);
+  const totalDebits = Math.max(0, totalDebitsGross - totalRefunds);
+  const totalCardPayments = selectedRows.filter(isCardBillPayment).reduce((s, r) => s + Number(r.amount), 0);
+  const cardPaymentsCount = selectedRows.filter(isCardBillPayment).length;
+  const refundsCount = selectedRows.filter(isCardRefund).length;
 
   const updateRow = (localId: string, patch: Partial<ReviewRow>) => {
     setRows((cur) => cur.map((r) => (r.localId === localId ? { ...r, ...patch } : r)));
