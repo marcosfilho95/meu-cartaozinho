@@ -669,12 +669,15 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
 
       const txPayload = selectedRows.map((row) => {
         const type = transactionTypeFromRow(row);
+        // Estornos entram como valor NEGATIVO na categoria original — redutor de despesa.
+        // Pagamento de fatura vira transferência (não conta como receita).
+        const amountValue = isCardRefund(row) ? -Math.abs(Number(row.amount)) : Number(row.amount);
         return {
           user_id: userId,
           account_id: row.accountId,
           category_id: row.categoryId || null,
           type,
-          amount: Number(row.amount),
+          amount: amountValue,
           transaction_date: row.transactionDate,
           due_date: row.postingDate || row.transactionDate,
           status: row.status,
