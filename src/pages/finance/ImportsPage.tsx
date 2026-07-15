@@ -248,6 +248,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
   const [mimeType, setMimeType] = useState("");
   const [fileText, setFileText] = useState("");
   const [pastedText, setPastedText] = useState("");
+  const [forcedMonth, setForcedMonth] = useState<string>(""); // YYYY-MM — força todas as linhas nesse mês
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [parseError, setParseError] = useState<{ title: string; body: string; hint: string } | null>(null);
@@ -326,7 +327,25 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
         existing,
       );
 
-      const reviewRows = parsed.transactions.map((row, index) => ({
+      const remapDate = (iso: string | undefined | null): string | undefined => {
+        if (!forcedMonth) return iso ?? undefined;
+        if (!iso) return undefined;
+        const [y, m] = forcedMonth.split("-").map(Number);
+        const day = Number((iso.match(/-(\d{2})$/) || [])[1] || iso.slice(-2)) || 1;
+        const lastDay = new Date(y, m, 0).getDate();
+        const clampedDay = Math.min(Math.max(day, 1), lastDay);
+        return `${forcedMonth}-${String(clampedDay).padStart(2, "0")}`;
+      };
+
+      const reviewRows = parsed.transactions.map((raw, index) => {
+        const row = forcedMonth
+          ? {
+              ...raw,
+              transactionDate: remapDate(raw.transactionDate) || raw.transactionDate,
+              postingDate: remapDate(raw.postingDate) || raw.postingDate,
+            }
+          : raw;
+        return {
         ...row,
         localId: `${row.fingerprint}-${index}`,
         selected: !row.possibleDuplicate,
@@ -343,7 +362,8 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
           })),
         ),
         status: "paid" as const,
-      }));
+        };
+      });
 
       setRows(reviewRows);
       setParsedInfo({
