@@ -248,6 +248,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
   const [mimeType, setMimeType] = useState("");
   const [fileText, setFileText] = useState("");
   const [pastedText, setPastedText] = useState("");
+  const [forcedMonth, setForcedMonth] = useState<string>(""); // YYYY-MM — força todas as linhas nesse mês
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [parseError, setParseError] = useState<{ title: string; body: string; hint: string } | null>(null);
@@ -326,7 +327,25 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
         existing,
       );
 
-      const reviewRows = parsed.transactions.map((row, index) => ({
+      const remapDate = (iso: string | undefined | null): string | undefined => {
+        if (!forcedMonth) return iso ?? undefined;
+        if (!iso) return undefined;
+        const [y, m] = forcedMonth.split("-").map(Number);
+        const day = Number((iso.match(/-(\d{2})$/) || [])[1] || iso.slice(-2)) || 1;
+        const lastDay = new Date(y, m, 0).getDate();
+        const clampedDay = Math.min(Math.max(day, 1), lastDay);
+        return `${forcedMonth}-${String(clampedDay).padStart(2, "0")}`;
+      };
+
+      const reviewRows = parsed.transactions.map((raw, index) => {
+        const row = forcedMonth
+          ? {
+              ...raw,
+              transactionDate: remapDate(raw.transactionDate) || raw.transactionDate,
+              postingDate: remapDate(raw.postingDate) || raw.postingDate,
+            }
+          : raw;
+        return {
         ...row,
         localId: `${row.fingerprint}-${index}`,
         selected: !row.possibleDuplicate,
@@ -343,7 +362,8 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
           })),
         ),
         status: "paid" as const,
-      }));
+        };
+      });
 
       setRows(reviewRows);
       setParsedInfo({
@@ -757,6 +777,29 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
       {/* Step 1: Upload */}
       <Card className="border-border/60 shadow-none">
         <CardContent className="p-5">
+          <div className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-border/60 bg-muted/20 p-3">
+            <div className="flex-1 min-w-[200px] space-y-1">
+              <Label htmlFor="forced-month" className="text-xs font-medium text-foreground">
+                Forçar mês da fatura <span className="text-muted-foreground font-normal">(opcional)</span>
+              </Label>
+              <p className="text-[11px] leading-tight text-muted-foreground">
+                Se marcar, todas as movimentações importadas vão para este mês — evita erros quando a data da compra difere do mês da fatura.
+              </p>
+            </div>
+            <Input
+              id="forced-month"
+              type="month"
+              value={forcedMonth}
+              onChange={(e) => setForcedMonth(e.target.value)}
+              className="h-9 w-[160px] text-xs"
+            />
+            {forcedMonth && (
+              <Button type="button" variant="ghost" size="sm" onClick={() => setForcedMonth("")} className="h-9 text-xs">
+                Limpar
+              </Button>
+            )}
+          </div>
+
           <Tabs defaultValue="file">
             <TabsList className="mb-4 bg-muted/40">
               <TabsTrigger value="file" className="gap-1.5 text-xs">
