@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { applyAccentTheme, getStoredAccentTheme } from "@/lib/accentTheme";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
+import OAuthConsent from "./pages/OAuthConsent";
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import CardDetail from "./pages/CardDetail";
@@ -62,6 +63,15 @@ const AppRoutes = () => {
         navigate("/reset-password", { replace: true });
       }
       setSession(nextSession);
+      if (event === "SIGNED_IN" && nextSession) {
+        try {
+          const pending = sessionStorage.getItem("pendingConsentUrl");
+          if (pending) {
+            sessionStorage.removeItem("pendingConsentUrl");
+            window.location.href = pending;
+          }
+        } catch {}
+      }
     });
 
     supabase.auth
@@ -126,6 +136,7 @@ const App = () => (
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
           <Route path="/*" element={<AppRoutes />} />
         </Routes>
       </BrowserRouter>
