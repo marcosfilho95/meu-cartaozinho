@@ -297,7 +297,17 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
         localId: `${row.fingerprint}-${index}`,
         selected: !row.possibleDuplicate,
         accountId: resolveDefaultAccountId(row, nextAccounts),
-        categoryId: resolveSmartCategoryId(row, nextCategories, nextRules),
+        categoryId: resolveSmartCategoryId(
+          row,
+          nextCategories,
+          nextRules,
+          existing.map((tx) => ({
+            description: tx.source || "",
+            merchantName: tx.source || "",
+            category_id: (tx as any).category_id ?? null,
+            direction: tx.type === "income" ? "CREDIT" : tx.type === "expense" ? "DEBIT" : null,
+          })),
+        ),
         status: "paid" as const,
       }));
 
