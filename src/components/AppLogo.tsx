@@ -14,7 +14,13 @@ const SIZE_CLASSES: Record<NonNullable<AppLogoProps["size"]>, string> = {
 
 export const AppLogo: React.FC<AppLogoProps> = ({ size = "md", className }) => {
   return (
-    <div className={cn("overflow-hidden shadow-elevated", SIZE_CLASSES[size], className)}>
+    <div
+      className={cn(
+        "overflow-hidden ring-1 ring-primary/10 shadow-card bg-secondary",
+        SIZE_CLASSES[size],
+        className,
+      )}
+    >
       <img
         src="/icons/icon-emerald.svg"
         alt="Meu Cartãozinho"
