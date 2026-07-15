@@ -228,10 +228,14 @@ export type Database = {
         Row: {
           category_id: string | null
           created_at: string
+          direction: string | null
           hit_count: number
           id: string
+          is_active: boolean
           last_hit_at: string | null
           match_type: string
+          merchant_name: string | null
+          name: string | null
           pattern: string
           priority: number
           updated_at: string
@@ -240,10 +244,14 @@ export type Database = {
         Insert: {
           category_id?: string | null
           created_at?: string
+          direction?: string | null
           hit_count?: number
           id?: string
+          is_active?: boolean
           last_hit_at?: string | null
           match_type?: string
+          merchant_name?: string | null
+          name?: string | null
           pattern: string
           priority?: number
           updated_at?: string
@@ -252,10 +260,14 @@ export type Database = {
         Update: {
           category_id?: string | null
           created_at?: string
+          direction?: string | null
           hit_count?: number
           id?: string
+          is_active?: boolean
           last_hit_at?: string | null
           match_type?: string
+          merchant_name?: string | null
+          name?: string | null
           pattern?: string
           priority?: number
           updated_at?: string
