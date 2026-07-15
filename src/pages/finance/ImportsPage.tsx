@@ -5,8 +5,12 @@ import {
   ArrowRightLeft,
   ArrowUpCircle,
   CheckCircle2,
+  ClipboardPaste,
   FileText,
+  Info,
   Loader2,
+  ShieldAlert,
+  Sparkles,
   Upload,
   XCircle,
 } from "lucide-react";
@@ -15,10 +19,13 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { supabase } from "@/integrations/supabase/client";
 import { getErrorMessage, untypedSupabase } from "@/lib/supabaseUntyped";
 import { formatCurrency } from "@/lib/constants";
@@ -83,28 +90,28 @@ type ReviewRow = NormalizedTransaction & {
   status: "paid" | "pending";
 };
 
-const INSTITUTION_OPTIONS: Array<{ value: InstitutionCode; label: string }> = [
-  { value: "UNKNOWN", label: "Detectar" },
-  { value: "NUBANK", label: "Nubank" },
-  { value: "MERCADO_PAGO", label: "Mercado Pago" },
-  { value: "PICPAY", label: "PicPay" },
-  { value: "C6", label: "C6" },
-];
+const INSTITUTION_LABEL: Record<InstitutionCode, string> = {
+  UNKNOWN: "Detectando…",
+  NUBANK: "Nubank",
+  MERCADO_PAGO: "Mercado Pago",
+  PICPAY: "PicPay",
+  C6: "C6",
+};
 
-const DOCUMENT_OPTIONS: Array<{ value: FinancialDocumentType; label: string }> = [
-  { value: "UNKNOWN", label: "Detectar" },
-  { value: "BANK_STATEMENT", label: "Extrato bancário" },
-  { value: "CREDIT_CARD_STATEMENT", label: "Fatura/cartão" },
-];
+const DOCUMENT_LABEL: Record<FinancialDocumentType, string> = {
+  UNKNOWN: "Documento genérico",
+  BANK_STATEMENT: "Extrato bancário",
+  CREDIT_CARD_STATEMENT: "Fatura do cartão",
+};
 
-const FORMAT_OPTIONS: Array<{ value: FinancialFileFormat; label: string }> = [
-  { value: "UNKNOWN", label: "Detectar" },
-  { value: "CSV", label: "CSV" },
-  { value: "PDF_TEXT", label: "PDF textual colado/extraído" },
-  { value: "TXT", label: "Texto" },
-  { value: "OFX", label: "OFX" },
-  { value: "XLSX", label: "XLSX" },
-];
+const FORMAT_LABEL: Record<FinancialFileFormat, string> = {
+  UNKNOWN: "—",
+  CSV: "CSV",
+  OFX: "OFX",
+  XLSX: "XLSX",
+  PDF_TEXT: "PDF (texto)",
+  TXT: "Texto",
+};
 
 const normalizeCategoryName = (value: string) => normalizeLabel(value).replace(/\s+/g, " ");
 const normalizeRulePattern = (value: string) => normalizeLabel(value).replace(/\s+/g, " ").trim();
@@ -114,40 +121,35 @@ const transactionTypeFromRow = (row: NormalizedTransaction): "income" | "expense
   return row.direction === "CREDIT" ? "income" : "expense";
 };
 
-const getRowIcon = (row: NormalizedTransaction) => {
+const rowIcon = (row: NormalizedTransaction) => {
   if (row.possibleInternalTransfer) return ArrowRightLeft;
   return row.direction === "CREDIT" ? ArrowUpCircle : ArrowDownCircle;
 };
 
-const getRowAmountClass = (row: NormalizedTransaction) => {
+const rowAmountClass = (row: NormalizedTransaction) => {
   if (row.possibleInternalTransfer) return "text-primary";
-  return row.direction === "CREDIT" ? "text-success" : "text-foreground";
+  return row.direction === "CREDIT" ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400";
 };
 
 const resolveSuggestedCategoryId = (row: NormalizedTransaction, categories: CategoryOption[]) => {
   const type = transactionTypeFromRow(row);
   const target = normalizeCategoryName(row.categorySuggestion || "");
   if (!target) return "";
-
-  const byExact = categories.find((category) => category.kind === type && normalizeCategoryName(category.name) === target);
+  const byExact = categories.find((c) => c.kind === type && normalizeCategoryName(c.name) === target);
   if (byExact) return byExact.id;
-
-  const byContains = categories.find((category) => {
-    if (category.kind !== type) return false;
-    const normalizedName = normalizeCategoryName(category.name);
-    return normalizedName.includes(target) || target.includes(normalizedName);
+  const byContains = categories.find((c) => {
+    if (c.kind !== type) return false;
+    const n = normalizeCategoryName(c.name);
+    return n.includes(target) || target.includes(n);
   });
-
   return byContains?.id || "";
 };
 
 const ruleMatchesRow = (rule: CategorizationRule, row: NormalizedTransaction) => {
   if (rule.direction && rule.direction !== row.direction) return false;
-
   const haystack = normalizeRulePattern(`${row.descriptionNormalized} ${row.descriptionOriginal} ${row.merchantName || ""}`);
   const pattern = normalizeRulePattern(rule.pattern);
   if (!pattern) return false;
-
   if (rule.match_type === "equals") return haystack === pattern;
   if (rule.match_type === "starts_with") return haystack.startsWith(pattern);
   if (rule.match_type === "regex") {
@@ -157,33 +159,50 @@ const ruleMatchesRow = (rule: CategorizationRule, row: NormalizedTransaction) =>
       return false;
     }
   }
-
   return haystack.includes(pattern);
 };
 
 const resolveSmartCategoryId = (row: NormalizedTransaction, categories: CategoryOption[], rules: CategorizationRule[]) => {
   const type = transactionTypeFromRow(row);
-  const matchedRule = [...rules]
-    .filter((rule) => rule.is_active && rule.category_id)
+  const matched = [...rules]
+    .filter((r) => r.is_active && r.category_id)
     .sort((a, b) => a.priority - b.priority)
-    .find((rule) => ruleMatchesRow(rule, row) && categories.some((category) => category.id === rule.category_id && category.kind === type));
-
-  return matchedRule?.category_id || resolveSuggestedCategoryId(row, categories);
+    .find((r) => ruleMatchesRow(r, row) && categories.some((c) => c.id === r.category_id && c.kind === type));
+  return matched?.category_id || resolveSuggestedCategoryId(row, categories);
 };
 
 const resolveDefaultAccountId = (row: NormalizedTransaction, accounts: AccountOption[]) => {
   const institution = normalizeLabel(row.institution.replace("_", " "));
-  const byInstitution = accounts.find((account) => normalizeLabel(`${account.institution || ""} ${account.name}`).includes(institution));
+  const byInstitution = accounts.find((a) => normalizeLabel(`${a.institution || ""} ${a.name}`).includes(institution));
   if (byInstitution) return byInstitution.id;
-
   if (row.sourceType === "CREDIT_CARD") {
-    return accounts.find((account) => account.type === "credit_card")?.id || accounts[0]?.id || "";
+    return accounts.find((a) => a.type === "credit_card")?.id || accounts[0]?.id || "";
   }
-
-  return accounts.find((account) => account.type !== "credit_card")?.id || accounts[0]?.id || "";
+  return accounts.find((a) => a.type !== "credit_card")?.id || accounts[0]?.id || "";
 };
 
-const supportedHint = "Suporte funcional: Nubank CSV oficial, PDF oficial Mercado Pago e texto colado/extraído de extrato.";
+const buildDidacticError = (raw: string, hadText: boolean): { title: string; body: string; hint: string } => {
+  const msg = raw.toLowerCase();
+  if (msg.includes("pdf") || msg.includes("imagem") || (!hadText && msg.includes("reconhec"))) {
+    return {
+      title: "Não consegui ler este PDF",
+      body: "Provavelmente é uma imagem ou escaneamento — o texto não pode ser selecionado.",
+      hint: "Tente exportar em CSV pelo app do banco, ou copie o texto do extrato e cole na aba 'Colar texto'.",
+    };
+  }
+  if (msg.includes("csv") || msg.includes("coluna")) {
+    return {
+      title: "CSV não reconhecido",
+      body: raw,
+      hint: "Verifique se o arquivo tem colunas de data, descrição e valor. O padrão Nubank é `date,title,amount`.",
+    };
+  }
+  return {
+    title: "Não consegui ler este arquivo",
+    body: raw,
+    hint: "Tente outro formato (CSV do banco) ou cole o texto do extrato manualmente.",
+  };
+};
 
 const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
@@ -194,31 +213,26 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
   const [fileSize, setFileSize] = useState<number | null>(null);
   const [mimeType, setMimeType] = useState("");
   const [fileText, setFileText] = useState("");
-  const [manualInstitution, setManualInstitution] = useState<InstitutionCode>("UNKNOWN");
-  const [manualDocumentType, setManualDocumentType] = useState<FinancialDocumentType>("UNKNOWN");
-  const [manualFormat, setManualFormat] = useState<FinancialFileFormat>("UNKNOWN");
   const [pastedText, setPastedText] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [parseError, setParseError] = useState<{ title: string; body: string; hint: string } | null>(null);
+  const [showDiagnostic, setShowDiagnostic] = useState(false);
   const [parsedInfo, setParsedInfo] = useState<{
     parserName: string;
     institution: InstitutionCode;
     documentType: FinancialDocumentType;
     format: FinancialFileFormat;
+    confidence: number;
+    reason: string;
     warnings: string[];
   } | null>(null);
   const [rows, setRows] = useState<ReviewRow[]>([]);
 
   const loadSupportData = useCallback(async () => {
     await Promise.all([ensureDefaultAccounts(userId), ensureDefaultCategories(userId)]);
-
     const [accountsRes, categoriesRes, rulesRes] = await Promise.all([
-      supabase
-        .from("accounts")
-        .select("id, name, type, institution")
-        .eq("user_id", userId)
-        .eq("is_active", true)
-        .order("name"),
+      supabase.from("accounts").select("id, name, type, institution").eq("user_id", userId).eq("is_active", true).order("name"),
       supabase.from("categories").select("id, name, kind, parent_id").eq("user_id", userId).order("name"),
       untypedSupabase
         .from("categorization_rules")
@@ -227,7 +241,6 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
         .eq("is_active", true)
         .order("priority"),
     ]);
-
     const nextAccounts = (accountsRes.data || []) as AccountOption[];
     const nextCategories = (categoriesRes.data || []) as CategoryOption[];
     const nextRules = (rulesRes.data || []) as CategorizationRule[];
@@ -237,29 +250,14 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
     return { nextAccounts, nextCategories, nextRules };
   }, [userId]);
 
-  const existingTransactions = useCallback(async () => {
-    const fullResult = await untypedSupabase
+  const fetchExistingForDedup = useCallback(async (): Promise<ExistingTx[]> => {
+    const full = await untypedSupabase
       .from("transactions")
       .select("id, external_id, fingerprint, amount, transaction_date, source, type")
       .eq("user_id", userId)
       .is("deleted_at", null)
       .limit(5000);
-
-    if (!fullResult.error) return (fullResult.data || []) as ExistingTx[];
-
-    const fallbackResult = await untypedSupabase
-      .from("transactions")
-      .select("id, amount, transaction_date, source, type")
-      .eq("user_id", userId)
-      .is("deleted_at", null)
-      .limit(5000);
-
-    if (!fallbackResult.error) {
-      toast.warning("Importação aberta sem checagem completa de duplicidade. Confirme se a migration de imports foi aplicada.");
-      return (fallbackResult.data || []) as ExistingTx[];
-    }
-
-    toast.warning("Não consegui consultar transações antigas para duplicidade. A revisão do arquivo continuará.");
+    if (!full.error) return (full.data || []) as ExistingTx[];
     return [];
   }, [userId]);
 
@@ -267,13 +265,11 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
     setLoading(true);
     setRows([]);
     setParsedInfo(null);
+    setParseError(null);
+    setShowDiagnostic(false);
 
     try {
-      const [{ nextAccounts, nextCategories, nextRules }, existing] = await Promise.all([
-        loadSupportData(),
-        existingTransactions(),
-      ]);
-
+      const [{ nextAccounts, nextCategories, nextRules }, existing] = await Promise.all([loadSupportData(), fetchExistingForDedup()]);
       setFileName(input.name);
       setMimeType(input.mime);
       setFileSize(input.size);
@@ -286,9 +282,9 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
           mimeType: input.mime,
           fileText: input.text,
           fileHash: input.hash,
-          manualInstitution,
-          manualDocumentType,
-          manualFormat,
+          manualInstitution: "UNKNOWN",
+          manualDocumentType: "UNKNOWN",
+          manualFormat: "UNKNOWN",
         },
         existing,
       );
@@ -308,11 +304,19 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
         institution: parsed.detection.institution,
         documentType: parsed.detection.documentType,
         format: parsed.detection.format,
+        confidence: parsed.detection.confidence,
+        reason: parsed.detection.reason,
         warnings: parsed.warnings,
       });
-      toast.success(`${reviewRows.length} movimentações prontas para revisão.`);
+
+      if (reviewRows.length > 0) {
+        toast.success(`${reviewRows.length} movimentações prontas para revisão.`);
+      } else {
+        toast.warning("Arquivo lido, mas nenhuma movimentação foi extraída.");
+      }
     } catch (error) {
-      toast.error(getErrorMessage(error, "Falha ao importar arquivo."));
+      const msg = getErrorMessage(error, "Falha ao importar arquivo.");
+      setParseError(buildDidacticError(msg, Boolean(input.text?.length)));
     } finally {
       setLoading(false);
     }
@@ -321,15 +325,10 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
   const handleFile = async (file: File) => {
     try {
       const [text, hash] = await Promise.all([readFileAsText(file), getFileHash(file)]);
-      await processText({
-        name: file.name,
-        text,
-        hash,
-        size: file.size,
-        mime: file.type || "text/plain",
-      });
+      await processText({ name: file.name, text, hash, size: file.size, mime: file.type || "text/plain" });
     } catch (error) {
-      toast.error(getErrorMessage(error, "Falha ao ler arquivo."));
+      const msg = getErrorMessage(error, "Falha ao ler arquivo.");
+      setParseError(buildDidacticError(msg, false));
     }
   };
 
@@ -339,7 +338,6 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
       toast.error("Cole o texto do extrato antes de processar.");
       return;
     }
-
     await processText({
       name: "extrato-colado.txt",
       text,
@@ -349,40 +347,38 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
     });
   };
 
-  const selectedRows = useMemo(() => rows.filter((row) => row.selected), [rows]);
-  const duplicatedRows = rows.filter((row) => row.possibleDuplicate).length;
-  const internalTransfers = rows.filter((row) => row.possibleInternalTransfer).length;
-  const totalCredits = selectedRows.filter((row) => row.direction === "CREDIT").reduce((sum, row) => sum + Number(row.amount), 0);
-  const totalDebits = selectedRows.filter((row) => row.direction === "DEBIT").reduce((sum, row) => sum + Number(row.amount), 0);
+  const selectedRows = useMemo(() => rows.filter((r) => r.selected), [rows]);
+  const duplicatedRows = rows.filter((r) => r.possibleDuplicate).length;
+  const internalTransfers = rows.filter((r) => r.possibleInternalTransfer).length;
+  const totalCredits = selectedRows.filter((r) => r.direction === "CREDIT").reduce((s, r) => s + Number(r.amount), 0);
+  const totalDebits = selectedRows.filter((r) => r.direction === "DEBIT").reduce((s, r) => s + Number(r.amount), 0);
 
   const updateRow = (localId: string, patch: Partial<ReviewRow>) => {
-    setRows((current) => current.map((row) => (row.localId === localId ? { ...row, ...patch } : row)));
+    setRows((cur) => cur.map((r) => (r.localId === localId ? { ...r, ...patch } : r)));
+  };
+
+  const bulkApplyCategory = (categoryId: string) => {
+    setRows((cur) => cur.map((r) => (r.selected ? { ...r, categoryId } : r)));
+  };
+  const bulkApplyAccount = (accountId: string) => {
+    setRows((cur) => cur.map((r) => (r.selected ? { ...r, accountId } : r)));
+  };
+  const bulkToggleAll = (value: boolean) => {
+    setRows((cur) => cur.map((r) => ({ ...r, selected: value })));
   };
 
   const learnCategorizationRules = async (confirmedRows: ReviewRow[]) => {
     const existingKeys = new Set(
-      categorizationRules.map((rule) => `${normalizeRulePattern(rule.pattern)}|${rule.category_id || ""}|${rule.direction || ""}`),
+      categorizationRules.map((r) => `${normalizeRulePattern(r.pattern)}|${r.category_id || ""}|${r.direction || ""}`),
     );
-    const nextRules = new Map<string, {
-      user_id: string;
-      name: string;
-      category_id: string;
-      match_type: "contains";
-      pattern: string;
-      merchant_name: string;
-      direction: "CREDIT" | "DEBIT";
-      is_active: boolean;
-      priority: number;
-    }>();
+    const nextRules = new Map<string, any>();
 
     confirmedRows.forEach((row) => {
       if (!row.categoryId || row.possibleInternalTransfer) return;
       const merchant = normalizeRulePattern(row.merchantName || row.descriptionNormalized || row.descriptionOriginal);
       if (!merchant || merchant.length < 4 || merchant === "OUTROS") return;
-
       const key = `${merchant}|${row.categoryId}|${row.direction}`;
       if (existingKeys.has(key) || nextRules.has(key)) return;
-
       nextRules.set(key, {
         user_id: userId,
         name: `Auto: ${merchant.slice(0, 48)}`,
@@ -397,34 +393,26 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
     });
 
     if (nextRules.size === 0) return;
-
     const { data, error } = await untypedSupabase
       .from("categorization_rules")
       .insert(Array.from(nextRules.values()))
       .select("id, category_id, match_type, pattern, direction, priority, is_active");
-
-    if (error) {
-      toast.warning("Importação salva, mas não consegui gravar as novas regras inteligentes.");
-      return;
-    }
-
-    setCategorizationRules((current) => [...current, ...((data || []) as CategorizationRule[])]);
+    if (error) return;
+    setCategorizationRules((c) => [...c, ...((data || []) as CategorizationRule[])]);
   };
 
   const handleConfirm = async () => {
     if (!fileName || !fileHash || selectedRows.length === 0) {
-      toast.error("Nenhuma movimentação selecionada para confirmar.");
+      toast.error("Nenhuma movimentação selecionada.");
       return;
     }
-
-    const invalid = selectedRows.find((row) => !row.accountId);
+    const invalid = selectedRows.find((r) => !r.accountId);
     if (invalid) {
       toast.error("Escolha uma conta para todas as movimentações selecionadas.");
       return;
     }
 
     setSaving(true);
-
     try {
       const filePayload = {
         user_id: userId,
@@ -433,12 +421,10 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
         file_size: fileSize,
         mime_type: mimeType,
         detected_format: parsedInfo?.format || "UNKNOWN",
-        institution: parsedInfo?.institution || manualInstitution,
-        document_type: parsedInfo?.documentType || manualDocumentType,
+        institution: parsedInfo?.institution || "UNKNOWN",
+        document_type: parsedInfo?.documentType || "UNKNOWN",
         stored_original: false,
-        metadata: {
-          originalLength: fileText.length,
-        },
+        metadata: { originalLength: fileText.length },
       };
 
       const { data: importedFileRaw, error: fileError } = await untypedSupabase
@@ -455,15 +441,13 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
           user_id: userId,
           imported_file_id: importedFile.id,
           status: "confirmed",
-          institution: parsedInfo?.institution || manualInstitution,
-          document_type: parsedInfo?.documentType || manualDocumentType,
+          institution: parsedInfo?.institution || "UNKNOWN",
+          document_type: parsedInfo?.documentType || "UNKNOWN",
           parser_name: parsedInfo?.parserName || "manual",
           transactions_total: selectedRows.length,
           duplicates_total: duplicatedRows,
           confirmed_at: new Date().toISOString(),
-          metadata: {
-            internalTransfers,
-          },
+          metadata: { internalTransfers },
         })
         .select("id")
         .single();
@@ -486,23 +470,13 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
           payment_method: row.sourceType === "CREDIT_CARD" ? "credit" : type === "transfer" ? "transferencia" : "import",
           is_reviewed: true,
           is_reconciled: false,
-          description_original: row.descriptionOriginal,
-          description_normalized: row.descriptionNormalized,
-          merchant_name: row.merchantName || null,
           external_id: row.externalId || null,
-          source_origin: `${row.institution}:${row.sourceType}`,
-          import_id: importRow.id,
-          imported_file_id: importedFile.id,
-          installment_current: row.installmentCurrent || null,
-          installment_total: row.installmentTotal || null,
           fingerprint: row.fingerprint,
-          possible_duplicate: Boolean(row.possibleDuplicate),
-          possible_internal_transfer: Boolean(row.possibleInternalTransfer),
-          metadata: row.metadata,
+          import_id: importRow.id,
         };
       });
 
-      const { error: txError } = await untypedSupabase.from("transactions").insert(txPayload);
+      const { error: txError } = await supabase.from("transactions").insert(txPayload);
       if (txError) throw txError;
 
       await learnCategorizationRules(selectedRows);
@@ -511,6 +485,8 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
       setRows([]);
       setParsedInfo(null);
       setFileText("");
+      setFileName("");
+      setFileHash("");
       window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId } }));
     } catch (error) {
       toast.error(getErrorMessage(error, "Falha ao confirmar importação."));
@@ -519,282 +495,376 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
     }
   };
 
+  const step = parsedInfo || parseError ? 2 : rows.length > 0 ? 3 : 1;
+
   return (
-    <div className="mx-auto max-w-6xl space-y-5 px-4 pb-24">
-      <Card className="border-0 shadow-card">
-        <CardContent className="space-y-4 p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <Upload className="h-4 w-4 text-primary" />
-                <h1 className="font-heading text-lg font-bold">Importações</h1>
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">{supportedHint}</p>
-            </div>
-            {parsedInfo && (
-              <Badge variant="outline" className="rounded-lg px-2 py-1 text-[11px]">
-                {parsedInfo.parserName}
-              </Badge>
-            )}
-          </div>
+    <div className="mx-auto max-w-6xl space-y-6 px-4 pb-28">
+      {/* Header */}
+      <div className="space-y-1">
+        <div className="flex items-center gap-2">
+          <Upload className="h-5 w-5 text-primary" strokeWidth={1.8} />
+          <h1 className="font-heading text-xl font-semibold tracking-tight">Importar extratos</h1>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Envie um extrato ou fatura. O sistema detecta o banco, o formato, sugere conta e categoria automaticamente.
+        </p>
+      </div>
 
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <div>
-              <Label className="text-xs text-muted-foreground">Instituição</Label>
-              <Select value={manualInstitution} onValueChange={(value) => setManualInstitution(value as InstitutionCode)}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {INSTITUTION_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+      {/* Stepper */}
+      <div className="flex items-center gap-3 text-xs">
+        {[
+          { n: 1, label: "Enviar" },
+          { n: 2, label: "Analisar" },
+          { n: 3, label: "Revisar" },
+        ].map((s, i) => (
+          <React.Fragment key={s.n}>
+            <div className={cn("flex items-center gap-2", step >= s.n ? "text-foreground" : "text-muted-foreground")}>
+              <span
+                className={cn(
+                  "flex h-6 w-6 items-center justify-center rounded-full border text-[11px] font-semibold tabular-nums",
+                  step > s.n
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : step === s.n
+                    ? "border-primary text-primary"
+                    : "border-border text-muted-foreground",
+                )}
+              >
+                {step > s.n ? <CheckCircle2 className="h-3.5 w-3.5" /> : s.n}
+              </span>
+              <span className="font-medium">{s.label}</span>
             </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">Tipo</Label>
-              <Select value={manualDocumentType} onValueChange={(value) => setManualDocumentType(value as FinancialDocumentType)}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DOCUMENT_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">Formato</Label>
-              <Select value={manualFormat} onValueChange={(value) => setManualFormat(value as FinancialFileFormat)}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {FORMAT_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+            {i < 2 && <span className="h-px flex-1 bg-border" />}
+          </React.Fragment>
+        ))}
+      </div>
 
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            <label className="block cursor-pointer rounded-lg border-2 border-dashed border-border bg-muted/20 p-6 text-center transition hover:border-primary/50 hover:bg-primary/5">
-              <FileText className="mx-auto h-8 w-8 text-muted-foreground" />
-              <p className="mt-2 text-sm font-semibold text-foreground">Escolha ou arraste um arquivo</p>
-              <p className="mt-1 text-xs text-muted-foreground">CSV, PDF, TXT ou OFX. O app detecta o padrão do banco automaticamente.</p>
-              <Input
-                type="file"
-                accept=".csv,.txt,.ofx,.pdf,text/csv,text/plain,application/pdf"
-                className="sr-only"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) handleFile(file);
-                  event.target.value = "";
-                }}
-              />
-            </label>
+      {/* Step 1: Upload */}
+      <Card className="border-border/60 shadow-none">
+        <CardContent className="p-5">
+          <Tabs defaultValue="file">
+            <TabsList className="mb-4 bg-muted/40">
+              <TabsTrigger value="file" className="gap-1.5 text-xs">
+                <FileText className="h-3.5 w-3.5" /> Arquivo
+              </TabsTrigger>
+              <TabsTrigger value="paste" className="gap-1.5 text-xs">
+                <ClipboardPaste className="h-3.5 w-3.5" /> Colar texto
+              </TabsTrigger>
+            </TabsList>
 
-            <div className="rounded-lg border border-border bg-background p-3">
-              <Label className="text-xs text-muted-foreground">Ou cole o texto do PDF</Label>
+            <TabsContent value="file" className="mt-0">
+              <label
+                className={cn(
+                  "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/20 p-10 text-center transition",
+                  "hover:border-primary/60 hover:bg-primary/5",
+                  loading && "pointer-events-none opacity-60",
+                )}
+              >
+                {loading ? (
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                ) : (
+                  <Upload className="h-8 w-8 text-muted-foreground" strokeWidth={1.6} />
+                )}
+                <p className="text-sm font-medium text-foreground">
+                  {loading ? "Lendo arquivo…" : "Escolha ou arraste o arquivo aqui"}
+                </p>
+                <p className="max-w-md text-xs text-muted-foreground">
+                  Aceita CSV do banco (Nubank, genérico), PDF com texto selecionável (Mercado Pago) e TXT.
+                  <br />O sistema detecta o banco e o tipo de documento automaticamente.
+                </p>
+                <Input
+                  type="file"
+                  accept=".csv,.txt,.ofx,.pdf,text/csv,text/plain,application/pdf"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFile(file);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </TabsContent>
+
+            <TabsContent value="paste" className="mt-0 space-y-3">
+              <Label className="text-xs text-muted-foreground">Cole aqui o texto copiado do extrato ou fatura</Label>
               <Textarea
                 value={pastedText}
-                onChange={(event) => setPastedText(event.target.value)}
-                placeholder="Cole aqui o texto selecionável do extrato Mercado Pago, PicPay ou C6..."
-                className="mt-2 min-h-[116px] resize-none"
+                onChange={(e) => setPastedText(e.target.value)}
+                placeholder="Ex.: 14/03/2025 IFOOD DELIVERY -R$ 42,90"
+                className="min-h-[180px] resize-none font-mono text-xs"
               />
-              <Button type="button" variant="outline" className="mt-2 w-full gap-1.5" onClick={handlePastedText} disabled={loading}>
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                Processar texto colado
+              <Button type="button" className="w-full gap-2" onClick={handlePastedText} disabled={loading}>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                Analisar texto
               </Button>
-            </div>
-          </div>
-
-          {loading && (
-            <div className="flex items-center justify-center gap-2 rounded-lg border border-border bg-background py-4 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Processando arquivo para revisão...
-            </div>
-          )}
-
-          {parsedInfo && (
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
-              <div className="rounded-lg border border-border bg-background p-3">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Linhas</p>
-                <p className="text-lg font-bold">{rows.length}</p>
-              </div>
-              <div className="rounded-lg border border-border bg-background p-3">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Selecionadas</p>
-                <p className="text-lg font-bold text-primary">{selectedRows.length}</p>
-              </div>
-              <div className="rounded-lg border border-border bg-background p-3">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Entradas</p>
-                <p className="text-lg font-bold text-success">{formatCurrency(totalCredits)}</p>
-              </div>
-              <div className="rounded-lg border border-border bg-background p-3">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Saídas</p>
-                <p className="text-lg font-bold text-destructive">{formatCurrency(totalDebits)}</p>
-              </div>
-              <div className="rounded-lg border border-border bg-background p-3">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Duplicidades</p>
-                <p className="text-lg font-bold text-warning">{duplicatedRows}</p>
-              </div>
-            </div>
-          )}
-
-          {parsedInfo?.warnings.map((warning) => (
-            <div key={warning} className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-muted-foreground">
-              <AlertTriangle className="h-4 w-4 text-warning" />
-              {warning}
-            </div>
-          ))}
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
-      {rows.length > 0 && (
-        <Card className="border-0 shadow-card">
-          <CardContent className="space-y-3 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h2 className="font-heading text-base font-bold">Revisão antes de gravar</h2>
-                <p className="text-xs text-muted-foreground">Desmarque duplicidades, ajuste conta/categoria e confirme.</p>
+      {/* Step 2: Error state */}
+      {parseError && (
+        <Card className="border-amber-200/60 bg-amber-50/40 shadow-none dark:border-amber-500/30 dark:bg-amber-500/5">
+          <CardContent className="space-y-3 p-5">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+              <div className="space-y-1">
+                <h3 className="font-medium text-foreground">{parseError.title}</h3>
+                <p className="text-sm text-muted-foreground">{parseError.body}</p>
+                <p className="text-sm text-foreground/80">
+                  <span className="font-medium">Sugestão: </span>
+                  {parseError.hint}
+                </p>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setRows((current) => current.map((row) => ({ ...row, selected: false })))}
-                >
-                  Desmarcar
+            </div>
+            {fileText && (
+              <Collapsible open={showDiagnostic} onOpenChange={setShowDiagnostic}>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="gap-1.5 text-xs">
+                    <Info className="h-3.5 w-3.5" />
+                    {showDiagnostic ? "Ocultar" : "Ver"} texto extraído (diagnóstico)
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-2">
+                  <pre className="max-h-64 overflow-auto rounded-lg border border-border bg-muted/40 p-3 text-[11px] leading-relaxed text-muted-foreground">
+                    {fileText.slice(0, 4000)}
+                    {fileText.length > 4000 && "\n\n… (truncado)"}
+                  </pre>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Step 2: Analysis summary */}
+      {parsedInfo && !parseError && (
+        <Card className="border-border/60 shadow-none">
+          <CardContent className="space-y-4 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Detecção automática</p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <h2 className="font-heading text-lg font-semibold">{INSTITUTION_LABEL[parsedInfo.institution]}</h2>
+                  <Badge variant="outline" className="rounded-md text-[10px] font-normal">
+                    {DOCUMENT_LABEL[parsedInfo.documentType]}
+                  </Badge>
+                  <Badge variant="outline" className="rounded-md text-[10px] font-normal">
+                    {FORMAT_LABEL[parsedInfo.format]}
+                  </Badge>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Confiança</p>
+                <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">
+                  {Math.round(parsedInfo.confidence * 100)}%
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+              <SummaryTile label="Linhas" value={String(rows.length)} />
+              <SummaryTile label="Entradas" value={formatCurrency(totalCredits)} accent="income" />
+              <SummaryTile label="Saídas" value={formatCurrency(totalDebits)} accent="expense" />
+              <SummaryTile label="Duplicadas" value={String(duplicatedRows)} accent={duplicatedRows > 0 ? "warn" : undefined} />
+              <SummaryTile label="Transferências" value={String(internalTransfers)} />
+            </div>
+
+            {parsedInfo.warnings.length > 0 && (
+              <div className="space-y-1.5">
+                {parsedInfo.warnings.slice(0, 3).map((w, i) => (
+                  <div key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                    <span>{w}</span>
+                  </div>
+                ))}
+                {parsedInfo.warnings.length > 3 && (
+                  <p className="pl-5 text-[11px] text-muted-foreground">+ {parsedInfo.warnings.length - 3} avisos</p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Step 3: Review */}
+      {rows.length > 0 && (
+        <Card className="border-border/60 shadow-none">
+          <CardContent className="space-y-4 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="font-heading text-base font-semibold">Revisar antes de importar</h2>
+                <p className="text-xs text-muted-foreground">
+                  Duplicadas já vêm desmarcadas. Transferências internas estão destacadas em azul.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="ghost" onClick={() => bulkToggleAll(false)} className="text-xs">
+                  Desmarcar todas
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => bulkToggleAll(true)} className="text-xs">
+                  Marcar todas
                 </Button>
                 <Button
-                  type="button"
                   size="sm"
-                  className="gradient-primary text-primary-foreground"
-                  disabled={saving || selectedRows.length === 0}
                   onClick={handleConfirm}
+                  disabled={saving || selectedRows.length === 0}
+                  className="gap-1.5 text-xs"
                 >
-                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-                  Confirmar importação
+                  {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                  Confirmar {selectedRows.length} lançamentos
                 </Button>
               </div>
             </div>
 
-            <div className="space-y-2">
-              {rows.map((row) => {
-                const Icon = getRowIcon(row);
-                const type = transactionTypeFromRow(row);
-                const categoryOptions = categories.filter((category) => category.kind === type);
+            {/* Bulk actions bar */}
+            {selectedRows.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+                <span className="font-medium text-primary">{selectedRows.length} selecionadas</span>
+                <span className="text-muted-foreground">Aplicar em massa:</span>
+                <Select onValueChange={bulkApplyCategory}>
+                  <SelectTrigger className="h-7 w-40 text-[11px]">
+                    <SelectValue placeholder="Categoria" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((c) => (
+                      <SelectItem key={c.id} value={c.id} className="text-xs">
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select onValueChange={bulkApplyAccount}>
+                  <SelectTrigger className="h-7 w-40 text-[11px]">
+                    <SelectValue placeholder="Conta" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.map((a) => (
+                      <SelectItem key={a.id} value={a.id} className="text-xs">
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
-                return (
-                  <div
-                    key={row.localId}
-                    className={cn(
-                      "grid grid-cols-1 gap-3 rounded-lg border border-border bg-background p-3 xl:grid-cols-[32px_1.3fr_150px_190px_190px_100px]",
-                      row.possibleDuplicate && "border-warning/50 bg-warning/5",
-                      !row.selected && "opacity-60",
-                    )}
-                  >
-                    <button
-                      type="button"
+            {/* Table */}
+            <div className="overflow-hidden rounded-lg border border-border/60">
+              <div className="hidden grid-cols-[32px_1.4fr_100px_120px_180px_180px_90px] gap-3 border-b border-border/60 bg-muted/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground lg:grid">
+                <span />
+                <span>Descrição</span>
+                <span>Data</span>
+                <span className="text-right">Valor</span>
+                <span>Conta</span>
+                <span>Categoria</span>
+                <span>Status</span>
+              </div>
+              <div className="divide-y divide-border/60">
+                {rows.map((row) => {
+                  const Icon = rowIcon(row);
+                  const type = transactionTypeFromRow(row);
+                  const categoryOptions = categories.filter((c) => c.kind === type);
+
+                  return (
+                    <div
+                      key={row.localId}
                       className={cn(
-                        "flex h-8 w-8 items-center justify-center rounded-full border-2",
-                        row.selected ? "border-primary bg-primary/10 text-primary" : "border-muted-foreground/30 text-muted-foreground",
+                        "grid grid-cols-1 gap-3 px-3 py-3 lg:grid-cols-[32px_1.4fr_100px_120px_180px_180px_90px]",
+                        row.possibleDuplicate && "bg-amber-50/40 dark:bg-amber-500/5",
+                        row.possibleInternalTransfer && "bg-primary/5",
+                        !row.selected && "opacity-50",
                       )}
-                      onClick={() => updateRow(row.localId, { selected: !row.selected })}
-                      title={row.selected ? "Importar" : "Ignorar"}
                     >
-                      {row.selected ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-                    </button>
-
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <Icon className={cn("h-4 w-4", getRowAmountClass(row))} />
-                        <p className="truncate text-sm font-semibold">{row.descriptionNormalized || row.descriptionOriginal}</p>
+                      <div className="flex items-start pt-1">
+                        <Checkbox checked={row.selected} onCheckedChange={(v) => updateRow(row.localId, { selected: Boolean(v) })} />
                       </div>
-                      <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{row.descriptionOriginal}</p>
-                      <div className="mt-1 flex flex-wrap gap-1.5">
-                        {row.installmentCurrent && row.installmentTotal && (
-                          <Badge variant="outline" className="text-[10px]">
-                            Parcela {row.installmentCurrent}/{row.installmentTotal}
-                          </Badge>
-                        )}
-                        {row.possibleDuplicate && (
-                          <Badge className="border-warning/30 bg-warning/15 text-[10px] text-warning">possível duplicidade</Badge>
-                        )}
-                        {row.possibleInternalTransfer && (
-                          <Badge className="border-primary/30 bg-primary/10 text-[10px] text-primary">transferência interna</Badge>
-                        )}
-                      </div>
-                    </div>
 
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Valor</p>
-                      <p className={cn("text-sm font-bold", getRowAmountClass(row))}>
-                        {row.direction === "CREDIT" ? "+" : "-"}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <Icon className={cn("h-3.5 w-3.5 shrink-0", rowAmountClass(row))} />
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {row.descriptionNormalized || row.descriptionOriginal}
+                          </p>
+                        </div>
+                        {row.descriptionOriginal !== row.descriptionNormalized && (
+                          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{row.descriptionOriginal}</p>
+                        )}
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {row.installmentCurrent && row.installmentTotal && (
+                            <Badge variant="outline" className="rounded-md px-1.5 py-0 text-[9px] font-normal">
+                              {row.installmentCurrent}/{row.installmentTotal}
+                            </Badge>
+                          )}
+                          {row.possibleDuplicate && (
+                            <Badge className="rounded-md border-amber-200 bg-amber-100 px-1.5 py-0 text-[9px] font-normal text-amber-800 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-400">
+                              possível duplicidade
+                            </Badge>
+                          )}
+                          {row.possibleInternalTransfer && (
+                            <Badge className="rounded-md border-primary/30 bg-primary/10 px-1.5 py-0 text-[9px] font-normal text-primary hover:bg-primary/10">
+                              transferência
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="text-xs tabular-nums text-muted-foreground lg:pt-1">{row.transactionDate.slice(5)}</div>
+
+                      <div className={cn("text-sm font-semibold tabular-nums lg:pt-1 lg:text-right", rowAmountClass(row))}>
+                        {row.direction === "CREDIT" ? "+" : "−"}
                         {formatCurrency(Number(row.amount))}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">{row.transactionDate}</p>
-                    </div>
+                      </div>
 
-                    <div>
-                      <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Conta</p>
-                      <Select value={row.accountId || "none"} onValueChange={(value) => updateRow(row.localId, { accountId: value === "none" ? "" : value })}>
-                        <SelectTrigger className="h-9 rounded-lg text-xs">
+                      <Select
+                        value={row.accountId || "none"}
+                        onValueChange={(v) => updateRow(row.localId, { accountId: v === "none" ? "" : v })}
+                      >
+                        <SelectTrigger className="h-8 rounded-md text-xs">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">Selecionar</SelectItem>
-                          {accounts.map((account) => (
-                            <SelectItem key={account.id} value={account.id}>
-                              {account.name}
+                          {accounts.map((a) => (
+                            <SelectItem key={a.id} value={a.id} className="text-xs">
+                              {a.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                    </div>
 
-                    <div>
-                      <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Categoria</p>
-                      <Select value={row.categoryId || "none"} onValueChange={(value) => updateRow(row.localId, { categoryId: value === "none" ? "" : value })}>
-                        <SelectTrigger className="h-9 rounded-lg text-xs">
+                      <Select
+                        value={row.categoryId || "none"}
+                        onValueChange={(v) => updateRow(row.localId, { categoryId: v === "none" ? "" : v })}
+                      >
+                        <SelectTrigger className="h-8 rounded-md text-xs">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">Sem categoria</SelectItem>
-                          {categoryOptions.map((category) => (
-                            <SelectItem key={category.id} value={category.id}>
-                              {category.name}
+                          {categoryOptions.map((c) => (
+                            <SelectItem key={c.id} value={c.id} className="text-xs">
+                              {c.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                    </div>
 
-                    <div>
-                      <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Status</p>
-                      <Select value={row.status} onValueChange={(value) => updateRow(row.localId, { status: value as "paid" | "pending" })}>
-                        <SelectTrigger className="h-9 rounded-lg text-xs">
+                      <Select
+                        value={row.status}
+                        onValueChange={(v) => updateRow(row.localId, { status: v as "paid" | "pending" })}
+                      >
+                        <SelectTrigger className="h-8 rounded-md text-xs">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="paid">Pago</SelectItem>
-                          <SelectItem value="pending">Pendente</SelectItem>
+                          <SelectItem value="paid" className="text-xs">Pago</SelectItem>
+                          <SelectItem value="pending" className="text-xs">Pendente</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -802,5 +872,21 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
     </div>
   );
 };
+
+const SummaryTile: React.FC<{ label: string; value: string; accent?: "income" | "expense" | "warn" }> = ({ label, value, accent }) => (
+  <div className="rounded-lg border border-border/60 bg-background p-3">
+    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+    <p
+      className={cn(
+        "mt-1 text-base font-semibold tabular-nums",
+        accent === "income" && "text-emerald-600 dark:text-emerald-400",
+        accent === "expense" && "text-rose-600 dark:text-rose-400",
+        accent === "warn" && "text-amber-600 dark:text-amber-400",
+      )}
+    >
+      {value}
+    </p>
+  </div>
+);
 
 export default ImportsPage;

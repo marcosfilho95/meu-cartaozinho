@@ -224,6 +224,65 @@ export type Database = {
           },
         ]
       }
+      categorization_rules: {
+        Row: {
+          category_id: string | null
+          created_at: string
+          direction: string | null
+          hit_count: number
+          id: string
+          is_active: boolean
+          last_hit_at: string | null
+          match_type: string
+          merchant_name: string | null
+          name: string | null
+          pattern: string
+          priority: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category_id?: string | null
+          created_at?: string
+          direction?: string | null
+          hit_count?: number
+          id?: string
+          is_active?: boolean
+          last_hit_at?: string | null
+          match_type?: string
+          merchant_name?: string | null
+          name?: string | null
+          pattern: string
+          priority?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category_id?: string | null
+          created_at?: string
+          direction?: string | null
+          hit_count?: number
+          id?: string
+          is_active?: boolean
+          last_hit_at?: string | null
+          match_type?: string
+          merchant_name?: string | null
+          name?: string | null
+          pattern?: string
+          priority?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categorization_rules_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       goal_transactions: {
         Row: {
           amount: number
@@ -297,6 +356,110 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      imported_files: {
+        Row: {
+          created_at: string
+          detected_format: string | null
+          document_type: string | null
+          file_hash: string
+          file_name: string
+          file_size: number | null
+          id: string
+          institution: string | null
+          metadata: Json
+          mime_type: string | null
+          stored_original: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          detected_format?: string | null
+          document_type?: string | null
+          file_hash: string
+          file_name: string
+          file_size?: number | null
+          id?: string
+          institution?: string | null
+          metadata?: Json
+          mime_type?: string | null
+          stored_original?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          detected_format?: string | null
+          document_type?: string | null
+          file_hash?: string
+          file_name?: string
+          file_size?: number | null
+          id?: string
+          institution?: string | null
+          metadata?: Json
+          mime_type?: string | null
+          stored_original?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      imports: {
+        Row: {
+          confirmed_at: string | null
+          created_at: string
+          document_type: string | null
+          duplicates_total: number
+          id: string
+          imported_file_id: string | null
+          institution: string | null
+          metadata: Json
+          parser_name: string | null
+          status: string
+          transactions_total: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          confirmed_at?: string | null
+          created_at?: string
+          document_type?: string | null
+          duplicates_total?: number
+          id?: string
+          imported_file_id?: string | null
+          institution?: string | null
+          metadata?: Json
+          parser_name?: string | null
+          status?: string
+          transactions_total?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          confirmed_at?: string | null
+          created_at?: string
+          document_type?: string | null
+          duplicates_total?: number
+          id?: string
+          imported_file_id?: string | null
+          institution?: string | null
+          metadata?: Json
+          parser_name?: string | null
+          status?: string
+          transactions_total?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "imports_imported_file_id_fkey"
+            columns: ["imported_file_id"]
+            isOneToOne: false
+            referencedRelation: "imported_files"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       installments: {
         Row: {
@@ -575,7 +738,10 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           due_date: string | null
+          external_id: string | null
+          fingerprint: string | null
           id: string
+          import_id: string | null
           is_reconciled: boolean
           is_reviewed: boolean
           notes: string | null
@@ -597,7 +763,10 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           due_date?: string | null
+          external_id?: string | null
+          fingerprint?: string | null
           id?: string
+          import_id?: string | null
           is_reconciled?: boolean
           is_reviewed?: boolean
           notes?: string | null
@@ -619,7 +788,10 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           due_date?: string | null
+          external_id?: string | null
+          fingerprint?: string | null
           id?: string
+          import_id?: string | null
           is_reconciled?: boolean
           is_reviewed?: boolean
           notes?: string | null
@@ -653,6 +825,13 @@ export type Database = {
             columns: ["counterpart_account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "imports"
             referencedColumns: ["id"]
           },
           {

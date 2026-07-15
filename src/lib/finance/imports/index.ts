@@ -2,6 +2,8 @@ import { ExistingTransactionMatch, FinancialFileParser, ParserContext } from "./
 import { markDuplicates, sha256Hex } from "./utils";
 import { mercadoPagoTextParser } from "./mercadoPagoTextParser";
 import { nubankCsvParser } from "./nubankCsvParser";
+import { genericCsvParser } from "./genericCsvParser";
+import { genericTextParser } from "./genericTextParser";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
 
@@ -9,8 +11,16 @@ export * from "./types";
 export * from "./utils";
 export { mercadoPagoTextParser } from "./mercadoPagoTextParser";
 export { nubankCsvParser } from "./nubankCsvParser";
+export { genericCsvParser } from "./genericCsvParser";
+export { genericTextParser } from "./genericTextParser";
 
-export const financialFileParsers: FinancialFileParser[] = [nubankCsvParser, mercadoPagoTextParser];
+// Order matters: specific parsers first, generic fallbacks last.
+export const financialFileParsers: FinancialFileParser[] = [
+  nubankCsvParser,
+  mercadoPagoTextParser,
+  genericCsvParser,
+  genericTextParser,
+];
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 

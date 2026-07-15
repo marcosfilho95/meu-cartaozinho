@@ -37,9 +37,10 @@ import {
   getMonthlyIncome,
   trendFromDelta,
 } from "@/lib/financeSelectors";
-import { AlertCircle, ArrowDownCircle, ArrowUpCircle, Check, Clock, LineChart as LineChartIcon, Loader2 as Loader2Icon, PieChart as PieChartIcon, TrendingDown, TrendingUp } from "lucide-react";
+import { AlertCircle, ArrowDownCircle, ArrowUpCircle, Check, Clock, LineChart as LineChartIcon, Loader2 as Loader2Icon, PieChart as PieChartIcon, Plus, TrendingDown, TrendingUp, Upload } from "lucide-react";
 import { GoalsSection } from "@/components/finance/GoalsSection";
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
+import { Button } from "@/components/ui/button";
 import { DailyOrganizerPanel } from "@/components/finance/DailyOrganizerPanel";
 import {
   Area,
@@ -324,6 +325,33 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   return (
     <>
       <div className="mx-auto max-w-6xl space-y-5 px-4">
+        {/* Premium header with primary quick actions */}
+        <div className="flex flex-wrap items-end justify-between gap-3 pt-1">
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Organizador Financeiro</p>
+            <h1 className="mt-0.5 font-heading text-2xl font-semibold tracking-tight">Resumo do mês</h1>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => openQuickDialog("expense")}
+              className="gap-1.5 text-xs"
+            >
+              <Plus className="h-3.5 w-3.5" strokeWidth={2.2} />
+              Novo lançamento
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => navigate("/financas/importacoes")}
+              className="gap-1.5 text-xs"
+            >
+              <Upload className="h-3.5 w-3.5" strokeWidth={2.2} />
+              Importar extrato
+            </Button>
+          </div>
+        </div>
+
         <Card className="border-0 shadow-elevated">
           <CardContent className="space-y-4 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
