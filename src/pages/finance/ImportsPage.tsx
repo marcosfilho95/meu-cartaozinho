@@ -256,7 +256,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
   const fetchExistingForDedup = useCallback(async (): Promise<ExistingTx[]> => {
     const full = await untypedSupabase
       .from("transactions")
-      .select("id, external_id, fingerprint, amount, transaction_date, source, type")
+      .select("id, external_id, fingerprint, amount, transaction_date, source, type, category_id")
       .eq("user_id", userId)
       .is("deleted_at", null)
       .limit(5000);
