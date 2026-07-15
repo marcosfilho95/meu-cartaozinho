@@ -285,35 +285,29 @@ export type Database = {
       }
       goal_transactions: {
         Row: {
-          account_id: string | null
           amount: number
           created_at: string
           description: string | null
           goal_id: string
           id: string
-          ref_month: string | null
           type: string
           user_id: string
         }
         Insert: {
-          account_id?: string | null
           amount: number
           created_at?: string
           description?: string | null
           goal_id: string
           id?: string
-          ref_month?: string | null
           type?: string
           user_id: string
         }
         Update: {
-          account_id?: string | null
           amount?: number
           created_at?: string
           description?: string | null
           goal_id?: string
           id?: string
-          ref_month?: string | null
           type?: string
           user_id?: string
         }
@@ -325,13 +319,6 @@ export type Database = {
             referencedRelation: "goals"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "goal_transactions_account_id_fkey"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "accounts"
-            referencedColumns: ["id"]
-          },
         ]
       }
       goals: {
@@ -339,12 +326,9 @@ export type Database = {
           created_at: string
           current_amount: number
           deadline: string | null
-          goal_type: string
           id: string
           is_completed: boolean
-          monthly_target: number
           name: string
-          priority: number
           target_amount: number
           updated_at: string
           user_id: string
@@ -353,12 +337,9 @@ export type Database = {
           created_at?: string
           current_amount?: number
           deadline?: string | null
-          goal_type?: string
           id?: string
           is_completed?: boolean
-          monthly_target?: number
           name: string
-          priority?: number
           target_amount: number
           updated_at?: string
           user_id: string
@@ -367,12 +348,9 @@ export type Database = {
           created_at?: string
           current_amount?: number
           deadline?: string | null
-          goal_type?: string
           id?: string
           is_completed?: boolean
-          monthly_target?: number
           name?: string
-          priority?: number
           target_amount?: number
           updated_at?: string
           user_id?: string
@@ -888,31 +866,7 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: undefined
       }
-      delete_goal_and_release_funds: {
-        Args: { p_account_id: string; p_goal_id: string }
-        Returns: undefined
-      }
       is_username_available: { Args: { p_username: string }; Returns: boolean }
-      reserve_goal_funds: {
-        Args: {
-          p_account_id: string
-          p_amount: number
-          p_description?: string | null
-          p_goal_id: string
-          p_ref_month: string
-        }
-        Returns: undefined
-      }
-      withdraw_goal_funds: {
-        Args: {
-          p_account_id: string
-          p_amount: number
-          p_description?: string | null
-          p_goal_id: string
-          p_ref_month: string
-        }
-        Returns: undefined
-      }
     }
     Enums: {
       account_scope: "personal" | "business"
