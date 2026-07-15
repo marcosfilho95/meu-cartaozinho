@@ -138,6 +138,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
         greeting={headerProfile.greeting}
         userName={headerProfile.firstName}
         avatarId={headerProfile.avatarId}
+        avatarUrl={headerProfile.avatarUrl}
       />
 
       <main className="mx-auto max-w-5xl px-4 pt-6 animate-fade-in sm:px-6">
