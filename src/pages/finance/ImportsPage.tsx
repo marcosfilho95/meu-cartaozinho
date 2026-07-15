@@ -465,6 +465,116 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
     setCategorizationRules((c) => [...c, ...((data || []) as CategorizationRule[])]);
   };
 
+  const classifyWithAI = useCallback(
+    async (
+      targetRows: ReviewRow[],
+      knownCategories: CategoryOption[],
+      opts?: { silent?: boolean },
+    ) => {
+      if (targetRows.length === 0) return;
+      setAiClassifying(true);
+      try {
+        const payloadRows = targetRows.map((row, idx) => ({
+          index: idx,
+          description: row.descriptionOriginal || row.descriptionNormalized || "",
+          merchant: row.merchantName || null,
+          amount: Number(row.amount),
+          direction: row.direction,
+          sourceType: row.sourceType || null,
+          isTransfer: Boolean(row.possibleInternalTransfer),
+        }));
+
+        const { data, error } = await supabase.functions.invoke("smart-classify-imports", {
+          body: {
+            rows: payloadRows,
+            categories: knownCategories.map((c) => ({ name: c.name, kind: c.kind })),
+          },
+        });
+        if (error) throw error;
+        const results: Array<{
+          index: number;
+          categoryName: string;
+          categoryKind: "income" | "expense" | "transfer";
+          createIfMissing: boolean;
+          confidence: number;
+        }> = (data as any)?.results || [];
+
+        if (results.length === 0) {
+          if (!opts?.silent) toast.info("A IA não encontrou classificações novas.");
+          return;
+        }
+
+        // Descobrir categorias a criar (nome+kind únicos, ainda não existentes)
+        let localCats = [...knownCategories];
+        const wantCreate = new Map<string, { name: string; kind: "income" | "expense" | "transfer" }>();
+        for (const r of results) {
+          const targetKind = r.categoryKind;
+          const key = `${normalizeCategoryName(r.categoryName)}|${targetKind}`;
+          const exists = localCats.some(
+            (c) => c.kind === targetKind && normalizeCategoryName(c.name) === normalizeCategoryName(r.categoryName),
+          );
+          if (!exists && r.createIfMissing) {
+            wantCreate.set(key, { name: r.categoryName, kind: targetKind });
+          }
+        }
+
+        let createdCount = 0;
+        if (wantCreate.size > 0) {
+          const insertPayload = Array.from(wantCreate.values()).map((c) => ({
+            user_id: userId,
+            name: c.name,
+            kind: c.kind,
+            is_system: false,
+          }));
+          const { data: created, error: insErr } = await supabase
+            .from("categories")
+            .insert(insertPayload as any)
+            .select("id, name, kind, parent_id");
+          if (!insErr && created) {
+            const createdList = created as CategoryOption[];
+            localCats = [...localCats, ...createdList];
+            createdCount = createdList.length;
+            setCategories(localCats);
+          }
+        }
+
+        // Aplicar categoria em cada linha
+        let classified = 0;
+        setRows((cur) => {
+          const rowIds = targetRows.map((r) => r.localId);
+          const next = cur.map((row) => {
+            const pos = rowIds.indexOf(row.localId);
+            if (pos === -1) return row;
+            const r = results.find((x) => x.index === pos);
+            if (!r) return row;
+            const match = localCats.find(
+              (c) => c.kind === r.categoryKind && normalizeCategoryName(c.name) === normalizeCategoryName(r.categoryName),
+            );
+            if (!match) return row;
+            if (row.categoryId === match.id) return row;
+            classified++;
+            return { ...row, categoryId: match.id };
+          });
+          return next;
+        });
+
+        setAiSummary({ classified, created: createdCount });
+        if (!opts?.silent) {
+          toast.success(
+            createdCount > 0
+              ? `IA classificou ${classified} linhas e criou ${createdCount} categoria(s).`
+              : `IA classificou ${classified} linhas.`,
+          );
+        }
+      } catch (err) {
+        if (!opts?.silent) toast.error(getErrorMessage(err, "Falha na classificação com IA."));
+      } finally {
+        setAiClassifying(false);
+      }
+    },
+    [userId],
+  );
+
   const handleConfirm = async () => {
     if (!fileName || !fileHash || selectedRows.length === 0) {
       toast.error("Nenhuma movimentação selecionada.");
