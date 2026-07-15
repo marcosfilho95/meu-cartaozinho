@@ -31,7 +31,7 @@ const isMissingAvatarUrlColumnError = (error: { code?: string; message?: string 
 const isMissingUsernameRpc = (error: { code?: string; message?: string } | null) => {
   if (!error) return false;
   const text = String(error.message || "");
-  return error.code === "PGRST202" || text.includes("get_login_email_by_username");
+  return error.code === "PGRST202" || text.includes("is_username_available");
 };
 
 const extractStoragePath = (avatarUrl: string): string | null => {
