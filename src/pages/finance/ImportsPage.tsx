@@ -188,15 +188,29 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
   }, [userId]);
 
   const existingTransactions = useCallback(async () => {
-    const { data, error } = await untypedSupabase
+    const fullResult = await untypedSupabase
       .from("transactions")
       .select("id, external_id, fingerprint, amount, transaction_date, source, type")
       .eq("user_id", userId)
       .is("deleted_at", null)
       .limit(5000);
 
-    if (error) throw error;
-    return (data || []) as ExistingTx[];
+    if (!fullResult.error) return (fullResult.data || []) as ExistingTx[];
+
+    const fallbackResult = await untypedSupabase
+      .from("transactions")
+      .select("id, amount, transaction_date, source, type")
+      .eq("user_id", userId)
+      .is("deleted_at", null)
+      .limit(5000);
+
+    if (!fallbackResult.error) {
+      toast.warning("Importação aberta sem checagem completa de duplicidade. Confirme se a migration de imports foi aplicada.");
+      return (fallbackResult.data || []) as ExistingTx[];
+    }
+
+    toast.warning("Não consegui consultar transações antigas para duplicidade. A revisão do arquivo continuará.");
+    return [];
   }, [userId]);
 
   const processText = async (input: { name: string; text: string; hash: string; size: number | null; mime: string }) => {
