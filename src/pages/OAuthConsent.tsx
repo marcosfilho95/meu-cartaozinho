@@ -41,7 +41,9 @@ export default function OAuthConsent() {
       if (!sess.session) {
         try {
           sessionStorage.setItem("pendingConsentUrl", window.location.pathname + window.location.search);
-        } catch {}
+        } catch {
+          // Continue to login when sessionStorage is unavailable.
+        }
         setNeedsLogin(true);
         return;
       }

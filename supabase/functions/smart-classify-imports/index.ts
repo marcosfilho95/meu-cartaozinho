@@ -47,7 +47,8 @@ MAPEAMENTO POR SETOR (não exaustivo — use conhecimento geral para casos não 
 - Apps: UBER, 99APP, 99POP, CABIFY, INDRIVER → "Uber e Táxi"
 - Postos: SHELL, IPIRANGA, PETROBRAS, BR MANIA, POSTO, ALE, RAIZEN → "Gasolina"
 - Público: BILHETE ÚNICO, METRÔ, CPTM, VLT, BRT, RECARGA BOM, RIOCARD, JAÉ → "Transporte Público"
-- Estacionamento/pedágio: ESTAPAR, MULTIPARK, ECOROD, CCR, AUTOBAN, SEM PARAR, CONECTCAR, VELOE → "Transporte"
+- Estacionamento/pedágio: ESTAPAR, MULTIPARK, ECOROD, CCR, AUTOBAN, SEM PARAR, CONECTCAR, VELOE → "Carro"
+- Veículo próprio: OFICINA, MECÂNICA, MANUTENÇÃO, AUTOPEÇAS, PNEUS, BORRACHARIA, LAVA-JATO, SEGURO AUTO, LICENCIAMENTO → "Carro"
 
 💊 Saúde / Farmácia:
 - Farmácias: RD SAÚDE, RAIA, DROGASIL, DROGARIA SÃO PAULO, DSP, PACHECO, PANVEL, NISSEI, ULTRAFARMA, ARAUJO, PAGUE MENOS, EXTRAFARMA → "Farmácia"
@@ -99,7 +100,7 @@ MAPEAMENTO POR SETOR (não exaustivo — use conhecimento geral para casos não 
 - IOF / TARIFA / ANUIDADE / JUROS DE ATRASO / MULTA → expense "Tarifas Bancárias" (createIfMissing)
 - SALÁRIO / PROVENTO / FOLHA / HOLERITE → income "Salário"
 
-🧾 Impostos: IPTU, IPVA, DARF, GPS, DAS, SIMPLES NACIONAL, LICENCIAMENTO, DETRAN → "IPTU" / "IPVA" / "Impostos"
+🧾 Impostos: IPTU, IPVA, DARF, GPS, DAS, SIMPLES NACIONAL → "IPTU" / "IPVA" / "Impostos". LICENCIAMENTO e DETRAN seguem a regra de veículo próprio → "Carro".
 
 PROTOCOLO DE RESPOSTA:
 1. Retorne SEMPRE JSON estrito: {"results":[{"index":number,"categoryName":string,"categoryKind":"income"|"expense"|"transfer","createIfMissing":boolean,"confidence":0..1,"reason":string}]}.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { mercadoPagoTextParser, parseMercadoPagoTextRows } from "@/lib/finance/imports/mercadoPagoTextParser";
 import { parseNubankCsvRows } from "@/lib/finance/imports/nubankCsvParser";
+import { suggestCategoryName } from "@/lib/finance/imports/utils";
 
 describe("financial imports", () => {
   it("parses Nubank CSV with Brazilian money and installments", async () => {
@@ -33,6 +34,56 @@ describe("financial imports", () => {
     const rows = await parseNubankCsvRows(csv);
 
     expect(rows.map((row) => row.categorySuggestion)).toEqual(["Alimentacao", "Alimentacao", "Alimentacao"]);
+  });
+
+  it.each([
+    ["Posto Shell Fortaleza", "Gasolina"],
+    ["Uber *Trip", "Uber e Táxi"],
+    ["Recarga Bilhete Unico", "Transporte Público"],
+    ["Latam Airlines", "Viagens"],
+    ["Sem Parar Pedagio", "Carro"],
+    ["Oficina Mecanica do Bairro", "Carro"],
+  ])("classifies %s as %s", (description, expectedCategory) => {
+    expect(suggestCategoryName(description, "DEBIT")).toBe(expectedCategory);
+  });
+
+  it.each([
+    ["Auto-Peças Avenida", "Carro"],
+    ["Lava-Jato Central", "Carro"],
+    ["Pneumologia Integrada", "Saude"],
+    ["Pagamento de imposto municipal", "Impostos"],
+    ["IPVA 2026", "IPVA"],
+    ["IPTU cota unica", "IPTU"],
+  ])("uses term boundaries when classifying %s", (description, expectedCategory) => {
+    expect(suggestCategoryName(description, "DEBIT")).toBe(expectedCategory);
+  });
+
+  it.each([
+    ["Cafeteria Central", "Alimentacao"],
+    ["Pizzas do Bairro", "Alimentacao"],
+    ["Dominos", "Alimentacao"],
+    ["Postoshell Avenida", "Gasolina"],
+    ["Gol *Passagem", "Viagens"],
+    ["Azul S/A", "Viagens"],
+    ["Tarifas bancarias", "Taxas Bancarias"],
+    ["Posto de Saude", "Saude"],
+    ["Oficina de Arte", "Educacao"],
+    ["Mecanica Quantica Curso", "Educacao"],
+    ["Licenciamento Microsoft", "Assinaturas"],
+    ["Licenciamento de software", "Outros"],
+    ["Licenciamento veiculo 2026", "Carro"],
+    ["Postos de Saude", "Saude"],
+    ["Posto Fiscal Estadual", "Impostos"],
+    ["Posto de Atendimento", "Outros"],
+    ["Mercados Avenida", "Alimentacao"],
+    ["Combustiveis Avenida", "Gasolina"],
+    ["Pousadas Brasil", "Viagens"],
+    ["Passagens Aereas", "Viagens"],
+    ["Cinemas e Ingressos", "Lazer"],
+    ["Tickets do Show", "Lazer"],
+    ["Transferencias recebidas", "Entre Contas"],
+  ])("handles inflections and ambiguous merchant text in %s", (description, expectedCategory) => {
+    expect(suggestCategoryName(description, "DEBIT")).toBe(expectedCategory);
   });
 
   it("parses Mercado Pago textual statement movements", async () => {

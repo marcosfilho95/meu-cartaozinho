@@ -64,21 +64,67 @@ export const normalizeLabel = (value: string) =>
 
 export const isGenericCardCategory = (label: string) => {
   const normalized = normalizeLabel(label);
-  return normalized === "cartao" || normalized === "cartoes";
+  return [
+    "cartao",
+    "cartoes",
+    "cartao credito",
+    "cartoes credito",
+    "cartao de credito",
+    "cartoes de credito",
+  ].includes(normalized);
 };
 
-export const isBankCategory = (label: string) => {
-  const normalized = normalizeLabel(label);
-  if (isGenericCardCategory(normalized)) return false;
-  return Object.keys(BANK_COLORS).some((key) => normalized.includes(normalizeLabel(key)));
+const normalizeLabelBoundaries = (value: string) =>
+  value.replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+
+const containsNormalizedLabel = (label: string, candidate: string) => {
+  const boundedLabel = normalizeLabelBoundaries(label);
+  const boundedCandidate = normalizeLabelBoundaries(candidate);
+  return boundedLabel === boundedCandidate ||
+    boundedLabel.startsWith(`${boundedCandidate} `) ||
+    boundedLabel.endsWith(` ${boundedCandidate}`) ||
+    boundedLabel.includes(` ${boundedCandidate} `);
 };
 
-export const resolveBankCategoryColor = (label: string, fallback: string) => {
+const AMBIGUOUS_BANK_PATTERNS: Record<string, string[]> = {
+  inter: ["banco inter", "conta inter", "cartao inter", "cartao de credito inter"],
+  caixa: [
+    "caixa economica",
+    "caixa tem",
+    "banco caixa",
+    "conta caixa",
+    "conta da caixa",
+    "cartao caixa",
+    "cartao da caixa",
+  ],
+  bb: ["banco bb", "conta bb", "cartao bb"],
+};
+
+const findBankCategoryColor = (label: string) => {
   const normalized = normalizeLabel(label);
   const direct = BANK_COLORS[normalized];
   if (direct) return direct;
-  const byContains = Object.entries(BANK_COLORS).find(([key]) => normalized.includes(key));
-  return byContains?.[1] || fallback;
+
+  for (const [key, patterns] of Object.entries(AMBIGUOUS_BANK_PATTERNS)) {
+    if (patterns.some((pattern) => containsNormalizedLabel(normalized, pattern))) {
+      return BANK_COLORS[key];
+    }
+  }
+
+  const ambiguousKeys = new Set(Object.keys(AMBIGUOUS_BANK_PATTERNS));
+  const match = Object.entries(BANK_COLORS).find(([key]) =>
+    !ambiguousKeys.has(key) && containsNormalizedLabel(normalized, normalizeLabel(key)),
+  );
+  return match?.[1];
+};
+
+export const isBankCategory = (label: string) => {
+  if (isGenericCardCategory(label)) return false;
+  return Boolean(findBankCategoryColor(label));
+};
+
+export const resolveBankCategoryColor = (label: string, fallback: string) => {
+  return findBankCategoryColor(label) || fallback;
 };
 
 export const getPaymentKey = (tx: FinanceTx) => {
@@ -150,20 +196,99 @@ export const getFinanceTransactionsWindowStart = (monthsBack: number) => {
   return startOfMonthString(new Date(now.getFullYear(), now.getMonth() - (monthsBack - 1), 1));
 };
 
+const FINANCE_TRANSACTION_SELECT =
+  "id, amount, type, status, source, notes, payment_method, transaction_date, due_date, account_id, category_id, categories(id, name, color, parent_id), accounts:accounts!transactions_account_id_fkey(id, name, type, due_day, current_balance)";
+
+const removeDisconnectedCardTransactions = (transactions: FinanceTx[]) =>
+  transactions.filter((tx) => !String(tx.notes || "").startsWith("mc_sync_installment:"));
+
+type FinanceTransactionScope = {
+  from?: string;
+  before?: string;
+  statuses?: FinanceTx["status"][];
+};
+
+const compareFinanceTransactions = (first: FinanceTx, second: FinanceTx) =>
+  first.transaction_date.localeCompare(second.transaction_date) || first.id.localeCompare(second.id);
+
+const fetchFinanceTransactionScope = async (
+  userId: string,
+  scope: FinanceTransactionScope,
+) => {
+  const pageSize = 500;
+  const transactionsById = new Map<string, FinanceTx>();
+  let cursor: Pick<FinanceTx, "id" | "transaction_date"> | null = null;
+
+  while (true) {
+    let query = supabase
+      .from("transactions")
+      .select(FINANCE_TRANSACTION_SELECT)
+      .eq("user_id", userId)
+      .is("deleted_at", null)
+      .order("transaction_date", { ascending: true })
+      .order("id", { ascending: true })
+      .limit(pageSize);
+
+    if (scope.from) query = query.gte("transaction_date", scope.from);
+    if (scope.before) query = query.lt("transaction_date", scope.before);
+    if (scope.statuses) query = query.in("status", scope.statuses);
+    if (cursor) {
+      query = query.or(
+        `transaction_date.gt.${cursor.transaction_date},and(transaction_date.eq.${cursor.transaction_date},id.gt.${cursor.id})`,
+      );
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+    const page = (data || []) as FinanceTx[];
+    if (page.length === 0) break;
+    page.forEach((transaction) => transactionsById.set(transaction.id, transaction));
+    const lastTransaction = page[page.length - 1];
+    if (
+      cursor &&
+      cursor.id === lastTransaction.id &&
+      cursor.transaction_date === lastTransaction.transaction_date
+    ) break;
+    cursor = {
+      id: lastTransaction.id,
+      transaction_date: lastTransaction.transaction_date,
+    };
+  }
+
+  return [...transactionsById.values()].sort(compareFinanceTransactions);
+};
+
 export const fetchFinanceTransactions = async (userId: string, monthsBack = 12) => {
   const windowStart = getFinanceTransactionsWindowStart(monthsBack);
-  const { data, error } = await supabase
-    .from("transactions")
-    .select(
-      "id, amount, type, status, source, notes, payment_method, transaction_date, due_date, account_id, category_id, categories(id, name, color, parent_id), accounts:accounts!transactions_account_id_fkey(id, name, type, due_day, current_balance)",
-    )
-    .eq("user_id", userId)
-    .is("deleted_at", null)
-    .or(`transaction_date.gte.${windowStart},and(transaction_date.lt.${windowStart},status.in.(pending,overdue))`)
-    .order("transaction_date", { ascending: true });
+  const [currentWindow, olderPending] = await Promise.all([
+    fetchFinanceTransactionScope(userId, { from: windowStart }),
+    fetchFinanceTransactionScope(userId, {
+      before: windowStart,
+      statuses: ["pending", "overdue"],
+    }),
+  ]);
+  const transactionsById = new Map<string, FinanceTx>();
+  [...olderPending, ...currentWindow].forEach((transaction) => {
+    transactionsById.set(transaction.id, transaction);
+  });
+  return removeDisconnectedCardTransactions(
+    [...transactionsById.values()].sort(compareFinanceTransactions),
+  );
+};
 
-  if (error) throw error;
-  return ((data || []) as FinanceTx[]).filter((tx) => !String(tx.notes || "").startsWith("mc_sync_installment:"));
+export const fetchFinanceTransactionsByMonth = async (userId: string, refMonth: string) => {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(refMonth)) {
+    throw new Error("Mês de referência inválido.");
+  }
+
+  const monthStart = `${refMonth}-01`;
+  const nextMonthStart = `${addMonthsToKey(refMonth, 1)}-01`;
+  const transactions = await fetchFinanceTransactionScope(userId, {
+    from: monthStart,
+    before: nextMonthStart,
+  });
+  return removeDisconnectedCardTransactions(transactions);
 };
 
 type FinanceDimensionFilters = {

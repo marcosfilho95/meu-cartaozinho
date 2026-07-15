@@ -13,7 +13,14 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
   },
-  plugins: [react(), mode === "development" && componentTagger(), mcpPlugin()].filter(Boolean),
+  // mcp-js 0.22.x externalizes Windows absolute paths as npm specifiers and
+  // would overwrite the deployable Edge Function with an invalid C:\\... import.
+  // Linux/CI keeps generating the bundle normally.
+  plugins: [
+    react(),
+    mode === "development" && componentTagger(),
+    process.platform !== "win32" && mcpPlugin(),
+  ].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

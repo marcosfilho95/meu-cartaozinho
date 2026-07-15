@@ -118,6 +118,7 @@ const CHILDREN: ChildDef[] = [
   { name: "Restaurante", kind: "expense", parent: "Alimentação", color: "#D946A8", icon: "utensils" },
   { name: "Delivery", kind: "expense", parent: "Alimentação", color: "#FB923C", icon: "coffee" },
   { name: "Gasolina", kind: "expense", parent: "Transporte", color: "#E0A020", icon: "car" },
+  { name: "Carro", kind: "expense", parent: "Transporte", color: "#64748B", icon: "car" },
   { name: "Uber e Táxi", kind: "expense", parent: "Transporte", color: "#F59E42", icon: "car" },
   { name: "Transporte Público", kind: "expense", parent: "Transporte", color: "#10B981", icon: "car" },
   { name: "Farmácia", kind: "expense", parent: "Saúde", color: "#14B8A6", icon: "heart" },
@@ -160,15 +161,10 @@ export const ensureDefaultCategories = async (userId: string) => {
   if (error) throw error;
 
   const rows = existing || [];
-  const hasByName = (name: string, kind: CategoryKind, parentId: string | null) =>
-    rows.some(
-      (row: any) =>
-        normalize(String(row.name || "")) === normalize(name) &&
-        row.kind === kind &&
-        (row.parent_id || null) === parentId,
-    );
+  const hasByName = (name: string, kind: CategoryKind) =>
+    rows.some((row: any) => normalize(String(row.name || "")) === normalize(name) && row.kind === kind);
 
-  const missingParents = PARENTS.filter((parent) => !hasByName(parent.name, parent.kind, null));
+  const missingParents = PARENTS.filter((parent) => !hasByName(parent.name, parent.kind));
   if (missingParents.length > 0) {
     const { error: insertError } = await supabase.from("categories").insert(
       missingParents.map((item) => ({
@@ -200,10 +196,7 @@ export const ensureDefaultCategories = async (userId: string) => {
     const parentId = parentIdByName.get(`${child.kind}:${normalize(child.parent)}`);
     if (!parentId) return false;
     return !current.some(
-      (row: any) =>
-        normalize(String(row.name || "")) === normalize(child.name) &&
-        row.kind === child.kind &&
-        row.parent_id === parentId,
+      (row: any) => normalize(String(row.name || "")) === normalize(child.name) && row.kind === child.kind,
     );
   });
 

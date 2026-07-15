@@ -70,7 +70,9 @@ const AppRoutes = () => {
             sessionStorage.removeItem("pendingConsentUrl");
             window.location.href = pending;
           }
-        } catch {}
+        } catch {
+          // sessionStorage can be unavailable in restricted browser contexts.
+        }
       }
     });
 
