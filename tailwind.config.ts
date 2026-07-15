@@ -14,8 +14,9 @@ export default {
     },
     extend: {
       fontFamily: {
-        heading: ['Sora', 'sans-serif'],
-        body: ['Manrope', 'sans-serif'],
+        heading: ['Libre Baskerville', 'Georgia', 'serif'],
+        body: ['IBM Plex Sans', 'Inter', 'sans-serif'],
+        mono: ['IBM Plex Mono', 'monospace'],
       },
       colors: {
         border: "hsl(var(--border))",
