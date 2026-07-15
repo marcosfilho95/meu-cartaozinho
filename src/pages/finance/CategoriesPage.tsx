@@ -138,6 +138,11 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
   };
 
   const handleDelete = async (id: string) => {
+    const category = categories.find((item) => item.id === id);
+    if (category?.is_system) {
+      toast.info("Categorias padrão do sistema são protegidas e não podem ser excluídas.");
+      return;
+    }
     if (!confirm("Excluir esta categoria?")) return;
     const { error } = await supabase.from("categories").delete().eq("id", id);
     if (error) {
@@ -189,8 +194,24 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ userId }) => {
                     <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => openEdit(category)}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-destructive" onClick={() => handleDelete(category.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`h-8 w-8 rounded-lg ${
+                        category.is_system
+                          ? "cursor-not-allowed text-muted-foreground opacity-50 hover:bg-transparent hover:text-muted-foreground"
+                          : "text-destructive"
+                      }`}
+                      onClick={() => handleDelete(category.id)}
+                      aria-disabled={Boolean(category.is_system)}
+                      aria-label={
+                        category.is_system
+                          ? `${category.name}: categoria padrão protegida, não pode ser excluída`
+                          : `Excluir categoria ${category.name}`
+                      }
+                      title={category.is_system ? "Categoria padrão protegida" : `Excluir ${category.name}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                     </Button>
                   </div>
                 </CardContent>

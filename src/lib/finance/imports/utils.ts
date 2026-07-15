@@ -29,7 +29,7 @@ export const parseBrazilianMoney = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) throw new Error(`Valor invalido: ${value}`);
   const isNegative = /-/.test(trimmed) || /^\(.*\)$/.test(trimmed);
-  let raw = trimmed
+  const raw = trimmed
     .replace(/[()]/g, "")
     .replace(/-/g, "")
     .replace(/^R\$\s*/i, "")
@@ -90,16 +90,33 @@ export const detectInstallment = (description: string) => {
   };
 };
 
-const hasAny = (normalized: string, terms: string[]) => terms.some((term) => normalized.includes(term));
+const normalizeForTermMatching = (value: string) =>
+  normalizeText(value)
+    .replace(/[^A-Z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const hasAny = (normalized: string, terms: string[]) => {
+  const searchable = normalizeForTermMatching(normalized);
+  return terms.some((rawTerm) => {
+    const prefixMatch = rawTerm.trim().endsWith("*");
+    const term = normalizeForTermMatching(prefixMatch ? rawTerm.trim().slice(0, -1) : rawTerm);
+    if (!term) return false;
+    const suffix = prefixMatch ? "[A-Z0-9]*" : "";
+    return new RegExp(`(?:^| )${escapeRegExp(term)}${suffix}(?: |$)`).test(searchable);
+  });
+};
 
 export const suggestCategoryName = (description: string, direction: TransactionDirection) => {
   const normalized = normalizeText(description);
   if (direction === "CREDIT") {
     if (normalized.includes("RENDIMENTO")) return "Rendimentos";
     if (normalized.includes("SALARIO")) return "Salario";
-    if (hasAny(normalized, ["CASHBACK", "ESTORNO", "REEMBOLSO", "DEVOLUCAO"])) return "Reembolsos";
-    if (hasAny(normalized, ["FREELANCE", "SERVICO", "HONORARIO", "COMISSAO"])) return "Servicos";
-    if (hasAny(normalized, ["DIVIDENDO", "JUROS", "APLICACAO"])) return "Rendimentos";
+    if (hasAny(normalized, ["CASHBACK", "ESTORNO", "REEMBOLSO*", "DEVOLUCAO", "DEVOLUCOES"])) return "Reembolsos";
+    if (hasAny(normalized, ["FREELANCE", "SERVICO*", "HONORARIO*", "COMISSAO", "COMISSOES"])) return "Servicos";
+    if (hasAny(normalized, ["DIVIDENDO*", "JUROS", "APLICACAO", "APLICACOES"])) return "Rendimentos";
     return "Outros (Receita)";
   }
 
@@ -108,34 +125,36 @@ export const suggestCategoryName = (description: string, direction: TransactionD
       "ACAI",
       "ATACADAO",
       "BAR ",
-      "BEBIDA",
-      "BISTRO",
+      "BEBIDA*",
+      "BISTRO*",
       "BOB S",
-      "BOLARIA",
+      "BOLARIA*",
       "BURGER",
       "CAFE",
+      "CAFETERIA*",
       "CARREFOUR",
-      "CHURRASC",
+      "CHURRASC*",
       "COCO BAMBU",
       "COMETA",
       "DELIVERY",
-      "DOMINO",
+      "DOMINO*",
       "EXTRA",
-      "HORTIFRUT",
+      "HORTIFRUT*",
       "IFOOD",
-      "LANCH",
-      "MCDONALD",
-      "MERCADINHO",
+      "LANCH*",
+      "MCDONALD*",
+      "MERCADINHO*",
       "MERCADO",
-      "PADARIA",
-      "PANIFICADORA",
-      "PIZZA",
-      "PIZZARIA",
+      "MERCADOS",
+      "PADARIA*",
+      "PANIFICADORA*",
+      "PIZZA*",
+      "HOLYPIZZA",
       "RAPPI",
-      "RESTAURANTE",
+      "RESTAURANTE*",
       "SALADEX",
       "SAO LUIZ",
-      "SUPERMERCADO",
+      "SUPERMERCADO*",
       "SUPER DO POVO",
       "TIO ARMENIO",
       "UBER EATS",
@@ -146,18 +165,13 @@ export const suggestCategoryName = (description: string, direction: TransactionD
 
   if (hasAny(normalized, [
     "AMARO", "C&A", "CEA", "CENTAURO", "DAFITI", "HERING", "LEADER", "MARISA",
-    "NIKE", "PERNAMBUCANAS", "RENNER", "RIACHUELO", "SHEIN", "SHOPEE", "VESTUARIO", "ROUPA",
+    "NIKE", "PERNAMBUCANAS", "RENNER", "RIACHUELO", "SHEIN", "SHOPEE", "VESTUARIO*", "ROUPA*",
   ])) {
     return "Vestuario";
   }
   if (hasAny(normalized, ["ENEL", "COELCE", "CEMIG", "COPEL", "LIGHT", "ENERGISA", "EQUATORIAL"])) return "Energia";
   if (hasAny(normalized, ["CAGECE", "SABESP", "COPASA", "SANEPAR", "AGUA"])) return "Agua";
   if (hasAny(normalized, ["ALGAR", "CLARO", "GVT", "INTERNET", "NET ", "OI ", "SKY", "TIM ", "VIVO"])) return "Internet";
-  if (hasAny(normalized, [
-    "99 ", "99APP", "99POP", "AZUL", "COMBUSTIVEL", "ESTACIONAMENTO", "GASOLINA",
-    "GOL", "IPIRANGA", "LATAM", "METRO", "ONIBUS", "PEDAGIO", "POSTO", "SHELL",
-    "TAXI", "UBER", "ZULMG",
-  ])) return "Transporte";
   if (hasAny(normalized, [
     "AMAZON PRIME", "APPLE.COM", "APPLE MUSIC", "AUDIBLE", "CANVA", "CHATGPT",
     "CLARO VIDEO", "CRUNCHYROLL", "DAZN", "DEEZER", "DISNEY", "GLOBOPLAY",
@@ -167,22 +181,49 @@ export const suggestCategoryName = (description: string, direction: TransactionD
     return "Assinaturas";
   }
   if (hasAny(normalized, [
-    "CLINICA", "CONSULTA", "DENTISTA", "DISTRIMEDICAL", "DROGA", "DROGARIA",
-    "EXAME", "FARMACIA", "HOSPITAL", "LABORATORIO", "MEDICO", "PAGUE MENOS",
-    "PANVEL", "RAIA", "UNIMED",
+    "CLINICA*", "CONSULTA*", "DENTISTA*", "DISTRIMEDICAL", "DROGARIA*", "DROGASIL",
+    "EXAME*", "FARMACIA*", "HOSPITAL*", "LABORATORIO*", "MEDICO*", "PAGUE MENOS",
+    "PANVEL", "PNEUMOLOGIA", "POSTO DE SAUDE", "POSTOS DE SAUDE", "RAIA", "UNIMED",
   ])) return "Saude";
   if (hasAny(normalized, [
-    "CURSO", "ESCOLA", "FACULDADE", "LIVRARIA", "SAS ", "TREINAMENTO",
-    "UDEMY", "UNIVERSIDADE", "UP TRAINING",
+    "CURSO*", "ESCOLA*", "FACULDADE*", "LIVRARIA*", "LIVRO*", "OFICINA DE ARTE", "SAS", "TREINAMENTO*",
+    "UDEMY", "UNIVERSIDADE*", "UP TRAINING",
   ])) return "Educacao";
+  const isNonFuelPost = hasAny(normalized, [
+    "POSTO DE ATENDIMENTO", "POSTOS DE ATENDIMENTO", "POSTO DE SAUDE", "POSTOS DE SAUDE",
+    "POSTO FISCAL*", "POSTOS FISCAIS", "POSTO POLICIAL*",
+  ]);
+  if (!isNonFuelPost && hasAny(normalized, [
+    "ALE COMBUSTIVEIS", "BR MANIA", "COMBUSTIVEL*", "GASOLINA", "IPIRANGA",
+    "COMBUSTIVEIS", "PETROBRAS", "POSTO", "POSTOS", "POSTOSHELL", "RAIZEN", "SHELL",
+  ])) return "Gasolina";
+  if (hasAny(normalized, ["99 ", "99APP", "99POP", "CABIFY", "INDRIVER", "TAXI", "UBER"])) return "Uber e Táxi";
   if (hasAny(normalized, [
-    "AIRBNB", "BOOKING", "CINEMA", "DECOLAR", "HOTEL", "INGRESSO", "KOP",
-    "LAZER", "PLAY", "POUSADA", "RESORT", "SHOW", "TICKET", "VIAGEM",
+    "BILHETE UNICO", "BRT", "CPTM", "JAE", "METRO", "ONIBUS", "RECARGA BOM", "RIOCARD", "VLT",
+  ])) return "Transporte Público";
+  if (hasAny(normalized, [
+    "123MILHAS", "AIRBNB", "AZUL", "AZUL LINHAS", "BOOKING", "CVC", "DECOLAR",
+    "GOL", "GOL LINHAS", "HOTEL", "LATAM", "PASSAGEM AEREA", "PASSAGENS AEREAS", "POUSADA*", "SMILES", "VIAGEM*",
+  ])) return "Viagens";
+  if (hasAny(normalized, [
+    "AUTOBAN", "AUTO MECANICA", "AUTOMECANICA", "AUTO PECAS", "AUTOPECAS", "BORRACHARIA*", "CCR", "CONECTCAR",
+    "DETRAN", "ECOROD*", "ESTACIONAMENTO*", "ESTAPAR", "LAVA JATO", "LAVAJATO",
+    "LICENCIAMENTO AUTO*", "LICENCIAMENTO DETRAN", "LICENCIAMENTO VEIC*", "MANUTENCAO AUTO*", "MANUTENCAO VEIC*", "MECANICA AUTOMOTIVA",
+    "MECANICA DE AUTOS", "MECANICA DE CARROS", "MULTIPARK", "OFICINA AUTOMOTIVA", "OFICINA DE CARROS",
+    "OFICINA DE MOTOS", "OFICINA MECANICA", "PEDAGIO*",
+    "PNEU", "PNEUS", "SEM PARAR", "SEGURO AUTO", "SEGURO VEIC*", "VELOE", "ZULMG",
+  ])) return "Carro";
+  if (normalized.includes("TRANSPORTE")) return "Transporte";
+  if (hasAny(normalized, [
+    "CINEMA*", "INGRESSO*", "KOP", "LAZER", "PLAY", "RESORT", "SHOW", "TICKET*",
   ])) return "Lazer";
-  if (hasAny(normalized, ["ALUGUEL", "CONDOMINIO", "IPTU", "MORADIA"])) return "Moradia";
+  if (hasAny(normalized, ["IPTU"])) return "IPTU";
+  if (hasAny(normalized, ["IPVA"])) return "IPVA";
+  if (hasAny(normalized, ["DARF", "DAS", "GPS", "IMPOSTO*", "POSTO FISCAL*", "SIMPLES NACIONAL"])) return "Impostos";
+  if (hasAny(normalized, ["ALUGUEL", "CONDOMINIO", "MORADIA"])) return "Moradia";
   if (hasAny(normalized, ["MERCADO LIVRE", "MAGALU", "AMAZON.COM", "AMAZONBR", "ALIEXPRESS", "SHOPPING"])) return "Compras";
-  if (hasAny(normalized, ["ANUIDADE", "TARIFA", "JUROS", "IOF", "MULTA"])) return "Taxas Bancarias";
-  if (hasAny(normalized, ["PIX ENVIADO", "PIX RECEBIDO", "TRANSFERENCIA", "TED", "DOC", "PAGAMENTO DE FATURA"])) return "Entre Contas";
+  if (hasAny(normalized, ["ANUIDADE*", "TARIFA*", "JUROS", "IOF", "MULTA*"])) return "Taxas Bancarias";
+  if (hasAny(normalized, ["PIX ENVIADO", "PIX RECEBIDO", "TRANSFERENCIA*", "TED", "DOC", "PAGAMENTO DE FATURA"])) return "Entre Contas";
   return "Outros";
 };
 

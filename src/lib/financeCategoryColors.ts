@@ -1,4 +1,8 @@
-import { BANK_COLORS, normalizeLabel } from "@/lib/financeShared";
+import {
+  isBankCategory,
+  normalizeLabel,
+  resolveBankCategoryColor,
+} from "@/lib/financeShared";
 
 const CATEGORY_COLOR_POOL = [
   "#E85D75",
@@ -32,17 +36,10 @@ const hashString = (value: string) => {
   return Math.abs(hash);
 };
 
-const isBrandLockedByName = (name: string) => {
-  const normalized = normalizeLabel(name);
-  return Object.keys(BANK_COLORS).some((key) => normalized === key || normalized.includes(key));
-};
+const isBrandLockedByName = (name: string) => isBankCategory(name);
 
 export const getBrandLockedColor = (name: string) => {
-  const normalized = normalizeLabel(name);
-  const direct = BANK_COLORS[normalized];
-  if (direct) return direct;
-  const contains = Object.entries(BANK_COLORS).find(([key]) => normalized.includes(key));
-  return contains?.[1] || null;
+  return resolveBankCategoryColor(name, "") || null;
 };
 
 type CategoryForColor = { id?: string; name?: string | null; color?: string | null };
@@ -79,4 +76,3 @@ export const getAutoCategoryColor = ({
 
   return CATEGORY_COLOR_POOL[base % CATEGORY_COLOR_POOL.length];
 };
-

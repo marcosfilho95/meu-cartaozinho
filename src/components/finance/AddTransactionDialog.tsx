@@ -143,7 +143,14 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
   }, [open, userId]);
 
   useEffect(() => {
-    setCategoryId("");
+    setCategoryId((currentCategoryId) => {
+      if (!currentCategoryId) return currentCategoryId;
+      const currentCategory = categories.find((category) => category.id === currentCategoryId);
+      return currentCategory?.kind === type ? currentCategoryId : "";
+    });
+  }, [categories, type]);
+
+  useEffect(() => {
     if (type === "income" && mode === "installment") {
       setMode("single");
     }

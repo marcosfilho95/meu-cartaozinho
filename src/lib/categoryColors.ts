@@ -3,34 +3,18 @@
  * Single source of truth for all category colors across all components.
  */
 
-/** Fixed bank colors — NEVER change these */
-const BANK_COLORS: Record<string, string> = {
-  nubank: "#8A05BE",
-  picpay: "#21C25E",
-  "mercado pago": "#009EE3",
-  mercadopago: "#009EE3",
-  c6: "#111111",
-  itau: "#EC7000",
-  "banco do brasil": "#F7C400",
-  bb: "#F7C400",
-  bradesco: "#CC092F",
-  santander: "#EC0000",
-  caixa: "#005CA8",
-  inter: "#FF7A00",
-};
-
-const normalize = (value: string) =>
-  value.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+import {
+  BANK_COLORS,
+  isBankCategory as matchesBankCategory,
+  isGenericCardCategory as matchesGenericCardCategory,
+  resolveBankCategoryColor,
+} from "@/lib/financeShared";
 
 /**
  * Resolve bank color from category name. Returns undefined if not a bank.
  */
 export const resolveBankColor = (name: string): string | undefined => {
-  const n = normalize(name);
-  const direct = BANK_COLORS[n];
-  if (direct) return direct;
-  const match = Object.entries(BANK_COLORS).find(([key]) => n.includes(key));
-  return match?.[1];
+  return resolveBankCategoryColor(name, "") || undefined;
 };
 
 /**
@@ -77,14 +61,11 @@ export const buildCategoryColorMap = (
 };
 
 export const isBankCategory = (label: string): boolean => {
-  const n = normalize(label);
-  if (n === "cartao" || n === "cartoes") return false;
-  return Object.keys(BANK_COLORS).some((key) => n.includes(key));
+  return matchesBankCategory(label);
 };
 
 export const isGenericCardCategory = (label: string): boolean => {
-  const n = normalize(label);
-  return n === "cartao" || n === "cartoes";
+  return matchesGenericCardCategory(label);
 };
 
 export { BANK_COLORS };

@@ -12,7 +12,7 @@ import {
 const LINE_MONTH_ABBR = /^(\d{1,2})\s+(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)\s+(.+?)\s+(-?\s*R?\$?\s*[\d.]*\d,\d{2})\s*$/i;
 const LINE_SLASH = /^(\d{2})\/(\d{2})\s+(.+?)\s+(-?\s*R?\$?\s*[\d.]*\d,\d{2})\s*$/;
 const CARD_END_PATTERN = /final(?:\s+do)?\s*cart[aã]o[:\s]+(\d{3,4})/i;
-const DUE_PATTERN = /vencimento[:\s]+(\d{2})[\/-](\d{2})[\/-](\d{4})/i;
+const DUE_PATTERN = /vencimento[:\s]+(\d{2})[/-](\d{2})[/-](\d{4})/i;
 
 const MONTH_MAP: Record<string, number> = {
   JAN: 1, FEV: 2, MAR: 3, ABR: 4, MAI: 5, JUN: 6,

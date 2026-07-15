@@ -26,10 +26,12 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatCurrency } from "@/lib/constants";
-import { normalizeLabel } from "@/lib/financeShared";
+import {
+  resolveSmartCategoryId,
+  type SmartCategoryOption,
+} from "@/lib/financeSmartClassification";
 
 interface Props {
   open: boolean;
@@ -54,6 +56,11 @@ interface DraftTx {
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
+
+const getInstallmentCount = (installments: number | null) => {
+  if (!Number.isInteger(installments) || Number(installments) <= 1) return 1;
+  return Math.min(Number(installments), 120);
+};
 
 const fileToDataUrl = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
@@ -81,20 +88,6 @@ const guessAccount = (
   return accounts.find((a) => a.type === "checking")?.id || accounts[0].id;
 };
 
-const matchCategory = (
-  categories: any[],
-  hint: string | null,
-  type: "income" | "expense",
-): string => {
-  if (!hint) return "";
-  const n = normalizeLabel(hint);
-  const pool = categories.filter((c: any) => c.kind === type);
-  const exact = pool.find((c: any) => normalizeLabel(c.name) === n);
-  if (exact) return exact.id;
-  const partial = pool.find((c: any) => normalizeLabel(c.name).includes(n) || n.includes(normalizeLabel(c.name)));
-  return partial?.id || "";
-};
-
 export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) => {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<"text" | "paste" | "image">("text");
@@ -102,20 +95,24 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
   const [pasted, setPasted] = useState("");
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [optionsLoading, setOptionsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [drafts, setDrafts] = useState<DraftTx[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<SmartCategoryOption[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
+    let cancelled = false;
     setTab("text");
     setText("");
     setPasted("");
     setImageDataUrl(null);
     setDrafts([]);
-    (async () => {
+    setOptionsLoading(true);
+
+    const loadOptions = async () => {
       const [accs, cats] = await Promise.all([
         supabase
           .from("accounts")
@@ -125,19 +122,34 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
           .order("name"),
         supabase
           .from("categories")
-          .select("id, name, kind, color")
+          .select("id, name, kind, color, parent_id")
           .eq("user_id", userId)
           .order("name"),
       ]);
+      if (accs.error) throw accs.error;
+      if (cats.error) throw cats.error;
+      if (cancelled) return;
       setAccounts(accs.data || []);
-      setCategories(cats.data || []);
-    })();
+      setCategories((cats.data || []) as SmartCategoryOption[]);
+    };
+
+    void loadOptions()
+      .catch(() => {
+        if (!cancelled) toast.error("Não foi possível carregar contas e categorias.");
+      })
+      .finally(() => {
+        if (!cancelled) setOptionsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [open, userId]);
 
   const handleImagePick = async (file: File | undefined) => {
     if (!file) return;
     if (file.size > 8 * 1024 * 1024) {
-      toast.error("Imagem muito grande (máx 8MB)");
+      toast.error("Imagem muito grande (máx. 8 MB)");
       return;
     }
     const url = await fileToDataUrl(file);
@@ -151,10 +163,15 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
       if (tab === "text") payload.text = text.trim();
       if (tab === "paste") payload.text = pasted.trim();
       if (tab === "image") payload.imageDataUrl = imageDataUrl;
+      const categoryById = new Map(categories.map((category) => [category.id, category]));
+      payload.categories = categories.map((category) => ({
+        name: category.name,
+        kind: category.kind,
+        parent: category.parent_id ? categoryById.get(category.parent_id)?.name || null : null,
+      }));
 
       if ((tab !== "image" && !payload.text) || (tab === "image" && !payload.imageDataUrl)) {
         toast.error("Adicione conteúdo antes de processar");
-        setLoading(false);
         return;
       }
 
@@ -167,12 +184,16 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
       const parsed = (data?.transactions || []) as any[];
       if (!parsed.length) {
         toast.info("Nenhuma transação identificada. Tente com mais detalhes.");
-        setLoading(false);
         return;
       }
 
       const newDrafts: DraftTx[] = parsed.map((t) => {
-        const category_id = matchCategory(categories, t.category_hint, t.type);
+        const category_id = resolveSmartCategoryId({
+          categories,
+          description: String(t.description || ""),
+          hint: t.category_hint,
+          type: t.type,
+        });
         const account_id = guessAccount(accounts, t.payment_method, t.type);
         return {
           id: uid(),
@@ -189,7 +210,11 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         };
       });
       setDrafts(newDrafts);
-      toast.success(`${newDrafts.length} transação(ões) reconhecida(s). Revise e salve.`);
+      toast.success(
+        newDrafts.length === 1
+          ? "Transação reconhecida. Revise e salve."
+          : `${newDrafts.length} transações reconhecidas. Revise e salve.`,
+      );
     } catch (err: any) {
       toast.error(err?.message || "Erro ao processar com IA");
     } finally {
@@ -209,14 +234,14 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     if (!drafts.length) return;
     const missingAccount = drafts.find((d) => !d.account_id);
     if (missingAccount) {
-      toast.error("Selecione a conta em todas as transações");
+      toast.error("Selecione uma conta para cada transação.");
       return;
     }
     setSaving(true);
     try {
       const rows: any[] = [];
       drafts.forEach((d) => {
-        const count = d.installments && d.installments > 1 ? d.installments : 1;
+        const count = getInstallmentCount(d.installments);
         for (let i = 0; i < count; i += 1) {
           const due = new Date(`${d.date}T12:00:00`);
           due.setMonth(due.getMonth() + i);
@@ -243,7 +268,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
       const { error } = await supabase.from("transactions").insert(rows);
       if (error) throw error;
 
-      toast.success(`${rows.length} lançamento(s) salvos!`);
+      toast.success(rows.length === 1 ? "Lançamento salvo!" : `${rows.length} lançamentos salvos!`);
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
@@ -261,11 +286,16 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
   };
 
   const canParse = useMemo(() => {
-    if (loading) return false;
+    if (loading || optionsLoading) return false;
     if (tab === "text") return text.trim().length > 3;
     if (tab === "paste") return pasted.trim().length > 3;
     return !!imageDataUrl;
-  }, [tab, text, pasted, imageDataUrl, loading]);
+  }, [tab, text, pasted, imageDataUrl, loading, optionsLoading]);
+
+  const totalLaunches = useMemo(
+    () => drafts.reduce((total, draft) => total + getInstallmentCount(draft.installments), 0),
+    [drafts],
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -276,7 +306,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
             Adicionar com IA
           </DialogTitle>
           <p className="text-xs text-muted-foreground">
-            Descreva, cole ou fotografe — a IA organiza os lançamentos pra você.
+            Descreva, cole ou fotografe — a IA organiza os lançamentos para você.
           </p>
         </DialogHeader>
 
@@ -324,7 +354,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
 
               <TabsContent value="image" className="mt-4 space-y-3">
                 <Label className="text-xs text-muted-foreground">
-                  Foto de comprovante, print de PIX, cupom fiscal.
+                  Envie uma foto de comprovante, uma captura de tela de PIX ou um cupom fiscal.
                 </Label>
                 <input
                   ref={fileInputRef}
@@ -356,7 +386,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                   >
                     <ImageIcon className="h-8 w-8" />
                     <span className="text-sm font-medium">Selecionar ou tirar foto</span>
-                    <span className="text-xs">PNG, JPG até 8MB</span>
+                    <span className="text-xs">PNG, JPG até 8 MB</span>
                   </button>
                 )}
               </TabsContent>
@@ -366,10 +396,10 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                 disabled={!canParse}
                 className="mt-4 h-11 w-full gap-2 gradient-primary text-primary-foreground"
               >
-                {loading ? (
+                {loading || optionsLoading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Analisando...
+                    {optionsLoading ? "Preparando..." : "Analisando..."}
                   </>
                 ) : (
                   <>
@@ -383,7 +413,9 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold">
-                  {drafts.length} transação(ões) para revisar
+                  {drafts.length === 1
+                    ? "Transação para revisar"
+                    : `${drafts.length} transações para revisar`}
                 </p>
                 <Button variant="ghost" size="sm" onClick={() => setDrafts([])}>
                   Voltar
@@ -405,23 +437,33 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                         )}
                         <button
                           type="button"
-                          onClick={() =>
-                            updateDraft(d.id, { type: d.type === "income" ? "expense" : "income" })
-                          }
+                          onClick={() => {
+                            const type = d.type === "income" ? "expense" : "income";
+                            updateDraft(d.id, {
+                              type,
+                              category_id: resolveSmartCategoryId({
+                                categories,
+                                description: d.description,
+                                hint: d.category_hint,
+                                type,
+                              }),
+                              account_id: guessAccount(accounts, d.payment_method, type),
+                            });
+                          }}
                           className="text-[11px] text-muted-foreground underline decoration-dotted"
                         >
-                          alternar
+                          {d.type === "income" ? "Marcar como despesa" : "Marcar como receita"}
                         </button>
                         {d.confidence < 0.6 && (
                           <Badge variant="outline" className="text-[10px]">
-                            revisar
+                            Revisar sugestão
                           </Badge>
                         )}
                       </div>
                       <button
                         onClick={() => removeDraft(d.id)}
                         className="text-muted-foreground hover:text-destructive"
-                        aria-label="Remover"
+                        aria-label="Remover transação"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -526,7 +568,11 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                     <Loader2 className="h-4 w-4 animate-spin" /> Salvando...
                   </>
                 ) : (
-                  <>Salvar {drafts.length} lançamento(s)</>
+                  <>
+                    {totalLaunches === 1
+                      ? "Salvar lançamento"
+                      : `Salvar ${totalLaunches} lançamentos`}
+                  </>
                 )}
               </Button>
             </div>
