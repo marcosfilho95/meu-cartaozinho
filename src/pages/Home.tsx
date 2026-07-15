@@ -152,7 +152,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
   return (
     <div className="min-h-screen bg-background pb-10">
       <AppHeader
-        title="Home"
+        title="Meu Cartãozinho — Visão Geral das Finanças"
         greeting={headerProfile.greeting}
         userName={headerProfile.firstName}
         avatarId={headerProfile.avatarId}
