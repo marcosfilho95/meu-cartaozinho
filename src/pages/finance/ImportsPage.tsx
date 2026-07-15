@@ -1094,6 +1094,16 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
                               transferência
                             </Badge>
                           )}
+                          {isCardBillPayment(row) && (
+                            <Badge className="rounded-md border-primary/30 bg-primary/10 px-1.5 py-0 text-[9px] font-normal text-primary hover:bg-primary/10">
+                              pagamento de fatura
+                            </Badge>
+                          )}
+                          {isCardRefund(row) && (
+                            <Badge className="rounded-md border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0 text-[9px] font-normal text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400">
+                              estorno (reduz categoria)
+                            </Badge>
+                          )}
                         </div>
                       </div>
 
