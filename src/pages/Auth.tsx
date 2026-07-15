@@ -34,7 +34,7 @@ const isMissingUsernameRpc = (error: any) => {
     error?.status === 404 ||
     error?.code === "404" ||
     error?.code === "PGRST202" ||
-    text.includes("get_login_email_by_username") ||
+    text.includes("is_username_available") ||
     text.toLowerCase().includes("could not find the function")
   );
 };
@@ -71,7 +71,7 @@ const isUsernameTaken = async (candidate: string) => {
   const normalized = normalizeUsername(candidate);
   if (!normalized || !USERNAME_REGEX.test(normalized)) return false;
 
-  const { data, error } = await supabase.rpc("get_login_email_by_username", {
+  const { data, error } = await supabase.rpc("is_username_available", {
     p_username: normalized,
   });
 
@@ -80,7 +80,8 @@ const isUsernameTaken = async (candidate: string) => {
     throw error;
   }
 
-  return !!data;
+  // data === true means username is free; taken when false.
+  return data === false;
 };
 
 const Auth: React.FC = () => {
@@ -114,7 +115,7 @@ const Auth: React.FC = () => {
     !pinError &&
     password === confirmPassword;
 
-  const resolveLoginEmail = async (identifier: string) => {
+  const validateIdentifierLocally = (identifier: string) => {
     const normalized = identifier.trim().toLowerCase();
     if (!normalized) throw new Error("Informe seu usuário.");
     if (normalized.includes("@")) {
@@ -122,20 +123,7 @@ const Auth: React.FC = () => {
       return normalized;
     }
     if (!USERNAME_REGEX.test(normalized)) throw new Error("Use um usuário válido ou um e-mail válido.");
-
-    const { data, error } = await supabase.rpc("get_login_email_by_username", {
-      p_username: normalized,
-    });
-
-    if (error) {
-      if (isMissingUsernameRpc(error)) {
-        throw new Error("Login por usuário não está habilitado neste projeto. Entre com e-mail.");
-      }
-      throw error;
-    }
-
-    if (!data) throw new Error("Usuário não encontrado.");
-    return data;
+    return normalized;
   };
 
   const getFriendlyAuthError = (error: any) => {
@@ -163,12 +151,23 @@ const Auth: React.FC = () => {
 
     setLoading(true);
     try {
-      const email = await resolveLoginEmail(loginIdentifier);
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const identifier = validateIdentifierLocally(loginIdentifier);
+      const { data, error } = await supabase.functions.invoke("auth-login", {
+        body: { identifier, password },
+      });
       if (error) {
-        if (error.message.includes("Invalid login")) throw new Error("PIN inválido.");
-        throw error;
+        // Edge function returns generic 401 on bad credentials; surface a friendly message.
+        throw new Error("Credenciais inválidas.");
       }
+      const session = (data as any)?.session;
+      if (!session?.access_token || !session?.refresh_token) {
+        throw new Error("Credenciais inválidas.");
+      }
+      const { error: setError } = await supabase.auth.setSession({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+      });
+      if (setError) throw setError;
 
       toast.success("Login realizado");
       navigate("/", { replace: true });
@@ -239,12 +238,13 @@ const Auth: React.FC = () => {
 
     setLoading(true);
     try {
-      const email = await resolveLoginEmail(forgotIdentifier);
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+      const identifier = validateIdentifierLocally(forgotIdentifier);
+      const { error } = await supabase.functions.invoke("auth-reset-password", {
+        body: { identifier, redirectTo: `${window.location.origin}/reset-password` },
       });
       if (error) throw error;
-      toast.success("Link enviado para redefinição do PIN");
+      // Generic message — do not disclose whether the account exists.
+      toast.success("Se o usuário existir, enviaremos um link para redefinição do PIN.");
       setView("login");
     } catch (err: any) {
       console.error("[Auth] Reset de PIN falhou", { error: err, forgotIdentifier });
