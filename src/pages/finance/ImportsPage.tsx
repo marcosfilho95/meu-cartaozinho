@@ -233,6 +233,8 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
   } | null>(null);
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [creatingAccount, setCreatingAccount] = useState(false);
+  const [aiClassifying, setAiClassifying] = useState(false);
+  const [aiSummary, setAiSummary] = useState<{ classified: number; created: number } | null>(null);
 
   const loadSupportData = useCallback(async () => {
     await Promise.all([ensureDefaultAccounts(userId), ensureDefaultCategories(userId)]);
@@ -326,6 +328,8 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
 
       if (reviewRows.length > 0) {
         toast.success(`${reviewRows.length} movimentações prontas para revisão.`);
+        // Auto-classificar com IA em background (não bloqueia UI)
+        void classifyWithAI(reviewRows, nextCategories, { silent: true });
       } else {
         toast.warning("Arquivo lido, mas nenhuma movimentação foi extraída.");
       }
