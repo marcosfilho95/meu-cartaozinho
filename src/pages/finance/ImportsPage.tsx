@@ -41,6 +41,7 @@ import {
   readFileAsText,
   sha256Hex,
 } from "@/lib/finance/imports";
+import { LocalCategoryClassifier } from "@/lib/finance/imports/classifier";
 import { normalizeLabel } from "@/lib/financeShared";
 import { cn } from "@/lib/utils";
 
@@ -162,13 +163,15 @@ const ruleMatchesRow = (rule: CategorizationRule, row: NormalizedTransaction) =>
   return haystack.includes(pattern);
 };
 
-const resolveSmartCategoryId = (row: NormalizedTransaction, categories: CategoryOption[], rules: CategorizationRule[]) => {
-  const type = transactionTypeFromRow(row);
-  const matched = [...rules]
-    .filter((r) => r.is_active && r.category_id)
-    .sort((a, b) => a.priority - b.priority)
-    .find((r) => ruleMatchesRow(r, row) && categories.some((c) => c.id === r.category_id && c.kind === type));
-  return matched?.category_id || resolveSuggestedCategoryId(row, categories);
+const resolveSmartCategoryId = (
+  row: NormalizedTransaction,
+  categories: CategoryOption[],
+  rules: CategorizationRule[],
+  history: Array<{ description: string; merchantName?: string | null; category_id: string | null; direction?: "CREDIT" | "DEBIT" | null }> = [],
+) => {
+  const classifier = new LocalCategoryClassifier(categories as any, rules as any, history);
+  const result = classifier.classify(row);
+  return result.categoryId || resolveSuggestedCategoryId(row, categories);
 };
 
 const resolveDefaultAccountId = (row: NormalizedTransaction, accounts: AccountOption[]) => {
@@ -228,6 +231,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
     warnings: string[];
   } | null>(null);
   const [rows, setRows] = useState<ReviewRow[]>([]);
+  const [creatingAccount, setCreatingAccount] = useState(false);
 
   const loadSupportData = useCallback(async () => {
     await Promise.all([ensureDefaultAccounts(userId), ensureDefaultCategories(userId)]);
@@ -253,7 +257,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
   const fetchExistingForDedup = useCallback(async (): Promise<ExistingTx[]> => {
     const full = await untypedSupabase
       .from("transactions")
-      .select("id, external_id, fingerprint, amount, transaction_date, source, type")
+      .select("id, external_id, fingerprint, amount, transaction_date, source, type, category_id")
       .eq("user_id", userId)
       .is("deleted_at", null)
       .limit(5000);
@@ -294,7 +298,17 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
         localId: `${row.fingerprint}-${index}`,
         selected: !row.possibleDuplicate,
         accountId: resolveDefaultAccountId(row, nextAccounts),
-        categoryId: resolveSmartCategoryId(row, nextCategories, nextRules),
+        categoryId: resolveSmartCategoryId(
+          row,
+          nextCategories,
+          nextRules,
+          existing.map((tx) => ({
+            description: tx.source || "",
+            merchantName: tx.source || "",
+            category_id: (tx as any).category_id ?? null,
+            direction: tx.type === "income" ? "CREDIT" : tx.type === "expense" ? "DEBIT" : null,
+          })),
+        ),
         status: "paid" as const,
       }));
 
@@ -348,6 +362,51 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
   };
 
   const selectedRows = useMemo(() => rows.filter((r) => r.selected), [rows]);
+
+  const suggestedAccountName = useMemo(() => {
+    if (!parsedInfo) return "";
+    const institution = parsedInfo.institution;
+    if (institution === "UNKNOWN") return "";
+    const label = INSTITUTION_LABEL[institution];
+    const isCard = parsedInfo.documentType === "CREDIT_CARD_STATEMENT";
+    return isCard ? `Cartão ${label}` : `Conta ${label}`;
+  }, [parsedInfo]);
+
+  const suggestedAccountMissing = useMemo(() => {
+    if (!suggestedAccountName || !parsedInfo || parsedInfo.institution === "UNKNOWN") return false;
+    const target = normalizeLabel(parsedInfo.institution.replace("_", " "));
+    return !accounts.some((a) => normalizeLabel(`${a.institution || ""} ${a.name}`).includes(target));
+  }, [accounts, parsedInfo, suggestedAccountName]);
+
+  const createSuggestedAccount = async () => {
+    if (!parsedInfo || !suggestedAccountName) return;
+    setCreatingAccount(true);
+    try {
+      const isCard = parsedInfo.documentType === "CREDIT_CARD_STATEMENT";
+      const payload = {
+        user_id: userId,
+        name: suggestedAccountName,
+        type: isCard ? "credit_card" : "checking",
+        scope: "personal",
+        institution: INSTITUTION_LABEL[parsedInfo.institution],
+        initial_balance: 0,
+        current_balance: 0,
+        include_in_net_worth: !isCard,
+        is_active: true,
+      };
+      const { data, error } = await supabase.from("accounts").insert(payload as any).select("id, name, type, institution").single();
+      if (error) throw error;
+      const newAccount = data as AccountOption;
+      setAccounts((cur) => [...cur, newAccount]);
+      setRows((cur) => cur.map((r) => (r.accountId ? r : { ...r, accountId: newAccount.id })));
+      toast.success(`Conta "${newAccount.name}" criada e aplicada.`);
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Falha ao criar conta."));
+    } finally {
+      setCreatingAccount(false);
+    }
+  };
+
   const duplicatedRows = rows.filter((r) => r.possibleDuplicate).length;
   const internalTransfers = rows.filter((r) => r.possibleInternalTransfer).length;
   const totalCredits = selectedRows.filter((r) => r.direction === "CREDIT").reduce((s, r) => s + Number(r.amount), 0);
@@ -680,6 +739,22 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
                 {parsedInfo.warnings.length > 3 && (
                   <p className="pl-5 text-[11px] text-muted-foreground">+ {parsedInfo.warnings.length - 3} avisos</p>
                 )}
+              </div>
+            )}
+
+            {suggestedAccountMissing && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+                <div className="flex items-start gap-2">
+                  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                  <span className="text-foreground/80">
+                    Você ainda não tem uma conta <span className="font-semibold text-foreground">{suggestedAccountName}</span>.
+                    Posso criar agora e vincular às movimentações.
+                  </span>
+                </div>
+                <Button size="sm" variant="outline" onClick={createSuggestedAccount} disabled={creatingAccount} className="gap-1.5 text-xs">
+                  {creatingAccount ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  Criar {suggestedAccountName}
+                </Button>
               </div>
             )}
           </CardContent>
