@@ -287,6 +287,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
         greeting={headerProfile.greeting}
         userName={headerProfile.firstName}
         avatarId={headerProfile.avatarId}
+        avatarUrl={headerProfile.avatarUrl}
         showBack
         backTo="/"
         topActions={<PurchaseNotificationsPopover userId={userId} />}

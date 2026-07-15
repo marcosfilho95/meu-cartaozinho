@@ -336,6 +336,7 @@ const CardDetail: React.FC = () => {
         greeting={headerProfile.greeting}
         userName={headerProfile.firstName}
         avatarId={headerProfile.avatarId}
+        avatarUrl={headerProfile.avatarUrl}
         showBack
         backTo="/cards"
       >
