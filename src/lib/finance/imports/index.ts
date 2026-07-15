@@ -26,18 +26,27 @@ const extractPdfText = async (file: File) => {
     const lines: string[] = [];
     let currentY: number | null = null;
     let currentLine: string[] = [];
+    const rawItems = content.items as Array<{ str?: string; transform?: number[] }>;
+    const items = rawItems
+      .filter((item) => item.str && item.transform && item.str.trim().length > 0)
+      .map((item) => ({
+        text: item.str || "",
+        x: Array.isArray(item.transform) ? item.transform[4] : 0,
+        y: Array.isArray(item.transform) ? item.transform[5] : 0,
+      }))
+      .sort((a, b) => {
+        if (Math.abs(a.y - b.y) > 2) return b.y - a.y;
+        return a.x - b.x;
+      });
 
-    for (const item of content.items) {
-      if (!("str" in item)) continue;
-      const y = Array.isArray(item.transform) ? item.transform[5] : null;
-
-      if (currentY !== null && y !== null && Math.abs(currentY - y) > 2) {
+    for (const item of items) {
+      if (currentY !== null && Math.abs(currentY - item.y) > 2) {
         if (currentLine.length > 0) lines.push(currentLine.join(" ").replace(/\s+/g, " ").trim());
         currentLine = [];
       }
 
-      if (y !== null) currentY = y;
-      if (item.str.trim()) currentLine.push(item.str);
+      currentY = item.y;
+      currentLine.push(item.text);
     }
 
     if (currentLine.length > 0) lines.push(currentLine.join(" ").replace(/\s+/g, " ").trim());

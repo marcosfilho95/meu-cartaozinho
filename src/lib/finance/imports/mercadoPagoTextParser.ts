@@ -35,13 +35,17 @@ const stripParsedTokens = (line: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
-const isIgnoredLine = (line: string) =>
-  /^pagina\s+\d+/i.test(normalizeText(line).toLowerCase()) ||
-  /^\d+\s*\/\s*\d+$/.test(line) ||
-  /^mercado\s+pago$/i.test(line) ||
-  /saldo inicial|saldo final|entradas|saidas|saídas|periodo|período|cpf|agencia|agência|conta|detalhe dos movimentos|data descrição|data descricao|data de geracao|data de geração|portal de ajuda|ouvidoria|cnpj|mercado pago institu/i.test(
-    line,
+const isIgnoredLine = (line: string) => {
+  const normalized = normalizeText(line);
+  return (
+    /^PAGINA\s+\d+/i.test(normalized) ||
+    /^\d+\s*\/\s*\d+$/.test(line) ||
+    /^MERCADO\s+PAGO$/i.test(normalized) ||
+    /EXTRATO DE CONTA|SALDO INICIAL|SALDO FINAL|ENTRADAS|SAIDAS|PERIODO|CPF|AGENCIA|CONTA|DETALHE DOS MOVIMENTOS|DATA DESCRICAO|DATA DE GERACAO|PORTAL DE AJUDA|OUVIDORIA|CNPJ|MERCADO PAGO INSTITU/i.test(
+      normalized,
+    )
   );
+};
 
 const appendToTransactionDescription = async (transaction: NormalizedTransaction, line: string) => {
   const nextOriginal = `${transaction.descriptionOriginal} ${line}`.replace(/\s+/g, " ").trim();
@@ -62,13 +66,35 @@ const appendToTransactionDescription = async (transaction: NormalizedTransaction
   });
 };
 
-export const parseMercadoPagoTextRows = async (text: string) => {
-  const cleanLines = text
+const getCandidateLines = (text: string) => {
+  const sourceLines = text
     .replace(/\u00A0/g, " ")
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter(Boolean)
-    .filter((line) => !isIgnoredLine(line));
+    .filter(Boolean);
+  const hasOfficialMovementsHeader = sourceLines.some((line) => normalizeText(line).includes("DETALHE DOS MOVIMENTOS"));
+  let insideOfficialMovements = !hasOfficialMovementsHeader;
+
+  return sourceLines.filter((line) => {
+    const normalized = normalizeText(line);
+
+    if (hasOfficialMovementsHeader && normalized.includes("DETALHE DOS MOVIMENTOS")) {
+      insideOfficialMovements = true;
+      return false;
+    }
+
+    if (hasOfficialMovementsHeader && normalized.includes("DATA DE GERACAO")) {
+      insideOfficialMovements = false;
+      return false;
+    }
+
+    if (!insideOfficialMovements) return false;
+    return !isIgnoredLine(line);
+  });
+};
+
+export const parseMercadoPagoTextRows = async (text: string) => {
+  const cleanLines = getCandidateLines(text);
 
   const transactions: NormalizedTransaction[] = [];
   const warnings: string[] = [];
@@ -198,8 +224,14 @@ export const mercadoPagoTextParser: FinancialFileParser = {
   name: "mercado-pago-text",
 
   async canHandle(context: ParserContext): Promise<ParserDetectionResult> {
-    const normalized = normalizeText(`${context.fileName}\n${context.fileText.slice(0, 1600)}`);
+    const normalized = normalizeText(`${context.fileName}\n${context.fileText.slice(0, 12000)}`);
     const hasBrand = normalized.includes("MERCADO PAGO") || normalized.includes("MERCADOPAGO") || context.manualInstitution === "MERCADO_PAGO";
+    const hasOfficialStatementShape =
+      normalized.includes("EXTRATO DE CONTA") &&
+      normalized.includes("DETALHE DOS MOVIMENTOS") &&
+      normalized.includes("ID DA OPERACAO") &&
+      normalized.includes("VALOR") &&
+      normalized.includes("SALDO");
     const hasStatementSignals =
       normalized.includes("SALDO INICIAL") ||
       normalized.includes("SALDO FINAL") ||
@@ -209,11 +241,14 @@ export const mercadoPagoTextParser: FinancialFileParser = {
       normalized.includes("RENDIMENTOS");
 
     return {
-      confidence: hasBrand && hasStatementSignals ? 0.9 : hasBrand ? 0.5 : 0,
-      institution: hasBrand ? "MERCADO_PAGO" : "UNKNOWN",
+      confidence: hasBrand && hasStatementSignals ? 0.9 : hasOfficialStatementShape ? 0.84 : hasBrand ? 0.5 : 0,
+      institution: hasBrand || hasOfficialStatementShape ? "MERCADO_PAGO" : "UNKNOWN",
       documentType: "BANK_STATEMENT",
       format: context.manualFormat === "PDF_TEXT" || context.mimeType === "application/pdf" ? "PDF_TEXT" : "TXT",
-      reason: hasBrand ? "Texto contem sinais de extrato Mercado Pago." : "Marca Mercado Pago nao encontrada.",
+      reason:
+        hasBrand || hasOfficialStatementShape
+          ? "Texto contem sinais de extrato Mercado Pago."
+          : "Marca ou padrao oficial Mercado Pago nao encontrado.",
     };
   },
 

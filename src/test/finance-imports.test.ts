@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseMercadoPagoTextRows } from "@/lib/finance/imports/mercadoPagoTextParser";
+import { mercadoPagoTextParser, parseMercadoPagoTextRows } from "@/lib/finance/imports/mercadoPagoTextParser";
 import { parseNubankCsvRows } from "@/lib/finance/imports/nubankCsvParser";
 
 describe("financial imports", () => {
@@ -90,5 +90,31 @@ Data de geração: 15-07-2026`;
       direction: "DEBIT",
       amount: "3903.09",
     });
+  });
+
+  it("detects official Mercado Pago PDF text even when the brand is not in the header", async () => {
+    const text = `
+EXTRATO DE CONTA
+Marcos Antonio Felix de Oliveira Filho
+CPF/CNPJ: 00000000000 Agencia: 1 Conta: 70575983585
+Periodo: De 01-06-2026 al 30-06-2026
+Entradas: R$ 11.187,28
+Saldo inicial: R$ 815,06 Saldo final: R$ 144,12
+Saidas: R$ -11.858,22
+DETALHE DOS MOVIMENTOS
+Data Descricao ID da operacao Valor Saldo
+01-06-2026 Rendimentos 1744540957205 R$ 0,36 R$ 815,42`;
+
+    const detection = await mercadoPagoTextParser.canHandle({
+      fileName: "dba95e0b-ad91-49e4-b1e7-090d97ad7117.pdf",
+      mimeType: "application/pdf",
+      fileText: text,
+      manualInstitution: "UNKNOWN",
+      manualFormat: "UNKNOWN",
+      manualDocumentType: "UNKNOWN",
+    });
+
+    expect(detection.institution).toBe("MERCADO_PAGO");
+    expect(detection.confidence).toBeGreaterThan(0.8);
   });
 });
