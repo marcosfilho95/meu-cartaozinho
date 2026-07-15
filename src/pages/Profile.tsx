@@ -31,7 +31,7 @@ const isMissingAvatarUrlColumnError = (error: { code?: string; message?: string 
 const isMissingUsernameRpc = (error: { code?: string; message?: string } | null) => {
   if (!error) return false;
   const text = String(error.message || "");
-  return error.code === "PGRST202" || text.includes("get_login_email_by_username");
+  return error.code === "PGRST202" || text.includes("is_username_available");
 };
 
 const extractStoragePath = (avatarUrl: string): string | null => {
@@ -202,7 +202,7 @@ const Profile: React.FC = () => {
     };
     const normalizedUsername = username.trim().toLowerCase();
     if (!usernameLocked && normalizedUsername && !usernameError) {
-      const { data: existingEmail, error: usernameLookupError } = await supabase.rpc("get_login_email_by_username", {
+      const { data: available, error: usernameLookupError } = await supabase.rpc("is_username_available", {
         p_username: normalizedUsername,
       });
       if (usernameLookupError && !isMissingUsernameRpc(usernameLookupError as any)) {
@@ -210,7 +210,9 @@ const Profile: React.FC = () => {
         setSaving(false);
         return;
       }
-      if (existingEmail && existingEmail !== userEmail) {
+      // available === false means it's taken by someone else — reject unless
+      // it's already the current user's username (unchanged).
+      if (available === false && normalizedUsername !== (username || "").trim().toLowerCase()) {
         toast.error("Esse nome de usuário já está em uso.");
         setSaving(false);
         return;
