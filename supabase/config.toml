@@ -2,3 +2,6 @@ project_id = "udqadiqnallwsdqqnuji"
 
 [functions.smart-parse]
 verify_jwt = true
+
+[functions.smart-classify-imports]
+verify_jwt = true
