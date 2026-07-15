@@ -1,9 +1,59 @@
 import { describe, expect, it } from "vitest";
 import { mercadoPagoTextParser, parseMercadoPagoTextRows } from "@/lib/finance/imports/mercadoPagoTextParser";
+import { genericCsvParser } from "@/lib/finance/imports/genericCsvParser";
 import { parseNubankCsvRows } from "@/lib/finance/imports/nubankCsvParser";
 import { suggestCategoryName } from "@/lib/finance/imports/utils";
 
 describe("financial imports", () => {
+  it("parses pasted C6 card CSV with introductory lines and semicolon columns", async () => {
+    const text = `FATURA C6 2026-06-05
+
+Data de Compra;Nome no Cartão;Final do Cartão;Categoria;Descrição;Parcela;Valor (em US$);Cotação (em R$);Valor (em R$)
+04/05/2026;MARCOS A FELIX O F;0644;-;Pagamento Fatura QR CODE;Única;0;0;-264,48
+24/05/2026;MARCOS A FELIX O F;0644;-;Anuidade Diferenciada;Única;0;0;98,00
+22/12/2025;MARCOS A FELIX O F;8419;Educacional;HIM*SOBRAL EDITORA LTD;12/12;0;0;97,14`;
+    const context = {
+      fileName: "extrato-colado.txt",
+      mimeType: "text/plain",
+      fileText: text,
+      fileHash: "c6-pasted-test",
+    };
+
+    const detection = await genericCsvParser.canHandle(context);
+    const parsed = await genericCsvParser.parse(context);
+
+    expect(detection).toMatchObject({
+      institution: "C6",
+      documentType: "CREDIT_CARD_STATEMENT",
+      format: "CSV",
+    });
+    expect(detection.confidence).toBeCloseTo(0.8);
+    expect(parsed.metadata).toMatchObject({ delimiter: ";", headerLine: 2 });
+    expect(parsed.transactions).toHaveLength(3);
+    expect(parsed.transactions[0]).toMatchObject({
+      descriptionOriginal: "Pagamento Fatura QR CODE",
+      amount: "264.48",
+      direction: "CREDIT",
+      sourceType: "CREDIT_CARD",
+      possibleInternalTransfer: true,
+    });
+    expect(parsed.transactions[1]).toMatchObject({
+      descriptionOriginal: "Anuidade Diferenciada",
+      amount: "98.00",
+      direction: "DEBIT",
+      categorySuggestion: "Taxas Bancarias",
+    });
+    expect(parsed.transactions[2]).toMatchObject({
+      descriptionOriginal: "HIM*SOBRAL EDITORA LTD",
+      amount: "97.14",
+      direction: "DEBIT",
+      installmentCurrent: 12,
+      installmentTotal: 12,
+      categorySuggestion: "Educacao",
+      sourceAccountId: "8419",
+    });
+  });
+
   it("parses Nubank CSV with Brazilian money and installments", async () => {
     const csv = `date,title,amount
 2026-07-15,Domino S Pizzza,"16,90"
