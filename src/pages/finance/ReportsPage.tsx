@@ -72,7 +72,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userId }) => {
           <CardContent className="space-y-3 p-4">
             <div className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4 text-primary" />
-              <h1 className="font-heading text-base font-bold">Receitas x despesas</h1>
+              <h2 className="font-heading text-base font-bold">Receitas x despesas</h2>
             </div>
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">

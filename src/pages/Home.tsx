@@ -152,7 +152,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
   return (
     <div className="min-h-screen bg-background pb-10">
       <AppHeader
-        title="Home"
+        title="Meu Cartãozinho — Visão Geral das Finanças"
         greeting={headerProfile.greeting}
         userName={headerProfile.firstName}
         avatarId={headerProfile.avatarId}
@@ -160,7 +160,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
         onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
       />
 
-      <div className="mx-auto -mt-3 max-w-2xl space-y-5 px-4 pb-2 animate-fade-in">
+      <main className="mx-auto -mt-3 max-w-2xl space-y-5 px-4 pb-2 animate-fade-in">
         <section className="rounded-3xl border border-border/70 bg-card p-5 shadow-elevated">
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Resumo rápido</p>
           <div className="mt-2 flex items-end justify-between gap-3">
@@ -301,7 +301,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Em breve</p>
           <p className="mt-1 text-sm text-muted-foreground">Metas, relatórios e investimentos no mesmo hub.</p>
         </section>
-      </div>
+      </main>
     </div>
   );
 };

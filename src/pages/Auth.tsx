@@ -305,7 +305,10 @@ const Auth: React.FC = () => {
       <div className="relative z-10 w-full max-w-md animate-fade-in py-4">
         <div className="mb-8 text-center">
           <AppLogo size="lg" className="mx-auto mb-4" />
-          <h1 className="font-heading text-[2.15rem] font-extrabold tracking-[-0.02em] text-foreground">Meu Cartãozinho</h1>
+          <h1 className="font-heading text-[2.15rem] font-extrabold tracking-[-0.02em] text-foreground">
+            Meu Cartãozinho
+            <span className="sr-only"> — Gestão de Finanças e Cartões</span>
+          </h1>
           <p className="mt-2 text-[0.95rem] font-semibold tracking-[0.01em] text-muted-foreground/90">Suas parcelas organizadas, mês a mês</p>
         </div>
 
