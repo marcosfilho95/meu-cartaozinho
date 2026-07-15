@@ -11,6 +11,7 @@ import {
   Loader2,
   ShieldAlert,
   Sparkles,
+  Wand2,
   Upload,
   XCircle,
 } from "lucide-react";
