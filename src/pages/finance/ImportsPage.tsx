@@ -231,6 +231,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
     warnings: string[];
   } | null>(null);
   const [rows, setRows] = useState<ReviewRow[]>([]);
+  const [creatingAccount, setCreatingAccount] = useState(false);
 
   const loadSupportData = useCallback(async () => {
     await Promise.all([ensureDefaultAccounts(userId), ensureDefaultCategories(userId)]);
@@ -361,6 +362,51 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
   };
 
   const selectedRows = useMemo(() => rows.filter((r) => r.selected), [rows]);
+
+  const suggestedAccountName = useMemo(() => {
+    if (!parsedInfo) return "";
+    const institution = parsedInfo.institution;
+    if (institution === "UNKNOWN") return "";
+    const label = INSTITUTION_LABEL[institution];
+    const isCard = parsedInfo.documentType === "CREDIT_CARD_STATEMENT";
+    return isCard ? `Cartão ${label}` : `Conta ${label}`;
+  }, [parsedInfo]);
+
+  const suggestedAccountMissing = useMemo(() => {
+    if (!suggestedAccountName || !parsedInfo || parsedInfo.institution === "UNKNOWN") return false;
+    const target = normalizeLabel(parsedInfo.institution.replace("_", " "));
+    return !accounts.some((a) => normalizeLabel(`${a.institution || ""} ${a.name}`).includes(target));
+  }, [accounts, parsedInfo, suggestedAccountName]);
+
+  const createSuggestedAccount = async () => {
+    if (!parsedInfo || !suggestedAccountName) return;
+    setCreatingAccount(true);
+    try {
+      const isCard = parsedInfo.documentType === "CREDIT_CARD_STATEMENT";
+      const payload = {
+        user_id: userId,
+        name: suggestedAccountName,
+        type: isCard ? "credit_card" : "checking",
+        scope: "personal",
+        institution: INSTITUTION_LABEL[parsedInfo.institution],
+        initial_balance: 0,
+        current_balance: 0,
+        include_in_net_worth: !isCard,
+        is_active: true,
+      };
+      const { data, error } = await supabase.from("accounts").insert(payload).select("id, name, type, institution").single();
+      if (error) throw error;
+      const newAccount = data as AccountOption;
+      setAccounts((cur) => [...cur, newAccount]);
+      setRows((cur) => cur.map((r) => (r.accountId ? r : { ...r, accountId: newAccount.id })));
+      toast.success(`Conta "${newAccount.name}" criada e aplicada.`);
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Falha ao criar conta."));
+    } finally {
+      setCreatingAccount(false);
+    }
+  };
+
   const duplicatedRows = rows.filter((r) => r.possibleDuplicate).length;
   const internalTransfers = rows.filter((r) => r.possibleInternalTransfer).length;
   const totalCredits = selectedRows.filter((r) => r.direction === "CREDIT").reduce((s, r) => s + Number(r.amount), 0);
