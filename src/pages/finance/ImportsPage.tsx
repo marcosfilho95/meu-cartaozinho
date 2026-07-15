@@ -874,12 +874,31 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
               <SummaryTile label="Linhas" value={String(rows.length)} />
               <SummaryTile label="Entradas" value={formatCurrency(totalCredits)} accent="income" />
-              <SummaryTile label="Saídas" value={formatCurrency(totalDebits)} accent="expense" />
+              <SummaryTile
+                label={totalRefunds > 0 ? "Saídas (líq.)" : "Saídas"}
+                value={formatCurrency(totalDebits)}
+                accent="expense"
+                hint={totalRefunds > 0 ? `Bruto ${formatCurrency(totalDebitsGross)} − estornos ${formatCurrency(totalRefunds)}` : undefined}
+              />
+              {cardPaymentsCount > 0 && (
+                <SummaryTile
+                  label="Pagto fatura"
+                  value={formatCurrency(totalCardPayments)}
+                  hint={`${cardPaymentsCount} pagamento(s) — não conta como receita`}
+                />
+              )}
+              {refundsCount > 0 && (
+                <SummaryTile
+                  label="Estornos"
+                  value={formatCurrency(totalRefunds)}
+                  accent="income"
+                  hint={`${refundsCount} crédito(s) — reduz a categoria original`}
+                />
+              )}
               <SummaryTile label="Duplicadas" value={String(duplicatedRows)} accent={duplicatedRows > 0 ? "warn" : undefined} />
-              <SummaryTile label="Transferências" value={String(internalTransfers)} />
             </div>
 
             {parsedInfo.warnings.length > 0 && (
