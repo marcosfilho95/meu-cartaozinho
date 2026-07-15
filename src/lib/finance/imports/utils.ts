@@ -97,6 +97,9 @@ export const suggestCategoryName = (description: string, direction: TransactionD
   if (direction === "CREDIT") {
     if (normalized.includes("RENDIMENTO")) return "Rendimentos";
     if (normalized.includes("SALARIO")) return "Salario";
+    if (hasAny(normalized, ["CASHBACK", "ESTORNO", "REEMBOLSO", "DEVOLUCAO"])) return "Reembolsos";
+    if (hasAny(normalized, ["FREELANCE", "SERVICO", "HONORARIO", "COMISSAO"])) return "Servicos";
+    if (hasAny(normalized, ["DIVIDENDO", "JUROS", "APLICACAO"])) return "Rendimentos";
     return "Outros (Receita)";
   }
 
@@ -141,20 +144,45 @@ export const suggestCategoryName = (description: string, direction: TransactionD
     return "Alimentacao";
   }
 
-  if (hasAny(normalized, ["AMARO", "C&A", "CEA", "CENTAURO", "MARISA", "RENNER", "RIACHUELO", "SHEIN", "VESTUARIO", "ROUPA"])) {
+  if (hasAny(normalized, [
+    "AMARO", "C&A", "CEA", "CENTAURO", "DAFITI", "HERING", "LEADER", "MARISA",
+    "NIKE", "PERNAMBUCANAS", "RENNER", "RIACHUELO", "SHEIN", "SHOPEE", "VESTUARIO", "ROUPA",
+  ])) {
     return "Vestuario";
   }
-  if (hasAny(normalized, ["ENEL", "COELCE"])) return "Energia";
-  if (hasAny(normalized, ["CAGECE", "AGUA"])) return "Agua";
-  if (hasAny(normalized, ["ALGAR", "CLARO", "INTERNET", "NET ", "OI ", "TIM ", "VIVO"])) return "Internet";
-  if (hasAny(normalized, ["99 ", "99APP", "99POP", "AZUL", "GOL", "LATAM", "METRO", "ONIBUS", "POSTO", "TAXI", "UBER"])) return "Transporte";
-  if (hasAny(normalized, ["AMAZON PRIME", "CANVA", "DISNEY", "GOOGLE", "MAX", "NETFLIX", "PRIME VIDEO", "SPOTIFY", "YOUTUBE"])) {
+  if (hasAny(normalized, ["ENEL", "COELCE", "CEMIG", "COPEL", "LIGHT", "ENERGISA", "EQUATORIAL"])) return "Energia";
+  if (hasAny(normalized, ["CAGECE", "SABESP", "COPASA", "SANEPAR", "AGUA"])) return "Agua";
+  if (hasAny(normalized, ["ALGAR", "CLARO", "GVT", "INTERNET", "NET ", "OI ", "SKY", "TIM ", "VIVO"])) return "Internet";
+  if (hasAny(normalized, [
+    "99 ", "99APP", "99POP", "AZUL", "COMBUSTIVEL", "ESTACIONAMENTO", "GASOLINA",
+    "GOL", "IPIRANGA", "LATAM", "METRO", "ONIBUS", "PEDAGIO", "POSTO", "SHELL",
+    "TAXI", "UBER", "ZULMG",
+  ])) return "Transporte";
+  if (hasAny(normalized, [
+    "AMAZON PRIME", "APPLE.COM", "APPLE MUSIC", "AUDIBLE", "CANVA", "CHATGPT",
+    "CLARO VIDEO", "CRUNCHYROLL", "DAZN", "DEEZER", "DISNEY", "GLOBOPLAY",
+    "GOOGLE", "HBO", "ICLOUD", "MAX", "MICROSOFT", "NETFLIX", "OPENAI",
+    "PARAMOUNT", "PRIME VIDEO", "SPOTIFY", "STAR PLUS", "TIDAL", "TWITCH", "YOUTUBE",
+  ])) {
     return "Assinaturas";
   }
-  if (hasAny(normalized, ["DISTRIMEDICAL", "DROGA", "DROGARIA", "FARMACIA", "PAGUE MENOS", "RAIA"])) return "Farmacia";
-  if (hasAny(normalized, ["CURSO", "ESCOLA", "FACULDADE", "LIVRARIA", "TREINAMENTO", "UP TRAINING"])) return "Educacao";
-  if (hasAny(normalized, ["CINEMA", "INGRESSO", "KOP", "LAZER", "PLAY", "SHOW"])) return "Lazer";
-  if (hasAny(normalized, ["PIX ENVIADO", "PIX RECEBIDO", "TRANSFERENCIA", "TED", "DOC"])) return "Entre Contas";
+  if (hasAny(normalized, [
+    "CLINICA", "CONSULTA", "DENTISTA", "DISTRIMEDICAL", "DROGA", "DROGARIA",
+    "EXAME", "FARMACIA", "HOSPITAL", "LABORATORIO", "MEDICO", "PAGUE MENOS",
+    "PANVEL", "RAIA", "UNIMED",
+  ])) return "Saude";
+  if (hasAny(normalized, [
+    "CURSO", "ESCOLA", "FACULDADE", "LIVRARIA", "SAS ", "TREINAMENTO",
+    "UDEMY", "UNIVERSIDADE", "UP TRAINING",
+  ])) return "Educacao";
+  if (hasAny(normalized, [
+    "AIRBNB", "BOOKING", "CINEMA", "DECOLAR", "HOTEL", "INGRESSO", "KOP",
+    "LAZER", "PLAY", "POUSADA", "RESORT", "SHOW", "TICKET", "VIAGEM",
+  ])) return "Lazer";
+  if (hasAny(normalized, ["ALUGUEL", "CONDOMINIO", "IPTU", "MORADIA"])) return "Moradia";
+  if (hasAny(normalized, ["MERCADO LIVRE", "MAGALU", "AMAZON.COM", "AMAZONBR", "ALIEXPRESS", "SHOPPING"])) return "Compras";
+  if (hasAny(normalized, ["ANUIDADE", "TARIFA", "JUROS", "IOF", "MULTA"])) return "Taxas Bancarias";
+  if (hasAny(normalized, ["PIX ENVIADO", "PIX RECEBIDO", "TRANSFERENCIA", "TED", "DOC", "PAGAMENTO DE FATURA"])) return "Entre Contas";
   return "Outros";
 };
 
