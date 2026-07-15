@@ -3,13 +3,15 @@ import { getAvatarById } from "@/data/avatars";
 
 interface UserAvatarProps {
   avatarId?: string | null;
+  avatarUrl?: string | null;
   name?: string | null;
   size?: number;
   className?: string;
 }
 
-export const UserAvatar: React.FC<UserAvatarProps> = ({ avatarId, name, size = 40, className = "" }) => {
+export const UserAvatar: React.FC<UserAvatarProps> = ({ avatarId, avatarUrl, name, size = 40, className = "" }) => {
   const avatar = avatarId ? getAvatarById(avatarId) : null;
+  const photoSrc = avatarUrl && avatarUrl.trim() ? avatarUrl : null;
   const initials = (name || "U")
     .trim()
     .split(" ")
@@ -24,16 +26,20 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({ avatarId, name, size = 4
       style={{ width: size, height: size }}
       title={name || "Perfil"}
     >
-      {avatar ? (
+      {photoSrc ? (
+        <img src={photoSrc} alt={name || "Foto de perfil"} className="h-full w-full object-cover" />
+      ) : avatar ? (
         <img src={avatar.src} alt={avatar.label} className="h-full w-full object-cover" />
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-muted to-accent/70 text-sm font-extrabold text-foreground/80">
           {initials}
         </div>
       )}
-      <span className="absolute bottom-0 right-0 rounded-tl-md bg-white/85 px-1 text-[10px] font-bold text-foreground">
-        {initials}
-      </span>
+      {!photoSrc && (
+        <span className="absolute bottom-0 right-0 rounded-tl-md bg-white/85 px-1 text-[10px] font-bold text-foreground">
+          {initials}
+        </span>
+      )}
     </div>
   );
 };

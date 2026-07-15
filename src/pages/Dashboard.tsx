@@ -20,7 +20,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CreditCard, Plus, ShoppingCart } from "lucide-react";
-import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
 import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
 import { getStoredProfile, setStoredProfile } from "@/lib/profileCache";
 import { getDashboardCache, setDashboardCache } from "@/lib/dashboardCache";
@@ -82,7 +81,6 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
   const [cards, setCards] = useState<Card[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [month, setMonth] = useState(getCurrentMonth());
-  const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
   const [totals, setTotals] = useState<Record<string, { total: number; count: number; active: number }>>({});
   const [loading, setLoading] = useState(true);
   const [chartVisible, setChartVisible] = useState(false);
@@ -289,10 +287,9 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
         greeting={headerProfile.greeting}
         userName={headerProfile.firstName}
         avatarId={headerProfile.avatarId}
+        avatarUrl={headerProfile.avatarUrl}
         showBack
         backTo="/"
-        accentTheme={accentTheme}
-        onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
         topActions={<PurchaseNotificationsPopover userId={userId} />}
       />
 
