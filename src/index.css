@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,8 +6,9 @@
 
 @layer base {
   :root {
-    --background: 340 30% 98%;
-    --foreground: 340 20% 15%;
+    /* Emerald Prestige — verde profundo, dourado sutil, off-white cremoso. */
+    --background: 40 33% 96%;
+    --foreground: 158 40% 10%;
 
     --card: 0 0% 100%;
     --card-foreground: 340 20% 15%;
@@ -27,51 +28,54 @@
     --finance-muted-fg: 220 8% 46%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 340 20% 15%;
+    --popover-foreground: 158 40% 10%;
 
-    --primary: 340 65% 60%;
+    --primary: 158 78% 17%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 340 25% 93%;
-    --secondary-foreground: 340 20% 20%;
+    --secondary: 42 40% 92%;
+    --secondary-foreground: 158 40% 15%;
 
-    --muted: 340 15% 95%;
-    --muted-foreground: 340 10% 45%;
+    --muted: 40 25% 94%;
+    --muted-foreground: 158 12% 38%;
 
-    --accent: 340 40% 90%;
-    --accent-foreground: 340 30% 20%;
+    --accent: 44 62% 54%;
+    --accent-foreground: 158 40% 12%;
 
     --destructive: 0 72% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 340 20% 90%;
-    --input: 340 20% 90%;
-    --ring: 340 65% 60%;
+    --border: 42 20% 88%;
+    --input: 42 20% 88%;
+    --ring: 158 78% 25%;
 
-    --radius: 0.75rem;
+    --radius: 0.6rem;
 
-    --sidebar-background: 340 25% 97%;
-    --sidebar-foreground: 340 15% 25%;
-    --sidebar-primary: 340 65% 60%;
+    --sidebar-background: 40 30% 97%;
+    --sidebar-foreground: 158 20% 22%;
+    --sidebar-primary: 158 78% 17%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 340 30% 92%;
-    --sidebar-accent-foreground: 340 20% 20%;
-    --sidebar-border: 340 20% 90%;
-    --sidebar-ring: 340 65% 60%;
+    --sidebar-accent: 42 30% 92%;
+    --sidebar-accent-foreground: 158 30% 18%;
+    --sidebar-border: 42 20% 88%;
+    --sidebar-ring: 158 78% 25%;
 
     /* Custom tokens */
-    --success: 152 55% 48%;
+    --success: 158 62% 32%;
     --success-foreground: 0 0% 100%;
-    --warning: 38 92% 60%;
+    --warning: 38 82% 52%;
     --warning-foreground: 38 50% 15%;
-    --pink-glow: 340 80% 75%;
-    --gradient-primary: linear-gradient(135deg, hsl(340, 65%, 60%), hsl(340, 80%, 75%));
-    --gradient-card: linear-gradient(145deg, hsl(0, 0%, 100%), hsl(340, 30%, 97%));
-    --shadow-card: 0 2px 12px -2px hsl(340 30% 60% / 0.1);
-    --shadow-elevated: 0 8px 30px -8px hsl(340 30% 60% / 0.2);
+    --gold: 44 62% 54%;
+    --gold-soft: 44 72% 88%;
+    --pink-glow: 44 62% 54%; /* legado — mapeia para dourado para não quebrar componentes antigos */
+    --gradient-primary: linear-gradient(135deg, hsl(158, 78%, 17%), hsl(158, 60%, 28%));
+    --gradient-gold: linear-gradient(135deg, hsl(44, 62%, 54%), hsl(38, 60%, 66%));
+    --gradient-card: linear-gradient(160deg, hsl(0, 0%, 100%) 0%, hsl(40, 33%, 97%) 100%);
+    --shadow-card: 0 1px 2px hsl(158 40% 12% / 0.04), 0 4px 20px -8px hsl(158 40% 12% / 0.08);
+    --shadow-elevated: 0 2px 4px hsl(158 40% 12% / 0.04), 0 20px 40px -18px hsl(158 40% 12% / 0.18);
 
-    --font-heading: 'Sora', sans-serif;
-    --font-body: 'Manrope', sans-serif;
+    --font-heading: 'Libre Baskerville', 'Georgia', serif;
+    --font-body: 'IBM Plex Sans', 'Inter', sans-serif;
   }
 
   :root[data-accent-theme="blue"] {
@@ -107,25 +111,27 @@
   }
 
   .dark {
-    --background: 340 15% 8%;
-    --foreground: 340 10% 92%;
-    --card: 340 15% 12%;
-    --card-foreground: 340 10% 92%;
-    --popover: 340 15% 12%;
-    --popover-foreground: 340 10% 92%;
-    --primary: 340 65% 60%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 340 15% 18%;
-    --secondary-foreground: 340 10% 90%;
-    --muted: 340 12% 18%;
-    --muted-foreground: 340 8% 60%;
-    --accent: 340 20% 20%;
-    --accent-foreground: 340 10% 90%;
-    --destructive: 0 62% 45%;
+    --background: 158 22% 7%;
+    --foreground: 42 30% 92%;
+    --card: 158 20% 10%;
+    --card-foreground: 42 30% 92%;
+    --popover: 158 20% 10%;
+    --popover-foreground: 42 30% 92%;
+    --primary: 44 62% 58%;
+    --primary-foreground: 158 40% 8%;
+    --secondary: 158 18% 15%;
+    --secondary-foreground: 42 30% 92%;
+    --muted: 158 15% 14%;
+    --muted-foreground: 42 12% 65%;
+    --accent: 44 62% 58%;
+    --accent-foreground: 158 40% 8%;
+    --destructive: 0 62% 55%;
     --destructive-foreground: 0 0% 100%;
-    --border: 340 12% 20%;
-    --input: 340 12% 20%;
-    --ring: 340 65% 60%;
+    --border: 158 15% 18%;
+    --input: 158 15% 18%;
+    --ring: 44 62% 58%;
+    --gradient-primary: linear-gradient(135deg, hsl(158, 60%, 22%), hsl(158, 50%, 32%));
+    --gradient-gold: linear-gradient(135deg, hsl(44, 62%, 58%), hsl(38, 55%, 68%));
   }
 }
 
