@@ -4,12 +4,10 @@ import { isSupabaseConfigured, supabase, supabaseEnvIssues } from "@/integration
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AccentThemeSwitch } from "@/components/AccentThemeSwitch";
 import { AppLogo } from "@/components/AppLogo";
 import { AppFooter } from "@/components/AppFooter";
 import { toast } from "sonner";
 import { Mail, Lock, Eye, EyeOff, User, Loader2 } from "lucide-react";
-import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
 import { checkSupabaseConnection } from "@/integrations/supabase/diagnostics";
 
 type View = "login" | "signup" | "forgot";
@@ -98,7 +96,6 @@ const Auth: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
   const loginFormRef = React.useRef<HTMLFormElement | null>(null);
   const signupFormRef = React.useRef<HTMLFormElement | null>(null);
   const [authFormsHeight, setAuthFormsHeight] = useState(0);
@@ -319,15 +316,6 @@ const Auth: React.FC = () => {
               <p className="mt-1">{connectionIssue}</p>
             </div>
           )}
-
-          <div className="mb-4">
-            <div className="w-full rounded-2xl border border-primary/15 bg-secondary/40 px-3 py-2 shadow-sm backdrop-blur-sm">
-              <p className="mb-1 text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Escolha seu tema</p>
-              <div className="flex justify-center">
-                <AccentThemeSwitch theme={accentTheme} onToggle={() => setAccentTheme((prev) => toggleAccentTheme(prev))} />
-              </div>
-            </div>
-          </div>
 
           {view !== "forgot" && (
             <div className="relative mb-6 grid grid-cols-2 rounded-2xl bg-secondary/55 p-1">
