@@ -109,34 +109,10 @@ export type Database = {
           },
         ]
       }
-      budget_cleanup_archive_20260715: {
-        Row: {
-          archived_at: string
-          budget_id: string
-          cleanup_reason: string
-          original_row: Json
-          user_id: string
-        }
-        Insert: {
-          archived_at?: string
-          budget_id: string
-          cleanup_reason: string
-          original_row: Json
-          user_id: string
-        }
-        Update: {
-          archived_at?: string
-          budget_id?: string
-          cleanup_reason?: string
-          original_row?: Json
-          user_id?: string
-        }
-        Relationships: []
-      }
       budgets: {
         Row: {
           alert_threshold_pct: number
-          category_id: string
+          category_id: string | null
           created_at: string
           id: string
           limit_amount: number
@@ -145,7 +121,7 @@ export type Database = {
         }
         Insert: {
           alert_threshold_pct?: number
-          category_id: string
+          category_id?: string | null
           created_at?: string
           id?: string
           limit_amount: number
@@ -154,7 +130,7 @@ export type Database = {
         }
         Update: {
           alert_threshold_pct?: number
-          category_id?: string
+          category_id?: string | null
           created_at?: string
           id?: string
           limit_amount?: number
@@ -163,11 +139,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "budgets_category_user_fkey"
-            columns: ["category_id", "user_id"]
+            foreignKeyName: "budgets_category_id_fkey"
+            columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
-            referencedColumns: ["id", "user_id"]
+            referencedColumns: ["id"]
           },
         ]
       }

@@ -116,6 +116,46 @@ const findCsvHeader = (lines: string[]): CsvHeaderInfo | null => {
     }
   }
 
+  // Fallback: some pastes come without a recognizable header row (or headers get
+  // mangled by copy-paste). If a line looks like `dd/mm/yyyy;...;<valor>` with
+  // semicolons and a monetary last column, treat it as a semicolon CSV and
+  // synthesize a positional header (data + descricao + valor).
+  for (let index = 0; index < Math.min(lines.length, 100); index += 1) {
+    const line = lines[index];
+    if (!/;/.test(line)) continue;
+    const cells = splitCsvLine(line, ";");
+    if (cells.length < 3) continue;
+    const first = cells[0];
+    const last = cells[cells.length - 1];
+    const looksDate = /^\d{2}[/-]\d{2}[/-]\d{2,4}$/.test(first);
+    const looksAmount = /-?\s*R?\$?\s*\d[\d.,]*$/.test(last);
+    if (!looksDate || !looksAmount) continue;
+    const header = cells.map((_, i) => {
+      if (i === 0) return "Data";
+      if (i === cells.length - 1) return "Valor (em R$)";
+      if (i === cells.length - 2) return "Parcela";
+      return `Descricao_${i}`;
+    });
+    // pick the widest text column as description (skip installment/date/amount)
+    let bestDescIdx = 1;
+    let bestLen = 0;
+    for (let i = 1; i < cells.length - 2; i += 1) {
+      const len = (cells[i] || "").length;
+      if (len > bestLen) { bestLen = len; bestDescIdx = i; }
+    }
+    header[bestDescIdx] = "Descricao";
+    return {
+      index: index === 0 ? 0 : index - 1,
+      delimiter: ";",
+      header,
+      dateIdx: 0,
+      descIdx: bestDescIdx,
+      amountIdx: cells.length - 1,
+      creditIdx: -1,
+      debitIdx: -1,
+    };
+  }
+
   return null;
 };
 

@@ -87,11 +87,38 @@ export const readFileAsText = async (file: File) => {
 export const getFileHash = async (file: File) => sha256Hex(await file.arrayBuffer());
 
 export const parseFinancialFile = async (context: ParserContext, existingTransactions: ExistingTransactionMatch[] = []) => {
-  const detections = await Promise.all(financialFileParsers.map(async (parser) => ({ parser, detection: await parser.canHandle(context) })));
+  const detections = await Promise.all(
+    financialFileParsers.map(async (parser) => {
+      try {
+        return { parser, detection: await parser.canHandle(context) };
+      } catch (error) {
+        return {
+          parser,
+          detection: {
+            confidence: 0,
+            institution: "UNKNOWN" as const,
+            documentType: "UNKNOWN" as const,
+            format: "UNKNOWN" as const,
+            reason: `erro na deteccao: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        };
+      }
+    }),
+  );
   const best = detections.sort((a, b) => b.detection.confidence - a.detection.confidence)[0];
 
   if (!best || best.detection.confidence <= 0) {
-    throw new Error("Formato ainda não reconhecido. Selecione instituição e tipo manualmente ou use Nubank CSV / Mercado Pago textual.");
+    const summary = detections
+      .map((d) => `${d.parser.name}=${d.detection.confidence.toFixed(2)} (${d.detection.reason})`)
+      .join(" | ");
+    console.warn("[parseFinancialFile] nenhum parser reconheceu o arquivo", {
+      fileName: context.fileName,
+      textPreview: context.fileText.slice(0, 400),
+      detections: detections.map((d) => ({ name: d.parser.name, ...d.detection })),
+    });
+    throw new Error(
+      `Formato ainda não reconhecido. Selecione instituição e tipo manualmente ou use Nubank CSV / Mercado Pago textual. [detecções: ${summary}]`,
+    );
   }
 
   const parsed = await best.parser.parse(context);
