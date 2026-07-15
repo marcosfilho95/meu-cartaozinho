@@ -741,6 +741,22 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
                 )}
               </div>
             )}
+
+            {suggestedAccountMissing && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+                <div className="flex items-start gap-2">
+                  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                  <span className="text-foreground/80">
+                    Você ainda não tem uma conta <span className="font-semibold text-foreground">{suggestedAccountName}</span>.
+                    Posso criar agora e vincular às movimentações.
+                  </span>
+                </div>
+                <Button size="sm" variant="outline" onClick={createSuggestedAccount} disabled={creatingAccount} className="gap-1.5 text-xs">
+                  {creatingAccount ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  Criar {suggestedAccountName}
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
