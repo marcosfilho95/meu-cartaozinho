@@ -41,6 +41,7 @@ import {
   readFileAsText,
   sha256Hex,
 } from "@/lib/finance/imports";
+import { LocalCategoryClassifier } from "@/lib/finance/imports/classifier";
 import { normalizeLabel } from "@/lib/financeShared";
 import { cn } from "@/lib/utils";
 
@@ -162,13 +163,15 @@ const ruleMatchesRow = (rule: CategorizationRule, row: NormalizedTransaction) =>
   return haystack.includes(pattern);
 };
 
-const resolveSmartCategoryId = (row: NormalizedTransaction, categories: CategoryOption[], rules: CategorizationRule[]) => {
-  const type = transactionTypeFromRow(row);
-  const matched = [...rules]
-    .filter((r) => r.is_active && r.category_id)
-    .sort((a, b) => a.priority - b.priority)
-    .find((r) => ruleMatchesRow(r, row) && categories.some((c) => c.id === r.category_id && c.kind === type));
-  return matched?.category_id || resolveSuggestedCategoryId(row, categories);
+const resolveSmartCategoryId = (
+  row: NormalizedTransaction,
+  categories: CategoryOption[],
+  rules: CategorizationRule[],
+  history: Array<{ description: string; merchantName?: string | null; category_id: string | null; direction?: "CREDIT" | "DEBIT" | null }> = [],
+) => {
+  const classifier = new LocalCategoryClassifier(categories as any, rules as any, history);
+  const result = classifier.classify(row);
+  return result.categoryId || resolveSuggestedCategoryId(row, categories);
 };
 
 const resolveDefaultAccountId = (row: NormalizedTransaction, accounts: AccountOption[]) => {
