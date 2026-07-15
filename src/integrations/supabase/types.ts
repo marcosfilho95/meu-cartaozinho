@@ -224,6 +224,53 @@ export type Database = {
           },
         ]
       }
+      categorization_rules: {
+        Row: {
+          category_id: string | null
+          created_at: string
+          hit_count: number
+          id: string
+          last_hit_at: string | null
+          match_type: string
+          pattern: string
+          priority: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category_id?: string | null
+          created_at?: string
+          hit_count?: number
+          id?: string
+          last_hit_at?: string | null
+          match_type?: string
+          pattern: string
+          priority?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category_id?: string | null
+          created_at?: string
+          hit_count?: number
+          id?: string
+          last_hit_at?: string | null
+          match_type?: string
+          pattern?: string
+          priority?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categorization_rules_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       goal_transactions: {
         Row: {
           amount: number
