@@ -1,13 +1,39 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Meu Cartaozinho">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Meu Cartãozinho">
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#E65A8D" />
-      <stop offset="38%" stop-color="#D86EA7" />
-      <stop offset="70%" stop-color="#86B7D8" />
-      <stop offset="100%" stop-color="#57B8EA" />
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0F5132"/>
+      <stop offset="1" stop-color="#1B7A50"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F4D97A"/>
+      <stop offset="1" stop-color="#B8892B"/>
+    </linearGradient>
+    <linearGradient id="cardShine" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
     </linearGradient>
   </defs>
-  <rect x="4" y="4" width="56" height="56" rx="14" fill="url(#bg)" />
-  <rect x="16" y="20" width="32" height="24" rx="5" fill="none" stroke="#FFFFFF" stroke-width="4" />
-  <rect x="16" y="29" width="32" height="4" fill="#FFFFFF" />
+
+  <!-- Emerald squircle background -->
+  <rect x="0" y="0" width="512" height="512" rx="112" ry="112" fill="url(#bg)"/>
+  <rect x="0" y="0" width="512" height="512" rx="112" ry="112" fill="url(#cardShine)"/>
+
+  <!-- Subtle inner border -->
+  <rect x="8" y="8" width="496" height="496" rx="106" ry="106" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="2"/>
+
+  <!-- Credit card -->
+  <g transform="translate(96 148) rotate(-6 160 100)">
+    <rect x="0" y="0" width="320" height="200" rx="26" ry="26" fill="url(#gold)"/>
+    <rect x="0" y="46" width="320" height="30" fill="#0F5132" fill-opacity="0.55"/>
+    <!-- Chip -->
+    <rect x="30" y="108" width="52" height="42" rx="7" fill="#0F5132" fill-opacity="0.75"/>
+    <path d="M30 129 h52 M56 108 v42" stroke="#F4D97A" stroke-width="2" stroke-opacity="0.9"/>
+    <!-- Card highlight -->
+    <rect x="0" y="0" width="320" height="200" rx="26" ry="26" fill="url(#cardShine)"/>
+  </g>
+
+  <!-- Upward growth arrow -->
+  <path d="M84 386 C 200 356, 300 336, 402 232"
+        fill="none" stroke="url(#gold)" stroke-width="20" stroke-linecap="round"/>
+  <path d="M368 226 L 418 220 L 410 268 Z" fill="url(#gold)"/>
 </svg>
