@@ -5,9 +5,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { UserAvatar } from "@/components/UserAvatar";
 import { AppLogo } from "@/components/AppLogo";
-import { AccentThemeSwitch } from "@/components/AccentThemeSwitch";
 import { Button } from "@/components/ui/button";
-import { AccentTheme } from "@/lib/accentTheme";
 import { cn } from "@/lib/utils";
 
 interface AppHeaderProps {
@@ -16,10 +14,13 @@ interface AppHeaderProps {
   greeting?: string;
   userName?: string;
   avatarId?: string | null;
+  avatarUrl?: string | null;
   showBack?: boolean;
   backTo?: string;
   preferHistoryBack?: boolean;
-  accentTheme?: AccentTheme;
+  /** @deprecated theme toggle removed */
+  accentTheme?: unknown;
+  /** @deprecated theme toggle removed */
   onToggleTheme?: () => void;
   topActions?: React.ReactNode;
   containerClassName?: string;
@@ -32,11 +33,10 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   greeting,
   userName,
   avatarId,
+  avatarUrl,
   showBack = false,
   backTo = "/",
   preferHistoryBack = false,
-  accentTheme,
-  onToggleTheme,
   topActions,
   containerClassName,
   children,
@@ -81,11 +81,6 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5">
-            {accentTheme && onToggleTheme && (
-              <div data-tour="theme-switch">
-                <AccentThemeSwitch compact theme={accentTheme} onToggle={onToggleTheme} />
-              </div>
-            )}
             {topActions}
             <Button
               variant="ghost"
@@ -116,7 +111,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             onClick={() => navigate("/perfil")}
             className="flex-shrink-0 rounded-full transition-transform hover:scale-105"
           >
-            <UserAvatar avatarId={avatarId ?? undefined} name={resolvedUserName} size={50} />
+            <UserAvatar avatarId={avatarId ?? undefined} avatarUrl={avatarUrl ?? undefined} name={resolvedUserName} size={50} />
           </button>
           <div className="min-w-0">
             {greetingLine && (
