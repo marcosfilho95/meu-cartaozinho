@@ -4,6 +4,7 @@ import { mercadoPagoTextParser } from "./mercadoPagoTextParser";
 import { nubankCsvParser } from "./nubankCsvParser";
 import { genericCsvParser } from "./genericCsvParser";
 import { genericTextParser } from "./genericTextParser";
+import { picpayPdfParser } from "./picpayPdfParser";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
 
@@ -13,10 +14,12 @@ export { mercadoPagoTextParser } from "./mercadoPagoTextParser";
 export { nubankCsvParser } from "./nubankCsvParser";
 export { genericCsvParser } from "./genericCsvParser";
 export { genericTextParser } from "./genericTextParser";
+export { picpayPdfParser } from "./picpayPdfParser";
 
 // Order matters: specific parsers first, generic fallbacks last.
 export const financialFileParsers: FinancialFileParser[] = [
   nubankCsvParser,
+  picpayPdfParser,
   mercadoPagoTextParser,
   genericCsvParser,
   genericTextParser,
