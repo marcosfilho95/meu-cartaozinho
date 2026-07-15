@@ -12,7 +12,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { toast } from "sonner";
 import { AlertCircle, Plus } from "lucide-react";
 import { addMonths, generateInstallments, formatMonth, formatCurrency, getCurrentMonth } from "@/lib/installments";
-import { syncPurchasesToFinanceByIds } from "@/lib/financeCardSync";
 
 const purchaseSchema = z.object({
   card_id: z.string().uuid("Selecione um cartao"),
@@ -250,13 +249,6 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
     if (instError) {
       toast.error("Erro ao gerar parcelas: " + instError.message);
       return;
-    }
-
-    try {
-      await syncPurchasesToFinanceByIds(userId, [purchase.id]);
-    } catch (syncError: any) {
-      console.error("[FinanceSync] Falha ao sincronizar compra com Organizador", syncError);
-      toast.error("Compra salva, mas houve falha ao sincronizar no Organizador Financeiro.");
     }
 
     toast.success(`Compra salva com ${data.installments_count} parcela(s)`);

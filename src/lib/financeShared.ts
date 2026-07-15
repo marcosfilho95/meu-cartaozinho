@@ -117,7 +117,7 @@ export const txDueDay = (tx: FinanceTx) => {
 export const isExpenseInDynamicCycle = (tx: FinanceTx, currentMonth: string, todayDay: number) => {
   const month = tx.transaction_date.slice(0, 7);
   const due = txDueDay(tx);
-  const activeMonth = todayDay > due ? addMonthsToKey(currentMonth, 1) : currentMonth;
+  const activeMonth = todayDay >= due ? addMonthsToKey(currentMonth, 1) : currentMonth;
   const carry = month < activeMonth && (tx.status === "pending" || tx.status === "overdue");
   return month === activeMonth || carry;
 };
@@ -125,10 +125,22 @@ export const isExpenseInDynamicCycle = (tx: FinanceTx, currentMonth: string, tod
 export const isExpenseInDynamicPreviousCycle = (tx: FinanceTx, currentMonth: string, todayDay: number) => {
   const month = tx.transaction_date.slice(0, 7);
   const due = txDueDay(tx);
-  const activeMonth = todayDay > due ? addMonthsToKey(currentMonth, 1) : currentMonth;
+  const activeMonth = todayDay >= due ? addMonthsToKey(currentMonth, 1) : currentMonth;
   const previousActiveMonth = addMonthsToKey(activeMonth, -1);
   const carry = month < previousActiveMonth && (tx.status === "pending" || tx.status === "overdue");
   return month === previousActiveMonth || carry;
+};
+
+const isPendingLikeExpense = (tx: FinanceTx) => tx.status === "pending" || tx.status === "overdue";
+
+export const getActiveCycleMonth = (transactions: FinanceTx[], currentMonth: string, todayDay: number) => {
+  const hasCreditCycleTurned = transactions.some((tx) => {
+    if (tx.type !== "expense") return false;
+    if (tx.payment_method !== "credit") return false;
+    return todayDay >= txDueDay(tx);
+  });
+
+  return hasCreditCycleTurned ? addMonthsToKey(currentMonth, 1) : currentMonth;
 };
 
 export const startOfMonthString = (date: Date) => `${monthKey(date)}-01`;
@@ -151,7 +163,7 @@ export const fetchFinanceTransactions = async (userId: string, monthsBack = 12) 
     .order("transaction_date", { ascending: true });
 
   if (error) throw error;
-  return (data || []) as FinanceTx[];
+  return ((data || []) as FinanceTx[]).filter((tx) => !String(tx.notes || "").startsWith("mc_sync_installment:"));
 };
 
 type FinanceDimensionFilters = {
@@ -191,24 +203,27 @@ export const applyFinanceDimensionFilters = (transactions: FinanceTx[], filters:
   });
 };
 
-export const getCycleScopedTransactions = (transactions: FinanceTx[], currentMonth: string, todayDay: number) =>
-  transactions.filter((tx) => {
+export const getCycleScopedTransactions = (transactions: FinanceTx[], currentMonth: string, todayDay: number) => {
+  const activeCycleMonth = getActiveCycleMonth(transactions, currentMonth, todayDay);
+  return transactions.filter((tx) => {
     if (tx.type === "income") return tx.transaction_date.slice(0, 7) === currentMonth;
     if (tx.type !== "expense") return false;
 
-    const isCreditExpense = tx.payment_method === "credit";
-    if (!isCreditExpense) return tx.transaction_date.slice(0, 7) === currentMonth;
-
-    return isExpenseInDynamicCycle(tx, currentMonth, todayDay);
+    const txMonth = tx.transaction_date.slice(0, 7);
+    if (txMonth === activeCycleMonth) return true;
+    return txMonth < activeCycleMonth && isPendingLikeExpense(tx);
   });
+};
 
-export const getPreviousCycleScopedTransactions = (transactions: FinanceTx[], currentMonth: string, previousMonth: string, todayDay: number) =>
-  transactions.filter((tx) => {
+export const getPreviousCycleScopedTransactions = (transactions: FinanceTx[], currentMonth: string, previousMonth: string, todayDay: number) => {
+  const activeCycleMonth = getActiveCycleMonth(transactions, currentMonth, todayDay);
+  const previousActiveCycleMonth = addMonthsToKey(activeCycleMonth, -1);
+  return transactions.filter((tx) => {
     if (tx.type === "income") return tx.transaction_date.slice(0, 7) === previousMonth;
     if (tx.type !== "expense") return false;
 
-    const isCreditExpense = tx.payment_method === "credit";
-    if (!isCreditExpense) return tx.transaction_date.slice(0, 7) === previousMonth;
-
-    return isExpenseInDynamicPreviousCycle(tx, currentMonth, todayDay);
+    const txMonth = tx.transaction_date.slice(0, 7);
+    if (txMonth === previousActiveCycleMonth) return true;
+    return txMonth < previousActiveCycleMonth && isPendingLikeExpense(tx);
   });
+};

@@ -29,7 +29,6 @@ interface QuickStats {
   monthExpense: number;
   pendingCount: number;
   pendingAmount: number;
-  cardTotal: number;
 }
 
 interface Alert {
@@ -65,7 +64,6 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
     monthExpense: 0,
     pendingCount: 0,
     pendingAmount: 0,
-    cardTotal: 0,
   });
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,19 +77,16 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
       setLoading(true);
       try {
         const now = new Date();
-        const currentRefMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
         const currentMonth = monthKey(now);
         const todayDay = now.getDate();
 
-        const [accsRes, txsRaw, installRes] = await Promise.all([
+        const [accsRes, txsRaw] = await Promise.all([
           supabase.from("accounts").select("*").eq("user_id", userId).eq("is_active", true),
           fetchFinanceTransactions(userId, 18),
-          supabase.from("installments").select("amount, status, ref_month").eq("user_id", userId).eq("ref_month", currentRefMonth),
         ]);
 
         const accs = accsRes.data || [];
         const txs = getCycleScopedTransactions(txsRaw, currentMonth, todayDay);
-        const installs = installRes.data || [];
 
         const totalBalance = accs.reduce((sum, account) => {
           return sum + (account.include_in_net_worth ? Number(account.current_balance) : 0);
@@ -103,9 +98,8 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
         const pendingTxs = txs.filter((tx: any) => tx.status === "pending" || tx.status === "overdue");
         const pendingCount = pendingTxs.length;
         const pendingAmount = pendingTxs.reduce((sum: number, tx: any) => sum + Number(tx.amount), 0);
-        const cardTotal = installs.reduce((sum: number, item: any) => sum + Number(item.amount), 0);
 
-        setStats({ totalBalance, monthIncome, monthExpense, pendingCount, pendingAmount, cardTotal });
+        setStats({ totalBalance, monthIncome, monthExpense, pendingCount, pendingAmount });
 
         const today = now.toISOString().slice(0, 10);
         const threeDaysLater = new Date(now.getTime() + 3 * 86400000).toISOString().slice(0, 10);
@@ -242,9 +236,9 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
           <div className="grid grid-cols-2 gap-3">
             <Card className="border-0 shadow-card">
               <CardContent className="p-3.5">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Total em cartões</p>
-                <p className="mt-1 text-base font-extrabold text-foreground">{formatCurrency(stats.cardTotal)}</p>
-                <p className="text-[10px] text-muted-foreground">{new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Organizador</p>
+                <p className="mt-1 text-base font-extrabold text-foreground">Pessoal</p>
+                <p className="text-[10px] text-muted-foreground">Dados por arquivos e lançamentos próprios</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-card">

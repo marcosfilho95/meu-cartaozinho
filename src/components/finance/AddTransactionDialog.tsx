@@ -32,9 +32,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatCurrency } from "@/lib/constants";
-import { BankLogo } from "@/components/BankLogo";
-import { BANK_COLORS, normalizeLabel } from "@/lib/financeShared";
-import { getAutoCategoryColor } from "@/lib/financeCategoryColors";
+import { normalizeLabel } from "@/lib/financeShared";
 
 type TxType = "income" | "expense";
 type PaymentMethod = "pix" | "boleto" | "credit" | "debit" | "cash";
@@ -64,25 +62,7 @@ const MODE_OPTIONS: { value: TxMode; label: string; icon: React.ReactNode }[] = 
 
 const LAST_PAYMENT_KEY = "finance_last_payment_method";
 
-const BANK_OPTIONS = [
-  { brand: "nubank", label: "Nubank" },
-  { brand: "bradesco", label: "Bradesco" },
-  { brand: "bb", label: "Banco do Brasil" },
-  { brand: "c6", label: "C6" },
-  { brand: "inter", label: "Inter" },
-  { brand: "santander", label: "Santander" },
-  { brand: "itau", label: "Itaú" },
-  { brand: "caixa", label: "Caixa" },
-  { brand: "picpay", label: "PicPay" },
-  { brand: "mercadopago", label: "Mercado Pago" },
-] as const;
-
 const normalize = normalizeLabel;
-
-const BANK_LABEL_BY_BRAND: Record<string, string> = BANK_OPTIONS.reduce((acc, item) => {
-  acc[normalize(item.brand)] = item.label;
-  return acc;
-}, {} as Record<string, string>);
 
 const isGenericCardCategory = (name?: string | null) => {
   const n = normalize(String(name || ""));
@@ -125,7 +105,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
     () => (localStorage.getItem(LAST_PAYMENT_KEY) as PaymentMethod) || "pix",
   );
-  const [cardId, setCardId] = useState("");
+  const [accountId, setAccountId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [mode, setMode] = useState<TxMode>("single");
   const [installments, setInstallments] = useState("1");
@@ -138,23 +118,17 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
   const [saving, setSaving] = useState(false);
 
   const [accounts, setAccounts] = useState<any[]>([]);
-  const [cards, setCards] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
 
   useEffect(() => {
     if (!open) return;
     const load = async () => {
-      const [accs, cardsRes, cats] = await Promise.all([
+      const [accs, cats] = await Promise.all([
         supabase
           .from("accounts")
-          .select("id, name, type, due_day, current_balance")
+          .select("id, name, type, due_day, current_balance, institution")
           .eq("user_id", userId)
           .eq("is_active", true)
-          .order("name"),
-        supabase
-          .from("cards")
-          .select("id, name, brand, color, default_due_day")
-          .eq("user_id", userId)
           .order("name"),
         supabase
           .from("categories")
@@ -163,7 +137,6 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
           .order("name"),
       ]);
       setAccounts(accs.data || []);
-      setCards(cardsRes.data || []);
       setCategories(cats.data || []);
     };
     load();
@@ -181,67 +154,28 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
     [categories, type],
   );
 
-  const needsCard = type === "expense" && (paymentMethod === "credit" || paymentMethod === "debit");
+  const accountOptions = useMemo(() => {
+    if (type === "income") return accounts.filter((account: any) => account.type !== "credit_card");
+    if (paymentMethod === "credit") return accounts.filter((account: any) => account.type === "credit_card");
+    if (paymentMethod === "cash") return accounts.filter((account: any) => account.type === "cash");
+    return accounts.filter((account: any) => account.type !== "credit_card");
+  }, [accounts, paymentMethod, type]);
 
-  const cardOptions = useMemo(() => {
-    const real = (cards || []).map((card: any) => ({
-      value: card.id,
-      label: String(card.name || "Cartão"),
-      brand: String(card.brand || ""),
-      defaultDueDay: Number(card.default_due_day || 0) || null,
-      isVirtual: false,
-    }));
-
-    const hasByBrand = new Set(real.map((item) => normalize(item.brand)));
-    const virtual = BANK_OPTIONS.filter((bank) => !hasByBrand.has(normalize(bank.brand))).map((bank) => ({
-      value: `virtual:${bank.brand}`,
-      label: bank.label,
-      brand: bank.brand,
-      defaultDueDay: null,
-      isVirtual: true,
-    }));
-
-    return [...real, ...virtual];
-  }, [cards]);
-
-  const selectedCardMeta = useMemo(() => {
-    return cardOptions.find((item) => item.value === cardId) || null;
-  }, [cardOptions, cardId]);
-
-  const selectedCardCategoryLabel = useMemo(() => {
-    if (!selectedCardMeta) return "";
-    const byBrand = BANK_LABEL_BY_BRAND[normalize(selectedCardMeta.brand || "")];
-    return byBrand || selectedCardMeta.label;
-  }, [selectedCardMeta]);
+  const selectedAccount = useMemo(() => accounts.find((account: any) => account.id === accountId) || null, [accounts, accountId]);
 
   useEffect(() => {
-    if (!needsCard || !cardId) return;
-    const dueDay = Number(selectedCardMeta?.defaultDueDay || 0);
+    if (!selectedAccount) return;
+    const dueDay = Number(selectedAccount?.due_day || 0);
     if (dueDay > 0) setTransactionDate(getNextDueDate(dueDay));
-  }, [needsCard, cardId, selectedCardMeta]);
+  }, [selectedAccount]);
+
+  useEffect(() => {
+    if (accountId && accountOptions.some((account: any) => account.id === accountId)) return;
+    setAccountId(accountOptions[0]?.id || "");
+  }, [accountId, accountOptions]);
 
   const resolveAccountId = useCallback((): string | null => {
-    if (needsCard) {
-      if (selectedCardMeta?.label) {
-        const cardName = String(selectedCardMeta.label).toLowerCase();
-        const byName = accounts.find((a: any) => {
-          const accountName = String(a.name || "").toLowerCase();
-          return (
-            accountName === cardName ||
-            accountName.includes(cardName) ||
-            cardName.includes(accountName)
-          );
-        });
-        if (byName?.id) return byName.id;
-      }
-      if (selectedCardMeta?.brand) {
-        const brandKey = normalize(selectedCardMeta.brand);
-        const byInstitution = accounts.find((a: any) => normalize(String(a.institution || "")).includes(brandKey));
-        if (byInstitution?.id) return byInstitution.id;
-      }
-      const ccAccount = accounts.find((a: any) => a.type === "credit_card");
-      return ccAccount?.id || accounts[0]?.id || null;
-    }
+    if (accountId) return accountId;
 
     const typeMap: Record<string, string> = {
       pix: "checking",
@@ -254,82 +188,12 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
 
     const fallbackNonCredit = accounts.find((a: any) => a.type !== "credit_card");
     return fallbackNonCredit?.id || accounts[0]?.id || null;
-  }, [accounts, paymentMethod, needsCard, selectedCardMeta]);
+  }, [accountId, accounts, paymentMethod]);
 
   const numAmount = parseFloat(amount.replace(",", ".")) || 0;
   const installmentCount = Math.max(1, parseInt(installments, 10) || 1);
   const perInstallment = mode === "installment" && numAmount > 0 ? numAmount : 0;
   const projectedTotal = mode === "installment" && numAmount > 0 ? numAmount * installmentCount : 0;
-
-  const resolveCategoryIdForSave = useCallback(async () => {
-    if (!(type === "expense" && needsCard && selectedCardMeta)) {
-      return categoryId || null;
-    }
-
-    const targetName = selectedCardCategoryLabel || selectedCardMeta.label;
-    const normalizedTarget = normalize(targetName);
-    const expenseCategories = categories.filter((c: any) => c.kind === "expense");
-
-    const existing = expenseCategories.find((cat: any) => normalize(String(cat.name || "")) === normalizedTarget);
-    if (existing?.id) return existing.id as string;
-
-    const cardsParent =
-      expenseCategories.find((cat: any) => !cat.parent_id && normalize(String(cat.name || "")) === "cartoes") ||
-      expenseCategories.find((cat: any) => !cat.parent_id && normalize(String(cat.name || "")) === "cartão");
-
-    let parentId = cardsParent?.id || null;
-    if (!parentId) {
-      const { data: parentInsert, error: parentError } = await supabase
-        .from("categories")
-        .insert({
-          user_id: userId,
-          name: "Cartões",
-          kind: "expense",
-          color: "#6366F1",
-          icon: "credit-card",
-          is_system: true,
-          parent_id: null,
-        })
-        .select("id")
-        .single();
-      if (parentError) throw parentError;
-      parentId = parentInsert.id;
-    }
-
-    const brandColor =
-      BANK_COLORS[normalize(selectedCardMeta.brand || "")] ||
-      BANK_COLORS[normalize(targetName)] ||
-      getAutoCategoryColor({ name: targetName, categories });
-
-    const { data: childInsert, error: childError } = await supabase
-      .from("categories")
-      .insert({
-        user_id: userId,
-        name: targetName,
-        kind: "expense",
-        color: brandColor,
-        icon: "credit-card",
-        is_system: true,
-        parent_id: parentId,
-      })
-      .select("id")
-      .single();
-    if (childError) throw childError;
-
-    setCategories((prev) => [
-      ...prev,
-      {
-        id: childInsert.id,
-        name: targetName,
-        kind: "expense",
-        color: brandColor,
-        icon: "credit-card",
-        parent_id: parentId,
-      },
-    ]);
-    setCategoryId(childInsert.id);
-    return childInsert.id as string;
-  }, [type, needsCard, selectedCardMeta, selectedCardCategoryLabel, categoryId, categories, userId]);
 
   const handleSave = async () => {
     if (!numAmount || numAmount <= 0) {
@@ -340,8 +204,8 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
       toast.error("Informe uma descrição");
       return;
     }
-    if (needsCard && !cardId) {
-      toast.error("Selecione um cartão");
+    if (!resolveAccountId()) {
+      toast.error("Selecione uma conta financeira");
       return;
     }
 
@@ -355,7 +219,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
     localStorage.setItem(LAST_PAYMENT_KEY, paymentMethod);
 
     try {
-      const resolvedCategoryId = await resolveCategoryIdForSave();
+      const resolvedCategoryId = categoryId || null;
       if (mode === "installment" && type === "expense") {
         const rows = [];
         for (let i = 0; i < installmentCount; i += 1) {
@@ -469,7 +333,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
     setAmount("");
     setDescription("");
     setCategoryId("");
-    setCardId("");
+    setAccountId("");
     setMode("single");
     setInstallments("1");
     setRecurrenceDuration("0");
@@ -551,57 +415,49 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
             </div>
           )}
 
-          {type === "expense" && needsCard && (
-            <div>
-              <Label className="mb-2 block text-xs text-muted-foreground">Cartão</Label>
-              <Select value={cardId} onValueChange={setCardId}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Selecione o banco/cartão" />
-                </SelectTrigger>
-                <SelectContent className="max-h-64">
-                  {cardOptions.map((card) => (
-                    <SelectItem key={card.value} value={card.value}>
-                      <span className="flex items-center gap-2">
-                        <BankLogo brand={card.brand} size={20} />
-                        <span className="truncate">{card.label}</span>
-                        {card.isVirtual && <span className="text-[10px] text-muted-foreground">• banco</span>}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          <div>
+            <Label className="mb-2 block text-xs text-muted-foreground">
+              {paymentMethod === "credit" ? "Cartão financeiro" : "Conta"}
+            </Label>
+            <Select value={accountId || "none"} onValueChange={(value) => setAccountId(value === "none" ? "" : value)}>
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Selecione a conta" />
+              </SelectTrigger>
+              <SelectContent className="max-h-64">
+                <SelectItem value="none">Selecionar conta</SelectItem>
+                {accountOptions.map((account: any) => (
+                  <SelectItem key={account.id} value={account.id}>
+                    {account.name}
+                    {account.institution ? ` · ${account.institution}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {accountOptions.length === 0 && (
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                Crie uma conta financeira na tela Contas para usar este tipo de lançamento.
+              </p>
+            )}
+          </div>
 
           <div>
             <Label className="text-xs text-muted-foreground">Categoria</Label>
-            {needsCard ? (
-              selectedCardMeta ? (
-              <div className="mt-1 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2.5 text-sm font-medium text-foreground">
-                {selectedCardCategoryLabel || selectedCardMeta.label} (automática)
-              </div>
-              ) : (
-                <div className="mt-1 rounded-lg border border-warning/35 bg-warning/10 px-3 py-2.5 text-sm text-muted-foreground">
-                  Selecione o banco/cartão para definir a categoria automaticamente.
-                </div>
-              )
-            ) : (
-              <Select value={categoryId} onValueChange={setCategoryId}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Selecione uma categoria" />
-                </SelectTrigger>
-                <SelectContent>
-                  {filteredCategories.map((cat: any) => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      <span className="flex items-center gap-2">
-                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cat.color || "#ccc" }} />
-                        {cat.name}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            <Select value={categoryId || "none"} onValueChange={(value) => setCategoryId(value === "none" ? "" : value)}>
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Selecione uma categoria" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sem categoria</SelectItem>
+                {filteredCategories.map((cat: any) => (
+                  <SelectItem key={cat.id} value={cat.id}>
+                    <span className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cat.color || "#ccc" }} />
+                      {cat.name}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div>

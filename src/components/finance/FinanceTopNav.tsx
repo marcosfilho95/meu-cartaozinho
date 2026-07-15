@@ -1,64 +1,42 @@
 import React from "react";
-import { useLocation } from "react-router-dom";
-import { LayoutDashboard, ArrowLeftRight, Wallet, FolderOpen, Target } from "lucide-react";
+import {
+  ArrowLeftRight,
+  CalendarClock,
+  FolderOpen,
+  LayoutDashboard,
+  Repeat,
+  Target,
+  Upload,
+  Users,
+  Wallet,
+  BarChart3,
+} from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 
 const NAV_ITEMS = [
-  { to: "/financas", icon: LayoutDashboard, label: "Resumo" },
-  { to: "/financas/orcamento", icon: Target, label: "Orçamento" },
+  { to: "/financas", icon: LayoutDashboard, label: "Resumo", end: true },
   { to: "/financas/transacoes", icon: ArrowLeftRight, label: "Transações" },
+  { to: "/financas/importacoes", icon: Upload, label: "Importar" },
+  { to: "/financas/previstas", icon: CalendarClock, label: "Previstas" },
+  { to: "/financas/recorrencias", icon: Repeat, label: "Recorrências" },
+  { to: "/financas/orcamento", icon: Target, label: "Orçamento" },
+  { to: "/financas/relatorios", icon: BarChart3, label: "Relatórios" },
   { to: "/financas/contas", icon: Wallet, label: "Contas" },
   { to: "/financas/categorias", icon: FolderOpen, label: "Categorias" },
+  { to: "/financas/membros", icon: Users, label: "Membros" },
 ];
 
 export const FinanceTopNav: React.FC = () => {
-  const location = useLocation();
-  const [switching, setSwitching] = React.useState(false);
-  const [indicatorIndex, setIndicatorIndex] = React.useState(0);
-  const activeIndex = React.useMemo(() => {
-    const pathname = location.pathname;
-    if (pathname.startsWith("/financas/orcamento")) return 1;
-    if (pathname.startsWith("/financas/transacoes")) return 2;
-    if (pathname.startsWith("/financas/contas")) return 3;
-    if (pathname.startsWith("/financas/categorias")) return 4;
-    return 0;
-  }, [location.pathname]);
-
-  React.useEffect(() => {
-    const previousRaw = sessionStorage.getItem("finance:topnav:index");
-    const previous = previousRaw ? Number(previousRaw) : 0;
-    setIndicatorIndex(Number.isNaN(previous) ? 0 : previous);
-    const raf = window.requestAnimationFrame(() => {
-      setIndicatorIndex(activeIndex);
-      sessionStorage.setItem("finance:topnav:index", String(activeIndex));
-    });
-    return () => window.cancelAnimationFrame(raf);
-  }, [activeIndex]);
-
-  React.useEffect(() => {
-    setSwitching(true);
-    const timer = window.setTimeout(() => setSwitching(false), 360);
-    return () => window.clearTimeout(timer);
-  }, [indicatorIndex]);
-
   return (
-    <nav className="sticky top-0 z-30 mx-auto mb-5 mt-[-0.5rem] max-w-5xl px-4">
-      <div className="relative grid grid-cols-5 rounded-2xl border border-border/60 bg-card/95 p-1 shadow-card backdrop-blur-md">
-        <span
-          aria-hidden
-          className={`pointer-events-none absolute bottom-1 left-1 top-1 rounded-xl gradient-primary shadow-sm transition-transform duration-300 ease-out ${switching ? "finance-tab-indicator-pop" : ""}`}
-          style={{
-            width: "calc((100% - 0.5rem) / 5)",
-            transform: `translateX(${indicatorIndex * 100}%)`,
-          }}
-        />
-        {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
+    <nav className="sticky top-0 z-30 mx-auto mb-5 mt-[-0.5rem] max-w-6xl px-4">
+      <div className="flex gap-1 overflow-x-auto rounded-2xl border border-border/60 bg-card/95 p-1 shadow-card backdrop-blur-md">
+        {NAV_ITEMS.map(({ to, icon: Icon, label, end }) => (
           <NavLink
             key={to}
             to={to}
-            end={to === "/financas"}
-            className="relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
-            activeClassName="text-primary-foreground"
+            end={end}
+            className="flex shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
+            activeClassName="gradient-primary text-primary-foreground shadow-sm"
           >
             <Icon className="h-3.5 w-3.5" />
             <span>{label}</span>
@@ -68,3 +46,4 @@ export const FinanceTopNav: React.FC = () => {
     </nav>
   );
 };
+

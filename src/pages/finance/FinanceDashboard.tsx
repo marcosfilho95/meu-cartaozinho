@@ -39,6 +39,8 @@ import {
 } from "@/lib/financeSelectors";
 import { AlertCircle, ArrowDownCircle, ArrowUpCircle, Check, Clock, LineChart as LineChartIcon, Loader2 as Loader2Icon, PieChart as PieChartIcon, TrendingDown, TrendingUp } from "lucide-react";
 import { GoalsSection } from "@/components/finance/GoalsSection";
+import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
+import { DailyOrganizerPanel } from "@/components/finance/DailyOrganizerPanel";
 import {
   Area,
   AreaChart,
@@ -77,6 +79,8 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const [statusFilter, setStatusFilter] = useState("all");
 
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [quickDialogOpen, setQuickDialogOpen] = useState(false);
+  const [quickDialogType, setQuickDialogType] = useState<"expense" | "income">("expense");
   const currentMonth = monthKey(new Date());
   const previousMonth = monthKey(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1));
   const todayDay = new Date().getDate();
@@ -91,10 +95,14 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     }
     try {
       await ensureDefaultCategories(userId);
-    } catch {}
+    } catch {
+      // Non-blocking: dashboard still loads even if category bootstrap fails.
+    }
     try {
       await ensureDefaultGoals(userId);
-    } catch {}
+    } catch {
+      // Non-blocking: dashboard still loads even if goal bootstrap fails.
+    }
 
     try {
       const [accountsRes, categoriesRes, goalsRes, txResult] = await Promise.all([
@@ -308,6 +316,10 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   };
 
   const isSimple = viewMode === "simple";
+  const openQuickDialog = (type: "expense" | "income") => {
+    setQuickDialogType(type);
+    setQuickDialogOpen(true);
+  };
 
   return (
     <>
@@ -396,6 +408,16 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
             </div>
           </CardContent>
         </Card>
+
+        <DailyOrganizerPanel
+          userId={userId}
+          transactions={currentMonthTx}
+          togglingId={togglingId}
+          onToggleTransaction={handleToggleStatus}
+          onNewExpense={() => openQuickDialog("expense")}
+          onNewIncome={() => openQuickDialog("income")}
+          onViewTransactions={() => navigate("/financas/transacoes")}
+        />
 
         <section className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <Card className="border-0 shadow-card xl:col-span-2"><CardContent className="p-4">
@@ -654,6 +676,13 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
         )}
 
       </div>
+      <AddTransactionDialog
+        key={quickDialogType}
+        open={quickDialogOpen}
+        onOpenChange={setQuickDialogOpen}
+        userId={userId}
+        defaultType={quickDialogType}
+      />
     </>
   );
 };

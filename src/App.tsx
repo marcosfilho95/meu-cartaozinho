@@ -6,7 +6,6 @@ import { BrowserRouter, Route, Routes, useLocation, useNavigate } from "react-ro
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { applyAccentTheme, getStoredAccentTheme } from "@/lib/accentTheme";
-import { FirstLoginTour } from "@/components/FirstLoginTour";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import Home from "./pages/Home";
@@ -20,6 +19,11 @@ import AccountsPage from "./pages/finance/AccountsPage";
 import CategoriesPage from "./pages/finance/CategoriesPage";
 import TransactionsPage from "./pages/finance/TransactionsPage";
 import BudgetPage from "./pages/finance/BudgetPage";
+import ImportsPage from "./pages/finance/ImportsPage";
+import ExpectedBillsPage from "./pages/finance/ExpectedBillsPage";
+import RecurrencesPage from "./pages/finance/RecurrencesPage";
+import MembersPage from "./pages/finance/MembersPage";
+import ReportsPage from "./pages/finance/ReportsPage";
 import { FinanceLayout } from "./components/finance/FinanceLayout";
 
 const queryClient = new QueryClient();
@@ -102,10 +106,14 @@ const AppRoutes = () => {
           <Route path="categorias" element={<CategoriesPage userId={session?.user?.id} />} />
           <Route path="transacoes" element={<TransactionsPage userId={session?.user?.id} />} />
           <Route path="orcamento" element={<BudgetPage userId={session?.user?.id} />} />
+          <Route path="importacoes" element={<ImportsPage userId={session?.user?.id} />} />
+          <Route path="previstas" element={<ExpectedBillsPage userId={session?.user?.id} />} />
+          <Route path="recorrencias" element={<RecurrencesPage userId={session?.user?.id} />} />
+          <Route path="membros" element={<MembersPage userId={session?.user?.id} />} />
+          <Route path="relatorios" element={<ReportsPage userId={session?.user?.id} />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>
-      <FirstLoginTour userId={session?.user?.id} />
     </>
   );
 };

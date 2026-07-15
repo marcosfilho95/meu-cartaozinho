@@ -19,7 +19,6 @@ import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
 import { getStoredProfile, setStoredProfile } from "@/lib/profileCache";
 import { getCardDetailCache, setCardDetailCache } from "@/lib/cardDetailCache";
 import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
-import { deleteSyncedFinanceTransactionsByCardIds, deleteSyncedFinanceTransactionsByPurchaseIds } from "@/lib/financeCardSync";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -270,26 +269,6 @@ const CardDetail: React.FC = () => {
 
   const deleteSubgroup = async (subgroupName: string) => {
     if (!userId || !cardId) return;
-    const { data: purchasesToDelete, error: purchaseListError } = await supabase
-      .from("purchases")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("card_id", cardId)
-      .eq("person", subgroupName);
-    if (purchaseListError) {
-      toast.error("Erro ao preparar exclusão de Usuário: " + purchaseListError.message);
-      return;
-    }
-
-    try {
-      await deleteSyncedFinanceTransactionsByPurchaseIds(
-        userId,
-        (purchasesToDelete || []).map((item) => item.id),
-      );
-    } catch (syncError: any) {
-      console.error("[FinanceSync] Falha ao remover transações sincronizadas do Usuário", syncError);
-    }
-
     const { error } = await supabase
       .from("purchases")
       .delete()
@@ -309,11 +288,6 @@ const CardDetail: React.FC = () => {
 
   const deleteCard = async () => {
     if (!cardId || !userId) return;
-    try {
-      await deleteSyncedFinanceTransactionsByCardIds(userId, [cardId]);
-    } catch (syncError: any) {
-      console.error("[FinanceSync] Falha ao remover transações sincronizadas do cartão", syncError);
-    }
     const { error } = await supabase.from("cards").delete().eq("id", cardId);
     if (error) {
       toast.error("Erro ao excluir cartao: " + error.message);

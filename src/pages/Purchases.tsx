@@ -11,7 +11,6 @@ import { toast } from "sonner";
 import { getPurchasesCache, setPurchasesCache } from "@/lib/purchasesCache";
 import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
 import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
-import { deleteSyncedFinanceTransactionsByPurchaseIds } from "@/lib/financeCardSync";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -99,13 +98,6 @@ const Purchases: React.FC<PurchasesProps> = ({ initialUserId }) => {
   }, [fetchPurchases]);
 
   const deletePurchase = async (purchaseId: string) => {
-    if (userId) {
-      try {
-        await deleteSyncedFinanceTransactionsByPurchaseIds(userId, [purchaseId]);
-      } catch (syncError) {
-        console.error("[FinanceSync] Falha ao remover transacoes sincronizadas", syncError);
-      }
-    }
     const { error } = await supabase.from("purchases").delete().eq("id", purchaseId);
     if (error) {
       toast.error("Erro ao excluir: " + error.message);
