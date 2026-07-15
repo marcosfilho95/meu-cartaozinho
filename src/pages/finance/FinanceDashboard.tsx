@@ -151,7 +151,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(1000);
-    if (!complete.error) return (complete.data || []) as GoalTransaction[];
+    if (!complete.error) return ((complete.data || []) as unknown) as GoalTransaction[];
 
     const legacy = await supabase
       .from("goal_transactions")
