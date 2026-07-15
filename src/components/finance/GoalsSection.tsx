@@ -182,7 +182,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
       const remaining = Math.max(Number(goal.target_amount) - Number(goal.current_amount), 0);
       if (amount > remaining) throw new Error(`Faltam ${formatCurrency(remaining)} para concluir esta meta.`);
 
-      const rpcResult = await supabase.rpc("reserve_goal_funds", {
+      const rpcResult = await (supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }>)("reserve_goal_funds", {
         p_goal_id: selectedGoalId,
         p_account_id: primaryAccount.id,
         p_amount: amount,
@@ -244,7 +244,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
     setDeletingId(goalToDelete.id);
     try {
       if (!primaryAccount) throw new Error("Nenhuma conta disponível para receber o valor guardado.");
-      const rpcResult = await supabase.rpc("delete_goal_and_release_funds", {
+      const rpcResult = await (supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }>)("delete_goal_and_release_funds", {
         p_goal_id: goalToDelete.id,
         p_account_id: primaryAccount.id,
       });
@@ -284,7 +284,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
     setWithdrawing(true);
     try {
       if (!primaryAccount) throw new Error("Nenhuma conta disponível para receber a retirada.");
-      const rpcResult = await supabase.rpc("withdraw_goal_funds", {
+      const rpcResult = await (supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }>)("withdraw_goal_funds", {
         p_goal_id: withdrawGoal.id,
         p_account_id: primaryAccount.id,
         p_amount: amount,
