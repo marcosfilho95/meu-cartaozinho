@@ -118,17 +118,47 @@ const FORMAT_LABEL: Record<FinancialFileFormat, string> = {
 const normalizeCategoryName = (value: string) => normalizeLabel(value).replace(/\s+/g, " ");
 const normalizeRulePattern = (value: string) => normalizeLabel(value).replace(/\s+/g, " ").trim();
 
+// Detecta pagamento de fatura de cartão (dinheiro entrando pra quitar a dívida).
+// Isso NÃO é receita — é uma transferência da conta corrente pro cartão.
+const CARD_PAYMENT_KEYWORDS = [
+  "PAGAMENTO RECEBIDO",
+  "PAGAMENTO DE FATURA",
+  "PAGAMENTO EFETUADO",
+  "PGTO FATURA",
+  "PGTO. FATURA",
+  "PAGTO FATURA",
+  "PAGAMENTO CARTAO",
+  "PAGAMENTO DE CARTAO",
+];
+
+const isCardBillPayment = (row: NormalizedTransaction) => {
+  if (row.sourceType !== "CREDIT_CARD") return false;
+  if (row.direction !== "CREDIT") return false;
+  const hay = normalizeLabel(`${row.descriptionOriginal} ${row.descriptionNormalized}`).toUpperCase();
+  return CARD_PAYMENT_KEYWORDS.some((k) => hay.includes(k));
+};
+
+// Estorno / reembolso / crédito na fatura que NÃO é pagamento.
+// Trata como redutor da despesa original (valor negativo na categoria do comerciante).
+const isCardRefund = (row: NormalizedTransaction) =>
+  row.sourceType === "CREDIT_CARD" && row.direction === "CREDIT" && !isCardBillPayment(row);
+
 const transactionTypeFromRow = (row: NormalizedTransaction): "income" | "expense" | "transfer" => {
+  if (isCardBillPayment(row)) return "transfer";
+  if (isCardRefund(row)) return "expense"; // classifica na categoria da compra (será negativo no salvamento)
   if (row.possibleInternalTransfer) return "transfer";
   return row.direction === "CREDIT" ? "income" : "expense";
 };
 
 const rowIcon = (row: NormalizedTransaction) => {
+  if (isCardBillPayment(row)) return ArrowRightLeft;
   if (row.possibleInternalTransfer) return ArrowRightLeft;
   return row.direction === "CREDIT" ? ArrowUpCircle : ArrowDownCircle;
 };
 
 const rowAmountClass = (row: NormalizedTransaction) => {
+  if (isCardBillPayment(row)) return "text-primary";
+  if (isCardRefund(row)) return "text-emerald-600/70 dark:text-emerald-400/70";
   if (row.possibleInternalTransfer) return "text-primary";
   return row.direction === "CREDIT" ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400";
 };
