@@ -12,6 +12,20 @@
     --card: 0 0% 100%;
     --card-foreground: 340 20% 15%;
 
+    /* Finance module tokens (escopados ao Organizador Financeiro).
+       Verde emerald para entradas, rose contido para saídas, âmbar só p/ alertas. */
+    --finance-income: 152 62% 40%;
+    --finance-income-soft: 152 55% 94%;
+    --finance-expense: 350 72% 52%;
+    --finance-expense-soft: 350 70% 96%;
+    --finance-neutral: 220 14% 30%;
+    --finance-neutral-soft: 220 12% 96%;
+    --finance-warn: 38 92% 50%;
+    --finance-warn-soft: 38 92% 96%;
+    --finance-surface: 0 0% 100%;
+    --finance-border: 220 14% 92%;
+    --finance-muted-fg: 220 8% 46%;
+
     --popover: 0 0% 100%;
     --popover-foreground: 340 20% 15%;
 
