@@ -18,7 +18,6 @@ import {
 import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
 import { getStoredProfile, setStoredProfile } from "@/lib/profileCache";
 import { getCardDetailCache, setCardDetailCache } from "@/lib/cardDetailCache";
-import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -88,7 +87,6 @@ const CardDetail: React.FC = () => {
   const [editingSubgroupId, setEditingSubgroupId] = useState<string | null>(null);
   const [editingSubgroupName, setEditingSubgroupName] = useState("");
   const [legendVisible, setLegendVisible] = useState(false);
-  const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
   const headerProfile = useUserHeaderProfile(userId);
 
   useEffect(() => {
@@ -340,8 +338,6 @@ const CardDetail: React.FC = () => {
         avatarId={headerProfile.avatarId}
         showBack
         backTo="/cards"
-        accentTheme={accentTheme}
-        onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
       >
         <div className="mt-3 flex items-center gap-3">
           <BankLogo brand={card?.brand} size={40} />

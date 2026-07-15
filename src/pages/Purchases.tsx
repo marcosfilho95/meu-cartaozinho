@@ -9,7 +9,6 @@ import { formatCurrency, formatMonth } from "@/lib/installments";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { getPurchasesCache, setPurchasesCache } from "@/lib/purchasesCache";
-import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
 import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
 import {
   AlertDialog,
@@ -46,7 +45,6 @@ const Purchases: React.FC<PurchasesProps> = ({ initialUserId }) => {
   const [userId, setUserId] = useState<string | null>(initialUserId || null);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
-  const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
   const headerProfile = useUserHeaderProfile(userId);
 
   useEffect(() => {
@@ -120,8 +118,6 @@ const Purchases: React.FC<PurchasesProps> = ({ initialUserId }) => {
         avatarId={headerProfile.avatarId}
         showBack
         backTo="/cards"
-        accentTheme={accentTheme}
-        onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
       >
         <p className="mt-3 text-xs font-medium text-primary-foreground/80" data-tour="purchases-title">
           Histórico de compras registradas no Meu Cartãozinho

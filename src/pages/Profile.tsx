@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
 import { getStoredProfile, setStoredProfile } from "@/lib/profileCache";
-import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
 import { Check } from "lucide-react";
 import { toast } from "sonner";
 
@@ -37,7 +36,6 @@ const Profile: React.FC = () => {
   const [initialUsername, setInitialUsername] = useState("");
   const [avatarId, setAvatarId] = useState<string>("");
   const [saving, setSaving] = useState(false);
-  const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -164,8 +162,6 @@ const Profile: React.FC = () => {
         showBack
         preferHistoryBack
         backTo="/"
-        accentTheme={accentTheme}
-        onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
       />
 
       <div className="mx-auto max-w-lg w-full px-4 -mt-4 flex-1 space-y-4 pb-4 animate-fade-in">

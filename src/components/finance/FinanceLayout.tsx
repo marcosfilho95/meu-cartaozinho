@@ -5,7 +5,6 @@ import { FinanceTopNav } from "@/components/finance/FinanceTopNav";
 import { FinanceBottomNav } from "@/components/finance/FinanceBottomNav";
 import { QuickTransactionFab } from "@/components/finance/QuickTransactionFab";
 import { useFinanceRouteTransition } from "@/hooks/use-finance-route-transition";
-import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
 import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
 
 interface FinanceLayoutProps {
@@ -13,7 +12,6 @@ interface FinanceLayoutProps {
 }
 
 export const FinanceLayout: React.FC<FinanceLayoutProps> = ({ userId }) => {
-  const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
   const headerProfile = useUserHeaderProfile(userId);
   const transitionClass = useFinanceRouteTransition();
   const location = useLocation();
@@ -28,8 +26,6 @@ export const FinanceLayout: React.FC<FinanceLayoutProps> = ({ userId }) => {
         avatarId={headerProfile.avatarId}
         showBack
         backTo="/"
-        accentTheme={accentTheme}
-        onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
       />
 
       <FinanceTopNav />

@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { AppHeader } from "@/components/AppHeader";
-import { AccentTheme, getStoredAccentTheme, toggleAccentTheme } from "@/lib/accentTheme";
 import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
 import { formatCurrency } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -58,7 +57,6 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
   });
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
-  const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => getStoredAccentTheme());
   const headerProfile = useUserHeaderProfile(userId);
 
   useEffect(() => {
@@ -140,8 +138,6 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
         greeting={headerProfile.greeting}
         userName={headerProfile.firstName}
         avatarId={headerProfile.avatarId}
-        accentTheme={accentTheme}
-        onToggleTheme={() => setAccentTheme((prev) => toggleAccentTheme(prev))}
       />
 
       <main className="mx-auto max-w-5xl px-4 pt-6 animate-fade-in sm:px-6">
