@@ -1159,8 +1159,8 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
   );
 };
 
-const SummaryTile: React.FC<{ label: string; value: string; accent?: "income" | "expense" | "warn" }> = ({ label, value, accent }) => (
-  <div className="rounded-lg border border-border/60 bg-background p-3">
+const SummaryTile: React.FC<{ label: string; value: string; accent?: "income" | "expense" | "warn"; hint?: string }> = ({ label, value, accent, hint }) => (
+  <div className="rounded-lg border border-border/60 bg-background p-3" title={hint}>
     <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
     <p
       className={cn(
@@ -1172,6 +1172,7 @@ const SummaryTile: React.FC<{ label: string; value: string; accent?: "income" | 
     >
       {value}
     </p>
+    {hint && <p className="mt-0.5 text-[10px] leading-tight text-muted-foreground">{hint}</p>}
   </div>
 );
 
