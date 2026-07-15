@@ -1,1 +1,4 @@
 project_id = "udqadiqnallwsdqqnuji"
+
+[functions.smart-parse]
+verify_jwt = true
