@@ -145,7 +145,7 @@ const findCsvHeader = (lines: string[]): CsvHeaderInfo | null => {
     }
     header[bestDescIdx] = "Descricao";
     return {
-      index: index === 0 ? 0 : index - 1,
+      index: index - 1,
       delimiter: ";",
       header,
       dateIdx: 0,
