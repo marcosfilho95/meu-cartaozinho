@@ -121,8 +121,9 @@ async function callGateway(messages: any[]): Promise<OutRow[]> {
     method: "POST",
     headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
     body: JSON.stringify({
-      model: "google/gemini-3-flash-preview",
+      model: "google/gemini-3.5-flash",
       messages,
+      temperature: 0.2,
       response_format: { type: "json_object" },
     }),
   });
