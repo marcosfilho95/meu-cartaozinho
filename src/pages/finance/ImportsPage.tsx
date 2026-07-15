@@ -394,7 +394,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
         include_in_net_worth: !isCard,
         is_active: true,
       };
-      const { data, error } = await supabase.from("accounts").insert(payload).select("id, name, type, institution").single();
+      const { data, error } = await supabase.from("accounts").insert(payload as any).select("id, name, type, institution").single();
       if (error) throw error;
       const newAccount = data as AccountOption;
       setAccounts((cur) => [...cur, newAccount]);
