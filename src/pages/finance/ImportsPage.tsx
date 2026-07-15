@@ -896,6 +896,20 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
                 </Button>
                 <Button
                   size="sm"
+                  variant="outline"
+                  onClick={() => classifyWithAI(rows, categories)}
+                  disabled={aiClassifying}
+                  className="gap-1.5 text-xs"
+                >
+                  {aiClassifying ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Wand2 className="h-3.5 w-3.5" />
+                  )}
+                  Classificar com IA
+                </Button>
+                <Button
+                  size="sm"
                   onClick={handleConfirm}
                   disabled={saving || selectedRows.length === 0}
                   className="gap-1.5 text-xs"
@@ -905,6 +919,30 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
                 </Button>
               </div>
             </div>
+
+            {(aiClassifying || aiSummary) && (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+                {aiClassifying ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                    <span className="text-primary">IA analisando lojas e classificando categorias…</span>
+                  </>
+                ) : aiSummary ? (
+                  <>
+                    <Sparkles className="h-3.5 w-3.5 text-primary" />
+                    <span className="text-foreground/80">
+                      IA classificou <span className="font-semibold text-primary">{aiSummary.classified}</span> linha(s)
+                      {aiSummary.created > 0 && (
+                        <>
+                          {" "}e criou <span className="font-semibold text-primary">{aiSummary.created}</span> categoria(s) nova(s)
+                        </>
+                      )}
+                      .
+                    </span>
+                  </>
+                ) : null}
+              </div>
+            )}
 
             {/* Bulk actions bar */}
             {selectedRows.length > 0 && (
