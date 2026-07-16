@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowDownCircle,
@@ -12,6 +12,7 @@ import {
   ShieldAlert,
   Sparkles,
   Wand2,
+  Trash2,
   Upload,
   XCircle,
 } from "lucide-react";
@@ -266,6 +267,52 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
   const [creatingAccount, setCreatingAccount] = useState(false);
   const [aiClassifying, setAiClassifying] = useState(false);
   const [aiSummary, setAiSummary] = useState<{ classified: number; created: number } | null>(null);
+  const [recentImports, setRecentImports] = useState<Array<{
+    id: string;
+    institution: string | null;
+    document_type: string | null;
+    parser_name: string | null;
+    transactions_total: number;
+    confirmed_at: string | null;
+    created_at: string;
+  }>>([]);
+  const [deletingImportId, setDeletingImportId] = useState<string | null>(null);
+
+  const loadRecentImports = useCallback(async () => {
+    const { data, error } = await untypedSupabase
+      .from("imports")
+      .select("id, institution, document_type, parser_name, transactions_total, confirmed_at, created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(10);
+    if (!error) setRecentImports((data || []) as any);
+  }, [userId]);
+
+  useEffect(() => {
+    loadRecentImports();
+  }, [loadRecentImports]);
+
+  const handleDeleteImport = async (importId: string) => {
+    if (!window.confirm("Excluir esta importação? Todas as movimentações criadas por ela serão removidas.")) return;
+    setDeletingImportId(importId);
+    try {
+      const { error: txErr } = await supabase
+        .from("transactions")
+        .delete()
+        .eq("user_id", userId)
+        .eq("import_id", importId);
+      if (txErr) throw txErr;
+      const { error: impErr } = await untypedSupabase.from("imports").delete().eq("id", importId).eq("user_id", userId);
+      if (impErr) throw impErr;
+      toast.success("Importação desfeita.");
+      setRecentImports((prev) => prev.filter((i) => i.id !== importId));
+      window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId } }));
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Falha ao excluir importação."));
+    } finally {
+      setDeletingImportId(null);
+    }
+  };
 
   const loadSupportData = useCallback(async () => {
     await Promise.all([ensureDefaultAccounts(userId), ensureDefaultCategories(userId)]);
@@ -724,6 +771,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
       setFileName("");
       setFileHash("");
       window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId } }));
+      loadRecentImports();
     } catch (error) {
       toast.error(getErrorMessage(error, "Falha ao confirmar importação."));
     } finally {
