@@ -1259,6 +1259,58 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
           </CardContent>
         </Card>
       )}
+
+      {/* Recent imports — undo/reset */}
+      <Card className="border-border/60 shadow-none">
+        <CardContent className="p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <h2 className="font-heading text-sm font-semibold">Importações recentes</h2>
+              <p className="text-xs text-muted-foreground">
+                Importou errado? Exclua para remover todas as movimentações criadas por aquela importação.
+              </p>
+            </div>
+          </div>
+          {recentImports.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nenhuma importação registrada ainda.</p>
+          ) : (
+            <div className="divide-y divide-border/60 rounded-lg border border-border/60">
+              {recentImports.map((imp) => {
+                const when = imp.confirmed_at || imp.created_at;
+                const date = when ? new Date(when).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—";
+                const institution = INSTITUTION_LABEL[(imp.institution as InstitutionCode) || "UNKNOWN"] || imp.institution || "—";
+                const docType = DOCUMENT_LABEL[(imp.document_type as FinancialDocumentType) || "UNKNOWN"] || imp.document_type || "—";
+                return (
+                  <div key={imp.id} className="flex items-center justify-between gap-3 px-3 py-2 text-xs">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">
+                        {institution} · {docType}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {imp.transactions_total} movimentações · {date}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 gap-1 text-rose-600 hover:bg-rose-500/10 hover:text-rose-700 dark:text-rose-400"
+                      onClick={() => handleDeleteImport(imp.id)}
+                      disabled={deletingImportId === imp.id}
+                    >
+                      {deletingImportId === imp.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                      Excluir
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };
