@@ -41,7 +41,7 @@ const isIgnoredLine = (line: string) => {
     /^PAGINA\s+\d+/i.test(normalized) ||
     /^\d+\s*\/\s*\d+$/.test(line) ||
     /^MERCADO\s+PAGO$/i.test(normalized) ||
-    /EXTRATO DE CONTA|SALDO INICIAL|SALDO FINAL|ENTRADAS|SAIDAS|PERIODO|CPF|AGENCIA|CONTA|DETALHE DOS MOVIMENTOS|DATA DESCRICAO|DATA DE GERACAO|PORTAL DE AJUDA|OUVIDORIA|CNPJ|MERCADO PAGO INSTITU/i.test(
+    /EXTRATO DE CONTA|SALDO INICIAL|SALDO FINAL|^ENTRADAS:|^SAIDAS:|PERIODO:|CPF\/CNPJ:|AG[EÊ]NCIA:|DETALHE DOS MOVIMENTOS|^DATA\s+DESCRI[CÇ][AÃ]O|DATA DE GERACAO|PORTAL DE AJUDA|OUVIDORIA|CNPJ N|MERCADO PAGO INSTITU/i.test(
       normalized,
     )
   );
@@ -105,7 +105,17 @@ export const parseMercadoPagoTextRows = async (text: string) => {
   let lastTransactionIndex = -1;
 
   const flush = async (amountText?: string, balanceText?: string) => {
-    if (!currentDate || !amountText || descriptionBuffer.length === 0) return;
+    if (!currentDate || !amountText || descriptionBuffer.length === 0) {
+      // Se veio um valor mas sem descrição, resetamos o estado para não
+      // "contaminar" a próxima transação (deixando currentDate ativo e
+      // engolindo linhas que pertencem ao lançamento seguinte).
+      if (amountText) {
+        descriptionBuffer = [];
+        currentExternalId = "";
+        currentDate = "";
+      }
+      return;
+    }
 
     const signedAmount = Number(parseBrazilianMoney(amountText));
     const direction = signedAmount >= 0 ? "CREDIT" : "DEBIT";
