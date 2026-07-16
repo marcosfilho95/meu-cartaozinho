@@ -207,13 +207,13 @@ const resolveSmartCategoryId = (
 };
 
 const resolveDefaultAccountId = (row: NormalizedTransaction, accounts: AccountOption[]) => {
+  const isCard = row.sourceType === "CREDIT_CARD";
+  const eligible = accounts.filter((a) => (isCard ? a.type === "credit_card" : a.type !== "credit_card"));
+  const pool = eligible.length > 0 ? eligible : accounts;
   const institution = normalizeLabel(row.institution.replace("_", " "));
-  const byInstitution = accounts.find((a) => normalizeLabel(`${a.institution || ""} ${a.name}`).includes(institution));
+  const byInstitution = pool.find((a) => normalizeLabel(`${a.institution || ""} ${a.name}`).includes(institution));
   if (byInstitution) return byInstitution.id;
-  if (row.sourceType === "CREDIT_CARD") {
-    return accounts.find((a) => a.type === "credit_card")?.id || accounts[0]?.id || "";
-  }
-  return accounts.find((a) => a.type !== "credit_card")?.id || accounts[0]?.id || "";
+  return pool[0]?.id || accounts[0]?.id || "";
 };
 
 const buildDidacticError = (raw: string, hadText: boolean): { title: string; body: string; hint: string } => {
