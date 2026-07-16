@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowDownCircle,
@@ -12,6 +12,7 @@ import {
   ShieldAlert,
   Sparkles,
   Wand2,
+  Trash2,
   Upload,
   XCircle,
 } from "lucide-react";
@@ -266,6 +267,52 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
   const [creatingAccount, setCreatingAccount] = useState(false);
   const [aiClassifying, setAiClassifying] = useState(false);
   const [aiSummary, setAiSummary] = useState<{ classified: number; created: number } | null>(null);
+  const [recentImports, setRecentImports] = useState<Array<{
+    id: string;
+    institution: string | null;
+    document_type: string | null;
+    parser_name: string | null;
+    transactions_total: number;
+    confirmed_at: string | null;
+    created_at: string;
+  }>>([]);
+  const [deletingImportId, setDeletingImportId] = useState<string | null>(null);
+
+  const loadRecentImports = useCallback(async () => {
+    const { data, error } = await untypedSupabase
+      .from("imports")
+      .select("id, institution, document_type, parser_name, transactions_total, confirmed_at, created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(10);
+    if (!error) setRecentImports((data || []) as any);
+  }, [userId]);
+
+  useEffect(() => {
+    loadRecentImports();
+  }, [loadRecentImports]);
+
+  const handleDeleteImport = async (importId: string) => {
+    if (!window.confirm("Excluir esta importação? Todas as movimentações criadas por ela serão removidas.")) return;
+    setDeletingImportId(importId);
+    try {
+      const { error: txErr } = await supabase
+        .from("transactions")
+        .delete()
+        .eq("user_id", userId)
+        .eq("import_id", importId);
+      if (txErr) throw txErr;
+      const { error: impErr } = await untypedSupabase.from("imports").delete().eq("id", importId).eq("user_id", userId);
+      if (impErr) throw impErr;
+      toast.success("Importação desfeita.");
+      setRecentImports((prev) => prev.filter((i) => i.id !== importId));
+      window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId } }));
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Falha ao excluir importação."));
+    } finally {
+      setDeletingImportId(null);
+    }
+  };
 
   const loadSupportData = useCallback(async () => {
     await Promise.all([ensureDefaultAccounts(userId), ensureDefaultCategories(userId)]);
@@ -724,6 +771,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
       setFileName("");
       setFileHash("");
       window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId } }));
+      loadRecentImports();
     } catch (error) {
       toast.error(getErrorMessage(error, "Falha ao confirmar importação."));
     } finally {
@@ -1211,6 +1259,58 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
           </CardContent>
         </Card>
       )}
+
+      {/* Recent imports — undo/reset */}
+      <Card className="border-border/60 shadow-none">
+        <CardContent className="p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <h2 className="font-heading text-sm font-semibold">Importações recentes</h2>
+              <p className="text-xs text-muted-foreground">
+                Importou errado? Exclua para remover todas as movimentações criadas por aquela importação.
+              </p>
+            </div>
+          </div>
+          {recentImports.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nenhuma importação registrada ainda.</p>
+          ) : (
+            <div className="divide-y divide-border/60 rounded-lg border border-border/60">
+              {recentImports.map((imp) => {
+                const when = imp.confirmed_at || imp.created_at;
+                const date = when ? new Date(when).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—";
+                const institution = INSTITUTION_LABEL[(imp.institution as InstitutionCode) || "UNKNOWN"] || imp.institution || "—";
+                const docType = DOCUMENT_LABEL[(imp.document_type as FinancialDocumentType) || "UNKNOWN"] || imp.document_type || "—";
+                return (
+                  <div key={imp.id} className="flex items-center justify-between gap-3 px-3 py-2 text-xs">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">
+                        {institution} · {docType}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {imp.transactions_total} movimentações · {date}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 gap-1 text-rose-600 hover:bg-rose-500/10 hover:text-rose-700 dark:text-rose-400"
+                      onClick={() => handleDeleteImport(imp.id)}
+                      disabled={deletingImportId === imp.id}
+                    >
+                      {deletingImportId === imp.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                      Excluir
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };
