@@ -834,13 +834,38 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
                 Se marcar, todas as movimentações importadas vão para este mês — evita erros quando a data da compra difere do mês da fatura.
               </p>
             </div>
-            <Input
-              id="forced-month"
-              type="month"
-              value={forcedMonth}
-              onChange={(e) => setForcedMonth(e.target.value)}
-              className="h-9 w-[160px] text-xs"
-            />
+            <div className="flex items-center gap-2">
+              <select
+                id="forced-month-m"
+                value={forcedMonth ? forcedMonth.split("-")[1] : ""}
+                onChange={(e) => {
+                  const m = e.target.value;
+                  const y = forcedMonth ? forcedMonth.split("-")[0] : String(new Date().getFullYear());
+                  setForcedMonth(m ? `${y}-${m}` : "");
+                }}
+                className="h-9 rounded-md border border-input bg-background px-2 text-xs"
+              >
+                <option value="">Mês</option>
+                {["01","02","03","04","05","06","07","08","09","10","11","12"].map((m, i) => (
+                  <option key={m} value={m}>{["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][i]}</option>
+                ))}
+              </select>
+              <select
+                id="forced-month-y"
+                value={forcedMonth ? forcedMonth.split("-")[0] : ""}
+                onChange={(e) => {
+                  const y = e.target.value;
+                  const m = forcedMonth ? forcedMonth.split("-")[1] : String(new Date().getMonth() + 1).padStart(2, "0");
+                  setForcedMonth(y ? `${y}-${m}` : "");
+                }}
+                className="h-9 rounded-md border border-input bg-background px-2 text-xs"
+              >
+                <option value="">Ano</option>
+                {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 3 + i).map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
             {forcedMonth && (
               <Button type="button" variant="ghost" size="sm" onClick={() => setForcedMonth("")} className="h-9 text-xs">
                 Limpar
