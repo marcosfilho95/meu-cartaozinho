@@ -158,6 +158,118 @@ async function callGateway(messages: any[]): Promise<OutRow[]> {
     })) as OutRow[];
 }
 
+const normalize = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9]+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+
+const pickExistingCategory = (
+  categories: Array<{ name: string; kind: string }>,
+  kind: OutRow["categoryKind"],
+  preferred: string[],
+) => {
+  const byKind = categories.filter((c) => c.kind === kind);
+  for (const name of preferred) {
+    const target = normalize(name);
+    const exact = byKind.find((c) => normalize(c.name) === target);
+    if (exact) return { name: exact.name, createIfMissing: false };
+    const fuzzy = byKind.find((c) => {
+      const current = normalize(c.name);
+      return current.includes(target) || target.includes(current);
+    });
+    if (fuzzy) return { name: fuzzy.name, createIfMissing: false };
+  }
+  return { name: preferred[0], createIfMissing: true };
+};
+
+const inferFallbackCategory = (row: InRow, categories: Array<{ name: string; kind: string }>): OutRow => {
+  const text = normalize(`${row.description || ""} ${row.merchant || ""}`);
+  let kind: OutRow["categoryKind"] = row.direction === "CREDIT" ? "income" : "expense";
+  let preferred = kind === "income" ? ["Outros (Receita)", "Recebimentos"] : ["Outros"];
+  let confidence = 0.45;
+  let reason = "Classificação local por palavra-chave.";
+
+  if (row.isTransfer || /DINHEIRO (RESERVADO|RETIRADO)|COFRINHO|PAGAMENTO CARTAO|CARTAO DE CREDITO|PGTO CARTAO/.test(text)) {
+    kind = "transfer";
+    preferred = /CARTAO/.test(text) ? ["Pagamento de Cartão", "Entre Contas", "Transferência"] : ["Entre Contas", "Transferência"];
+    confidence = 0.88;
+    reason = "Movimentação entre contas/cartão.";
+  } else if (row.direction === "CREDIT") {
+    kind = "income";
+    if (/RENDIMENTO|JUROS|CDB|TESOURO|DIVIDENDO/.test(text)) {
+      preferred = ["Rendimentos", "Investimentos", "Outros (Receita)"];
+      confidence = 0.9;
+      reason = "Rendimento identificado no extrato.";
+    } else if (/SALARIO|PROVENTO|FOLHA|HOLERITE/.test(text)) {
+      preferred = ["Salário", "Recebimentos", "Outros (Receita)"];
+      confidence = 0.85;
+      reason = "Receita de salário/provento.";
+    } else if (/PIX RECEBIDO|TED CREDITO|DOC CREDITO|DEPOSITO/.test(text)) {
+      preferred = ["Recebimentos", "Pix Recebido", "Outros (Receita)"];
+      confidence = 0.78;
+      reason = "Entrada recebida na conta.";
+    }
+  } else {
+    kind = "expense";
+    if (/ENEL|LIGHT|COELCE|CEMIG|COPEL|CPFL|EQUATORIAL|ENERGISA/.test(text)) {
+      preferred = ["Energia", "Conta de Luz", "Moradia", "Outros"];
+      confidence = 0.9;
+      reason = "Conta de energia identificada.";
+    } else if (/SABESP|CAGECE|AGUA|CEDAE|SANEPAR|COPASA/.test(text)) {
+      preferred = ["Água", "Agua", "Moradia", "Outros"];
+      confidence = 0.9;
+      reason = "Conta de água identificada.";
+    } else if (/TIM|VIVO|CLARO|OI|NET|ALGAR|SKY|INTERNET/.test(text)) {
+      preferred = ["Internet", "Telefone", "Moradia", "Outros"];
+      confidence = 0.86;
+      reason = "Conta de telecom/internet.";
+    } else if (/ALUGUEL|LOCACAO|IMOBILIARIA|CONDOMINIO/.test(text)) {
+      preferred = ["Aluguel", "Condomínio", "Moradia", "Outros"];
+      confidence = 0.86;
+      reason = "Moradia/aluguel identificado.";
+    } else if (/BANCO VOLKSWAGEN|DETRAN|IPVA|LICENCIAMENTO|OFICINA|MECANICA|SEGURO AUTO/.test(text)) {
+      preferred = ["Carro", "Financiamento", "Outros"];
+      confidence = 0.78;
+      reason = "Despesa veicular identificada.";
+    } else if (/PAGAMENTO DE CONTA|BOLETO/.test(text)) {
+      preferred = ["Contas", "Moradia", "Outros"];
+      confidence = 0.65;
+      reason = "Pagamento de boleto/conta.";
+    } else if (/PIX ENVIADO|PAGAMENTO COM QR PIX/.test(text)) {
+      preferred = ["Pix Enviado", "Outros"];
+      confidence = 0.58;
+      reason = "Saída via Pix sem categoria clara.";
+    } else if (/TARIFA|IOF|ANUIDADE|JUROS|MULTA/.test(text)) {
+      preferred = ["Tarifas Bancárias", "Taxas Bancarias", "Outros"];
+      confidence = 0.82;
+      reason = "Tarifa/encargo bancário.";
+    }
+  }
+
+  const picked = pickExistingCategory(categories, kind, preferred);
+  return {
+    index: row.index,
+    categoryName: picked.name,
+    categoryKind: kind,
+    createIfMissing: picked.createIfMissing && !/^OUTROS/.test(normalize(picked.name)),
+    confidence,
+    reason,
+  };
+};
+
+const mergeWithFallback = (
+  rows: InRow[],
+  categories: Array<{ name: string; kind: string }>,
+  results: OutRow[],
+) => {
+  const byIndex = new Map(results.map((r) => [r.index, r]));
+  return rows.map((row) => byIndex.get(row.index) || inferFallbackCategory(row, categories));
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return new Response("Método não permitido", { status: 405, headers: corsHeaders });
@@ -189,11 +301,16 @@ Deno.serve(async (req) => {
           transferencia: Boolean(r.isTransfer),
         })),
       };
-      const results = await callGateway([
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: JSON.stringify(userMsg) },
-      ]);
-      all.push(...results);
+      try {
+        const results = await callGateway([
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: JSON.stringify(userMsg) },
+        ]);
+        all.push(...mergeWithFallback(slice, categories, results));
+      } catch (err) {
+        console.warn("smart-classify-imports: usando fallback local", err?.message || err);
+        all.push(...slice.map((row) => inferFallbackCategory(row, categories)));
+      }
     }
 
     return new Response(JSON.stringify({ results: all }), {
