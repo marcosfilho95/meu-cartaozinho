@@ -26,6 +26,7 @@ import ExpectedBillsPage from "./pages/finance/ExpectedBillsPage";
 import RecurrencesPage from "./pages/finance/RecurrencesPage";
 import MembersPage from "./pages/finance/MembersPage";
 import ReportsPage from "./pages/finance/ReportsPage";
+import CofrinhosPage from "./pages/finance/CofrinhosPage";
 import { FinanceLayout } from "./components/finance/FinanceLayout";
 
 const queryClient = new QueryClient();
@@ -125,6 +126,7 @@ const AppRoutes = () => {
           <Route path="recorrencias" element={<RecurrencesPage userId={session?.user?.id} />} />
           <Route path="membros" element={<MembersPage userId={session?.user?.id} />} />
           <Route path="relatorios" element={<ReportsPage userId={session?.user?.id} />} />
+          <Route path="cofrinhos" element={<CofrinhosPage userId={session?.user?.id} />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>
