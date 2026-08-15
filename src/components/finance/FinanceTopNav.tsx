@@ -11,6 +11,7 @@ import {
   Wallet,
   BarChart3,
   MoreHorizontal,
+  PiggyBank,
   ChevronDown,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
@@ -33,6 +34,7 @@ const PRIMARY_ITEMS = [
 const MORE_ITEMS = [
   { to: "/financas/importacoes", icon: Upload, label: "Importar" },
   { to: "/financas/relatorios", icon: BarChart3, label: "Relatórios" },
+  { to: "/financas/fechamento", icon: PiggyBank, label: "Fechamento do mês" },
   { to: "/financas/previstas", icon: CalendarClock, label: "Previstas" },
   { to: "/financas/recorrencias", icon: Repeat, label: "Recorrências" },
   { to: "/financas/categorias", icon: FolderOpen, label: "Categorias" },
