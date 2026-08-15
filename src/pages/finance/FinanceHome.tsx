@@ -191,6 +191,24 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
     [fixedExpenses],
   );
 
+  const fixedOpen = useMemo(
+    () => monthBills.filter((bill) => !["paid", "ignored", "canceled"].includes(bill.status)),
+    [monthBills],
+  );
+  const fixedOpenTotal = useMemo(() => fixedOpen.reduce((sum, bill) => sum + bill.amount, 0), [fixedOpen]);
+
+  const markBillPaid = async (bill: FixedBillPreview) => {
+    setTogglingId(bill.id);
+    const { error } = await supabase.from("expected_bills").update({ status: "paid" }).eq("id", bill.id);
+    setTogglingId(null);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    setMonthBills((current) => current.map((item) => (item.id === bill.id ? { ...item, status: "paid" } : item)));
+    toast.success("Conta fixa marcada como paga.");
+  };
+
   const selectableMonths = useMemo(() => {
     const current = monthKey(new Date());
     return [addMonthsToKey(current, 1), current, ...[1, 2, 3, 4, 5].map((i) => addMonthsToKey(current, -i))];
