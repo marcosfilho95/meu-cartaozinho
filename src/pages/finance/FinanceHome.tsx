@@ -354,29 +354,54 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
               </div>
               <p className="mt-3 text-[11px] uppercase tracking-wide text-muted-foreground">Compromisso mensal</p>
               <p className="font-heading text-2xl font-extrabold">{formatCurrency(fixedMonthlyTotal)}</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {fixedOpen.length} em aberto neste mês · {formatCurrency(fixedOpenTotal)}
+              </p>
               <div className="mt-3 space-y-1.5">
-                {fixedExpenses.length === 0 ? (
+                {monthBills.length === 0 ? (
                   <p className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">
                     Cadastre suas contas fixas (aluguel, luz, assinaturas) para prever o mês.
                   </p>
                 ) : (
-                  fixedExpenses.slice(0, 5).map((item) => (
-                    <div key={item.id} className="flex items-center gap-2 rounded-lg border border-border/70 bg-background px-3 py-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold">
-                          {item.name || item.template_payload?.source || "Recorrência"}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {item.day_of_month ? `Todo dia ${item.day_of_month}` : "Mensal"}
-                        </p>
+                  monthBills.slice(0, 5).map((bill) => {
+                    const paid = bill.status === "paid";
+                    return (
+                      <div key={bill.id} className="flex items-center gap-2 rounded-lg border border-border/70 bg-background px-3 py-2">
+                        <div className="min-w-0 flex-1">
+                          <p className={cn("truncate text-sm font-semibold", paid && "text-muted-foreground line-through")}>
+                            {bill.name}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            Vence {new Date(`${bill.dueDate}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="shrink-0 text-[11px]">{formatCurrency(bill.amount)}</Badge>
+                        {!paid && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 shrink-0 px-2 text-[11px]"
+                            disabled={togglingId === bill.id}
+                            onClick={() => markBillPaid(bill)}
+                          >
+                            Pagar
+                          </Button>
+                        )}
                       </div>
-                      <Badge variant="outline" className="shrink-0 text-[11px]">
-                        {formatCurrency(Number(item.amount ?? item.template_payload?.amount ?? 0))}
-                      </Badge>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3 h-8 w-full text-xs"
+                disabled={generating}
+                onClick={() => void syncFixedBills()}
+              >
+                {generating ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+                Gerar contas fixas do mês
+              </Button>
             </CardContent>
           </Card>
         </section>
