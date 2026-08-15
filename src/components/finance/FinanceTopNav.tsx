@@ -34,6 +34,7 @@ const PRIMARY_ITEMS = [
 const MORE_ITEMS = [
   { to: "/financas/importacoes", icon: Upload, label: "Importar" },
   { to: "/financas/relatorios", icon: BarChart3, label: "Relatórios" },
+  { to: "/financas/cofrinhos", icon: PiggyBank, label: "Cofrinhos" },
   { to: "/financas/fechamento", icon: PiggyBank, label: "Fechamento do mês" },
   { to: "/financas/previstas", icon: CalendarClock, label: "Previstas" },
   { to: "/financas/recorrencias", icon: Repeat, label: "Recorrências" },
