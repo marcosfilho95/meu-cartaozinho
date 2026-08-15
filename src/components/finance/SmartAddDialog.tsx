@@ -32,6 +32,7 @@ import {
   resolveSmartCategoryId,
   type SmartCategoryOption,
 } from "@/lib/financeSmartClassification";
+import { parseSmartInputWithAi } from "@/lib/finance/aiService";
 
 interface Props {
   open: boolean;
@@ -175,13 +176,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke("smart-parse", {
-        body: payload,
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-
-      const parsed = (data?.transactions || []) as any[];
+      const parsed = (await parseSmartInputWithAi(payload)) as any[];
       if (!parsed.length) {
         toast.info("Nenhuma transação identificada. Tente com mais detalhes.");
         return;
