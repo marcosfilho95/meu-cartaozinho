@@ -32,6 +32,11 @@ import {
   type FinanceTx,
 } from "@/lib/financeShared";
 import { getExpensesByCategory } from "@/lib/financeSelectors";
+import {
+  fetchExpectedBillsForMonth,
+  generateExpectedBillsForMonth,
+  type FixedBillPreview,
+} from "@/lib/finance/fixedBills";
 import { cn } from "@/lib/utils";
 
 interface FinanceHomeProps {
@@ -71,6 +76,8 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogType, setDialogType] = useState<"expense" | "income">("expense");
+  const [monthBills, setMonthBills] = useState<FixedBillPreview[]>([]);
+  const [generating, setGenerating] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -100,9 +107,37 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
     }
   }, [userId]);
 
+  const syncFixedBills = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!userId) return;
+      setGenerating(true);
+      try {
+        const result = await generateExpectedBillsForMonth(userId, refMonth);
+        const bills = await fetchExpectedBillsForMonth(userId, refMonth);
+        setMonthBills(bills);
+        if (!options?.silent) {
+          toast.success(
+            result.created > 0
+              ? `${result.created} conta(s) fixa(s) gerada(s) para o mês.`
+              : "Todas as contas fixas do mês já estão geradas.",
+          );
+        }
+      } catch {
+        if (!options?.silent) toast.error("Não foi possível gerar as contas fixas do mês.");
+      } finally {
+        setGenerating(false);
+      }
+    },
+    [refMonth, userId],
+  );
+
   useEffect(() => {
     if (userId) void load();
   }, [load, userId]);
+
+  useEffect(() => {
+    if (userId) void syncFixedBills({ silent: true });
+  }, [syncFixedBills, userId]);
 
   useEffect(() => {
     const onSync = () => void load();
