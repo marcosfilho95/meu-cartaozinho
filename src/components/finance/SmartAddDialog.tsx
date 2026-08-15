@@ -29,10 +29,10 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatCurrency } from "@/lib/constants";
 import {
-import { parseSmartInputWithAi } from "@/lib/finance/aiService";
   resolveSmartCategoryId,
   type SmartCategoryOption,
 } from "@/lib/financeSmartClassification";
+import { parseSmartInputWithAi } from "@/lib/finance/aiService";
 
 interface Props {
   open: boolean;
