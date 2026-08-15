@@ -590,20 +590,10 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
           isTransfer: Boolean(row.possibleInternalTransfer),
         }));
 
-        const { data, error } = await supabase.functions.invoke("smart-classify-imports", {
-          body: {
-            rows: payloadRows,
-            categories: knownCategories.map((c) => ({ name: c.name, kind: c.kind })),
-          },
-        });
-        if (error) throw error;
-        const results: Array<{
-          index: number;
-          categoryName: string;
-          categoryKind: "income" | "expense" | "transfer";
-          createIfMissing: boolean;
-          confidence: number;
-        }> = (data as any)?.results || [];
+        const results = await classifyTransactionsWithAi(
+          payloadRows,
+          knownCategories.map((c) => ({ name: c.name, kind: c.kind })),
+        );
 
         if (results.length === 0) {
           if (!opts?.silent) toast.info("A IA não encontrou classificações novas.");
