@@ -46,6 +46,7 @@ import {
 import { LocalCategoryClassifier } from "@/lib/finance/imports/classifier";
 import { normalizeLabel } from "@/lib/financeShared";
 import { cn } from "@/lib/utils";
+import { classifyTransactionsWithAi } from "@/lib/finance/aiService";
 
 interface ImportsPageProps {
   userId: string;
