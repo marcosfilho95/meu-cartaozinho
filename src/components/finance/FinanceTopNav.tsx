@@ -24,15 +24,15 @@ import {
 import { cn } from "@/lib/utils";
 
 const PRIMARY_ITEMS = [
-  { to: "/financas", icon: LayoutDashboard, label: "Resumo", end: true },
-  { to: "/financas/transacoes", icon: ArrowLeftRight, label: "Transações" },
-  { to: "/financas/contas", icon: Wallet, label: "Contas" },
+  { to: "/financas", icon: LayoutDashboard, label: "Início", end: true },
+  { to: "/financas/transacoes", icon: ArrowLeftRight, label: "Lançamentos" },
   { to: "/financas/orcamento", icon: Target, label: "Planejamento" },
-  { to: "/financas/relatorios", icon: BarChart3, label: "Relatórios" },
+  { to: "/financas/contas", icon: Wallet, label: "Contas" },
 ];
 
 const MORE_ITEMS = [
   { to: "/financas/importacoes", icon: Upload, label: "Importar" },
+  { to: "/financas/relatorios", icon: BarChart3, label: "Relatórios" },
   { to: "/financas/previstas", icon: CalendarClock, label: "Previstas" },
   { to: "/financas/recorrencias", icon: Repeat, label: "Recorrências" },
   { to: "/financas/categorias", icon: FolderOpen, label: "Categorias" },
