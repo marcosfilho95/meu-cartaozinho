@@ -739,6 +739,18 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
         // Estornos entram como valor NEGATIVO na categoria original — redutor de despesa.
         // Pagamento de fatura vira transferência (não conta como receita).
         const amountValue = isCardRefund(row) ? -Math.abs(Number(row.amount)) : Number(row.amount);
+        const effectiveDate = row.postingDate || row.transactionDate;
+        const competenceMonth = (forcedMonth || effectiveDate.slice(0, 7)) as string;
+        const isCard = row.sourceType === "CREDIT_CARD";
+        const role = isCardRefund(row)
+          ? "refund"
+          : type === "transfer"
+            ? "transfer"
+            : isCard
+              ? "card_purchase"
+              : type === "income"
+                ? "income"
+                : "expense";
         return {
           user_id: userId,
           account_id: row.accountId,
@@ -756,11 +768,32 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
           external_id: row.externalId || null,
           fingerprint: row.fingerprint,
           import_id: importRow.id,
+          imported_file_id: importedFile.id,
+          source_origin: "import",
+          description_original: row.descriptionOriginal,
+          description_normalized: row.descriptionNormalized,
+          merchant_name: row.merchantName || null,
+          installment_current: row.installmentCurrent ?? null,
+          installment_total: row.installmentTotal ?? null,
+          possible_duplicate: Boolean(row.possibleDuplicate),
+          possible_internal_transfer: Boolean(row.possibleInternalTransfer),
+          purchase_date: row.transactionDate,
+          competence_month: competenceMonth,
+          statement_month: isCard ? competenceMonth : null,
+          transaction_role: role,
+          institution: row.institution || parsedInfo?.institution || null,
+          card_last4: (row.metadata?.cardLast4 as string | undefined) || null,
+          metadata: { ...(row.metadata || {}), forcedMonth: forcedMonth || null },
         };
       });
 
-      const { error: txError } = await supabase.from("transactions").insert(txPayload);
-      if (txError) throw txError;
+      const { error: txError } = await supabase.from("transactions").insert(txPayload as never);
+      if (txError) {
+        // Importação atômica: nada de import órfão sem lançamentos.
+        await untypedSupabase.from("transactions").delete().eq("import_id", importRow.id);
+        await untypedSupabase.from("imports").delete().eq("id", importRow.id);
+        throw txError;
+      }
 
       await learnCategorizationRules(selectedRows);
 
