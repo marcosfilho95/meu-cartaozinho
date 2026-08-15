@@ -405,6 +405,31 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
             </CardContent>
           </Card>
         </section>
+
+        <section className="grid gap-3 sm:grid-cols-2">
+          <Button
+            variant="outline"
+            className="h-auto justify-start gap-3 rounded-2xl p-4 text-left"
+            onClick={() => navigate("/financas/cofrinhos")}
+          >
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">🐷</span>
+            <span>
+              <span className="block text-sm font-semibold">Cofrinhos e sonhos</span>
+              <span className="block text-xs font-normal text-muted-foreground">Casa, poupança, viagem, filhos</span>
+            </span>
+          </Button>
+          <Button
+            variant="outline"
+            className="h-auto justify-start gap-3 rounded-2xl p-4 text-left"
+            onClick={() => navigate("/financas/relatorios")}
+          >
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">📊</span>
+            <span>
+              <span className="block text-sm font-semibold">Relatórios e gráficos</span>
+              <span className="block text-xs font-normal text-muted-foreground">Gastos por cartão, categoria e evolução</span>
+            </span>
+          </Button>
+        </section>
       </div>
 
       <AddTransactionDialog
