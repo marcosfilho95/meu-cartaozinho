@@ -11,6 +11,7 @@ import {
   Wallet,
   BarChart3,
   MoreHorizontal,
+  PiggyBank,
   ChevronDown,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
