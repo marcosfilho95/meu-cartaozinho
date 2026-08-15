@@ -259,6 +259,13 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
           auto_create: true,
           is_active: true,
           next_date: transactionDate,
+          name: description.trim(),
+          amount: numAmount,
+          kind: type,
+          account_id: accountId,
+          category_id: resolvedCategoryId,
+          day_of_month: Number(transactionDate.slice(8, 10)) || null,
+          start_date: transactionDate,
           template_payload: {
             account_id: accountId,
             category_id: resolvedCategoryId,
