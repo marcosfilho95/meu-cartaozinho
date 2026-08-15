@@ -109,6 +109,36 @@ export type Database = {
           },
         ]
       }
+      audit_logs: {
+        Row: {
+          action: string
+          created_at: string
+          entity_id: string | null
+          entity_type: string
+          id: string
+          metadata: Json
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+          metadata?: Json
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+          metadata?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
       budgets: {
         Row: {
           alert_threshold_pct: number
@@ -226,6 +256,7 @@ export type Database = {
       }
       categorization_rules: {
         Row: {
+          account_id: string | null
           category_id: string | null
           created_at: string
           direction: string | null
@@ -234,7 +265,9 @@ export type Database = {
           is_active: boolean
           last_hit_at: string | null
           match_type: string
+          max_amount: number | null
           merchant_name: string | null
+          min_amount: number | null
           name: string | null
           pattern: string
           priority: number
@@ -242,6 +275,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          account_id?: string | null
           category_id?: string | null
           created_at?: string
           direction?: string | null
@@ -250,7 +284,9 @@ export type Database = {
           is_active?: boolean
           last_hit_at?: string | null
           match_type?: string
+          max_amount?: number | null
           merchant_name?: string | null
+          min_amount?: number | null
           name?: string | null
           pattern: string
           priority?: number
@@ -258,6 +294,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          account_id?: string | null
           category_id?: string | null
           created_at?: string
           direction?: string | null
@@ -266,7 +303,9 @@ export type Database = {
           is_active?: boolean
           last_hit_at?: string | null
           match_type?: string
+          max_amount?: number | null
           merchant_name?: string | null
+          min_amount?: number | null
           name?: string | null
           pattern?: string
           priority?: number
@@ -279,6 +318,92 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expected_bills: {
+        Row: {
+          account_id: string | null
+          amount: number | null
+          category_id: string | null
+          confidence: number
+          created_at: string
+          due_date: string
+          expected_max_amount: number | null
+          expected_min_amount: number | null
+          id: string
+          metadata: Json
+          name: string
+          recurrence_id: string | null
+          status: string
+          transaction_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          amount?: number | null
+          category_id?: string | null
+          confidence?: number
+          created_at?: string
+          due_date: string
+          expected_max_amount?: number | null
+          expected_min_amount?: number | null
+          id?: string
+          metadata?: Json
+          name: string
+          recurrence_id?: string | null
+          status?: string
+          transaction_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string | null
+          amount?: number | null
+          category_id?: string | null
+          confidence?: number
+          created_at?: string
+          due_date?: string
+          expected_max_amount?: number | null
+          expected_min_amount?: number | null
+          id?: string
+          metadata?: Json
+          name?: string
+          recurrence_id?: string | null
+          status?: string
+          transaction_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expected_bills_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expected_bills_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expected_bills_recurrence_id_fkey"
+            columns: ["recurrence_id"]
+            isOneToOne: false
+            referencedRelation: "recurrences"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expected_bills_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
             referencedColumns: ["id"]
           },
         ]
@@ -521,6 +646,81 @@ export type Database = {
           },
         ]
       }
+      internal_transfers: {
+        Row: {
+          confidence: number
+          created_at: string
+          id: string
+          incoming_transaction_id: string | null
+          metadata: Json
+          outgoing_transaction_id: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          confidence?: number
+          created_at?: string
+          id?: string
+          incoming_transaction_id?: string | null
+          metadata?: Json
+          outgoing_transaction_id?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          confidence?: number
+          created_at?: string
+          id?: string
+          incoming_transaction_id?: string | null
+          metadata?: Json
+          outgoing_transaction_id?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "internal_transfers_incoming_transaction_id_fkey"
+            columns: ["incoming_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "internal_transfers_outgoing_transaction_id_fkey"
+            columns: ["outgoing_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      members: {
+        Row: {
+          color: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       payees: {
         Row: {
           created_at: string
@@ -647,33 +847,66 @@ export type Database = {
       }
       recurrences: {
         Row: {
+          account_id: string | null
+          amount: number | null
           auto_create: boolean
+          category_id: string | null
           created_at: string
+          day_of_month: number | null
+          end_date: string | null
           frequency: Database["public"]["Enums"]["recurrence_frequency"]
           id: string
           is_active: boolean
+          is_variable: boolean
+          kind: string | null
+          name: string | null
           next_date: string | null
+          notes: string | null
+          start_date: string | null
           template_payload: Json | null
+          updated_at: string
           user_id: string
         }
         Insert: {
+          account_id?: string | null
+          amount?: number | null
           auto_create?: boolean
+          category_id?: string | null
           created_at?: string
+          day_of_month?: number | null
+          end_date?: string | null
           frequency?: Database["public"]["Enums"]["recurrence_frequency"]
           id?: string
           is_active?: boolean
+          is_variable?: boolean
+          kind?: string | null
+          name?: string | null
           next_date?: string | null
+          notes?: string | null
+          start_date?: string | null
           template_payload?: Json | null
+          updated_at?: string
           user_id: string
         }
         Update: {
+          account_id?: string | null
+          amount?: number | null
           auto_create?: boolean
+          category_id?: string | null
           created_at?: string
+          day_of_month?: number | null
+          end_date?: string | null
           frequency?: Database["public"]["Enums"]["recurrence_frequency"]
           id?: string
           is_active?: boolean
+          is_variable?: boolean
+          kind?: string | null
+          name?: string | null
           next_date?: string | null
+          notes?: string | null
+          start_date?: string | null
           template_payload?: Json | null
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
@@ -701,6 +934,39 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      transaction_members: {
+        Row: {
+          member_id: string
+          percentage: number
+          transaction_id: string
+        }
+        Insert: {
+          member_id: string
+          percentage?: number
+          transaction_id: string
+        }
+        Update: {
+          member_id?: string
+          percentage?: number
+          transaction_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transaction_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transaction_members_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       transaction_tags: {
         Row: {
@@ -736,24 +1002,40 @@ export type Database = {
         Row: {
           account_id: string
           amount: number
+          card_last4: string | null
           category_id: string | null
+          competence_month: string | null
           counterpart_account_id: string | null
           created_at: string
           deleted_at: string | null
+          description_normalized: string | null
+          description_original: string | null
           due_date: string | null
           external_id: string | null
           fingerprint: string | null
           id: string
           import_id: string | null
+          imported_file_id: string | null
+          installment_current: number | null
+          installment_total: number | null
+          institution: string | null
           is_reconciled: boolean
           is_reviewed: boolean
+          merchant_name: string | null
+          metadata: Json
           notes: string | null
           payee_id: string | null
           payment_method: string | null
+          possible_duplicate: boolean
+          possible_internal_transfer: boolean
+          purchase_date: string | null
           recurrence_id: string | null
           source: string | null
+          source_origin: string | null
+          statement_month: string | null
           status: Database["public"]["Enums"]["transaction_status"]
           transaction_date: string
+          transaction_role: string | null
           type: Database["public"]["Enums"]["transaction_type"]
           updated_at: string
           user_id: string
@@ -761,24 +1043,40 @@ export type Database = {
         Insert: {
           account_id: string
           amount: number
+          card_last4?: string | null
           category_id?: string | null
+          competence_month?: string | null
           counterpart_account_id?: string | null
           created_at?: string
           deleted_at?: string | null
+          description_normalized?: string | null
+          description_original?: string | null
           due_date?: string | null
           external_id?: string | null
           fingerprint?: string | null
           id?: string
           import_id?: string | null
+          imported_file_id?: string | null
+          installment_current?: number | null
+          installment_total?: number | null
+          institution?: string | null
           is_reconciled?: boolean
           is_reviewed?: boolean
+          merchant_name?: string | null
+          metadata?: Json
           notes?: string | null
           payee_id?: string | null
           payment_method?: string | null
+          possible_duplicate?: boolean
+          possible_internal_transfer?: boolean
+          purchase_date?: string | null
           recurrence_id?: string | null
           source?: string | null
+          source_origin?: string | null
+          statement_month?: string | null
           status?: Database["public"]["Enums"]["transaction_status"]
           transaction_date?: string
+          transaction_role?: string | null
           type?: Database["public"]["Enums"]["transaction_type"]
           updated_at?: string
           user_id: string
@@ -786,24 +1084,40 @@ export type Database = {
         Update: {
           account_id?: string
           amount?: number
+          card_last4?: string | null
           category_id?: string | null
+          competence_month?: string | null
           counterpart_account_id?: string | null
           created_at?: string
           deleted_at?: string | null
+          description_normalized?: string | null
+          description_original?: string | null
           due_date?: string | null
           external_id?: string | null
           fingerprint?: string | null
           id?: string
           import_id?: string | null
+          imported_file_id?: string | null
+          installment_current?: number | null
+          installment_total?: number | null
+          institution?: string | null
           is_reconciled?: boolean
           is_reviewed?: boolean
+          merchant_name?: string | null
+          metadata?: Json
           notes?: string | null
           payee_id?: string | null
           payment_method?: string | null
+          possible_duplicate?: boolean
+          possible_internal_transfer?: boolean
+          purchase_date?: string | null
           recurrence_id?: string | null
           source?: string | null
+          source_origin?: string | null
+          statement_month?: string | null
           status?: Database["public"]["Enums"]["transaction_status"]
           transaction_date?: string
+          transaction_role?: string | null
           type?: Database["public"]["Enums"]["transaction_type"]
           updated_at?: string
           user_id?: string
@@ -835,6 +1149,13 @@ export type Database = {
             columns: ["import_id"]
             isOneToOne: false
             referencedRelation: "imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_imported_file_id_fkey"
+            columns: ["imported_file_id"]
+            isOneToOne: false
+            referencedRelation: "imported_files"
             referencedColumns: ["id"]
           },
           {
