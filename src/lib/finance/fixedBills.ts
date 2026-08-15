@@ -62,7 +62,7 @@ export const generateExpectedBillsForMonth = async (userId: string, monthKey: st
   });
 
   if (rows.length === 0) {
-    return { created: 0, bills: (billsRes.data || []) as FixedBillPreview[] };
+    return { created: 0 };
   }
 
   const inserts = rows.map((rec) => {
@@ -88,7 +88,7 @@ export const generateExpectedBillsForMonth = async (userId: string, monthKey: st
   const { error } = await supabase.from("expected_bills").insert(inserts);
   if (error) throw error;
 
-  return { created: inserts.length, bills: [] as FixedBillPreview[] };
+  return { created: inserts.length };
 };
 
 export const fetchExpectedBillsForMonth = async (userId: string, monthKey: string) => {
