@@ -15,6 +15,9 @@ interface RecurrencesPageProps {
 
 type Recurrence = {
   id: string;
+  name?: string | null;
+  amount?: number | null;
+  day_of_month?: number | null;
   frequency: "weekly" | "monthly" | "yearly";
   next_date: string | null;
   is_active: boolean;
@@ -40,7 +43,7 @@ const RecurrencesPage: React.FC<RecurrencesPageProps> = ({ userId }) => {
     setLoading(true);
     const { data, error } = await untypedSupabase
       .from("recurrences")
-      .select("id, frequency, next_date, is_active, template_payload")
+      .select("id, name, amount, day_of_month, frequency, next_date, is_active, template_payload")
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
     if (error) {
@@ -101,12 +104,12 @@ const RecurrencesPage: React.FC<RecurrencesPageProps> = ({ userId }) => {
                   <Repeat className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold">{item.template_payload?.source || "Recorrência sem descrição"}</p>
+                  <p className="truncate text-sm font-bold">{item.name || item.template_payload?.source || "Recorrência sem descrição"}</p>
                   <p className="text-xs text-muted-foreground">
                     {frequencyLabel[item.frequency]} · próxima: {item.next_date ? new Date(`${item.next_date}T12:00:00`).toLocaleDateString("pt-BR") : "sem data"}
                   </p>
                 </div>
-                <p className="font-bold">{formatCurrency(Number(item.template_payload?.amount || 0))}</p>
+                <p className="font-bold">{formatCurrency(Number(item.amount ?? item.template_payload?.amount ?? 0))}</p>
                 <Badge variant="outline" className={item.is_active ? "border-success/30 bg-success/15 text-success" : "border-border bg-muted text-muted-foreground"}>
                   {item.is_active ? "Ativa" : "Pausada"}
                 </Badge>
