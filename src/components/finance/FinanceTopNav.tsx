@@ -1,17 +1,12 @@
 import React from "react";
 import {
   ArrowLeftRight,
-  CalendarClock,
   FolderOpen,
   LayoutDashboard,
   Repeat,
-  Target,
   Upload,
-  Users,
   Wallet,
-  BarChart3,
   MoreHorizontal,
-  PiggyBank,
   ChevronDown,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
@@ -27,19 +22,13 @@ import { cn } from "@/lib/utils";
 const PRIMARY_ITEMS = [
   { to: "/financas", icon: LayoutDashboard, label: "Início", end: true },
   { to: "/financas/transacoes", icon: ArrowLeftRight, label: "Lançamentos" },
-  { to: "/financas/orcamento", icon: Target, label: "Planejamento" },
   { to: "/financas/contas", icon: Wallet, label: "Contas" },
 ];
 
 const MORE_ITEMS = [
   { to: "/financas/importacoes", icon: Upload, label: "Importar" },
-  { to: "/financas/relatorios", icon: BarChart3, label: "Relatórios" },
-  { to: "/financas/cofrinhos", icon: PiggyBank, label: "Cofrinhos" },
-  { to: "/financas/fechamento", icon: PiggyBank, label: "Fechamento do mês" },
-  { to: "/financas/previstas", icon: CalendarClock, label: "Previstas" },
-  { to: "/financas/recorrencias", icon: Repeat, label: "Recorrências" },
+  { to: "/financas/recorrencias", icon: Repeat, label: "Despesas fixas" },
   { to: "/financas/categorias", icon: FolderOpen, label: "Categorias" },
-  { to: "/financas/membros", icon: Users, label: "Membros" },
 ];
 
 export const FinanceTopNav: React.FC = () => {

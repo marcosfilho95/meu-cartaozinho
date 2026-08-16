@@ -10,28 +10,28 @@ import {
   CalendarRange,
   CheckCircle2,
   Lightbulb,
-  PiggyBank,
-  Plus,
   Target,
   TrendingDown,
   TrendingUp,
   Upload,
+  Wallet,
 } from "lucide-react";
 import {
-  Area,
-  AreaChart,
+  Bar,
   CartesianGrid,
   Cell,
+  ComposedChart,
+  Legend,
   Line,
   Pie,
   PieChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 
-import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
 import { GoalsSection } from "@/components/finance/GoalsSection";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -59,6 +59,8 @@ import {
   type FinanceTx,
 } from "@/lib/financeShared";
 import { getExpensesByCategory, getMonthlyExpenses, getMonthlyIncome } from "@/lib/financeSelectors";
+import { buildExpenseBreakdown } from "@/lib/financeAnalytics";
+import { calculateNetWorth } from "@/lib/financeOverview";
 import { cn } from "@/lib/utils";
 
 interface FinanceDashboardProps {
@@ -102,12 +104,10 @@ const ComparisonChip = ({
   current,
   previous,
   inverse = false,
-  points = false,
 }: {
   current: number;
   previous: number;
   inverse?: boolean;
-  points?: boolean;
 }) => {
   const delta = current - previous;
   const percentage = percentDelta(current, previous);
@@ -122,8 +122,6 @@ const ComparisonChip = ({
       {isStable ? null : delta > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
       {isStable
         ? "Estável vs. mês anterior"
-        : points
-          ? `${delta > 0 ? "+" : ""}${delta.toFixed(1)} p.p. vs. mês anterior`
         : percentage === null
           ? `${delta > 0 ? "+" : ""}${formatCurrency(delta)}`
           : `${delta > 0 ? "+" : ""}${percentage.toFixed(1)}% vs. mês anterior`}
@@ -141,8 +139,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const [referenceMonth, setReferenceMonth] = useState(() => getLastClosedMonthKey());
   const [chartRange, setChartRange] = useState<6 | 12>(6);
   const [accountFilter, setAccountFilter] = useState("all");
-  const [quickDialogOpen, setQuickDialogOpen] = useState(false);
-  const [quickDialogType, setQuickDialogType] = useState<"expense" | "income">("expense");
+  const [breakdownMode, setBreakdownMode] = useState<"category" | "card">("category");
 
   const loadGoalTransactions = useCallback(async () => {
     const complete = await supabase
@@ -260,6 +257,12 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     () => getExpensesByCategory(referenceTransactions),
     [referenceTransactions],
   );
+  const cardDistribution = useMemo(
+    () => buildExpenseBreakdown(filteredTransactions, "card", { months: [referenceMonth], limit: 5 })
+      .map((item) => ({ ...item, label: item.name })),
+    [filteredTransactions, referenceMonth],
+  );
+  const spendingDistribution = breakdownMode === "category" ? categoryDistribution : cardDistribution;
   const categoryMovements = useMemo(
     () => buildCategoryMovements(referenceTransactions, comparisonTransactions),
     [comparisonTransactions, referenceTransactions],
@@ -303,11 +306,13 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       month: getMonthLabel(key),
       receitas: monthIncome,
       despesas: monthExpenses,
+      despesasNegativas: monthExpenses > 0 ? -monthExpenses : 0,
       sobra: monthIncome - monthExpenses,
     };
   }), [evolutionKeys, filteredTransactions]);
 
   const selectableMonths = useMemo(() => getLastMonthKeys(13, new Date()).slice(0, -1).reverse(), []);
+  const netWorth = useMemo(() => calculateNetWorth(accounts, goals), [accounts, goals]);
   const hasReferenceData = referenceTransactions.some((transaction) => transaction.status !== "canceled");
   const planTone = !hasReferenceData
     ? { icon: CalendarRange, title: "Fechamento ainda não importado", className: "border-border bg-muted/30 text-muted-foreground" }
@@ -318,30 +323,19 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       : { icon: AlertTriangle, title: "Atenção à capacidade de poupança", className: "border-destructive/30 bg-destructive/5 text-destructive" };
   const PlanIcon = planTone.icon;
 
-  const openQuickDialog = (type: "expense" | "income") => {
-    setQuickDialogType(type);
-    setQuickDialogOpen(true);
-  };
-
   return (
-    <>
       <div className="mx-auto max-w-6xl space-y-5 px-4">
         <header className="flex flex-wrap items-end justify-between gap-3 pt-1">
           <div>
-            <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Planejamento financeiro</p>
+            <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Organizador</p>
             <h1 className="mt-0.5 font-heading text-2xl font-semibold tracking-tight">
-              Fechamento de {fullMonthLabel(referenceMonth)}
+              {fullMonthLabel(referenceMonth)}
             </h1>
-            <p className="mt-1 text-xs text-muted-foreground">O painel abre no último mês encerrado e compara com {fullMonthLabel(comparisonMonth)}.</p>
+            <p className="mt-1 text-xs text-muted-foreground">Fechamento completo do mês e comparação com {fullMonthLabel(comparisonMonth)}.</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={() => openQuickDialog("expense")} className="gap-1.5 text-xs">
-              <Plus className="h-3.5 w-3.5" /> Novo lançamento
-            </Button>
-            <Button size="sm" onClick={() => navigate("/financas/importacoes")} className="gap-1.5 text-xs">
-              <Upload className="h-3.5 w-3.5" /> Importar fechamento
-            </Button>
-          </div>
+          <Button size="sm" onClick={() => navigate("/financas/importacoes")} className="gap-1.5 text-xs">
+            <Upload className="h-3.5 w-3.5" /> Importar
+          </Button>
         </header>
 
         <Card className="border-0 shadow-elevated">
@@ -391,10 +385,10 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
             <ComparisonChip current={expenses} previous={previousExpenses} inverse />
           </CardContent></Card>
           <Card className="border-0 shadow-card"><CardContent className="p-4">
-            <PiggyBank className="h-5 w-5 text-primary" />
-            <p className="mt-2 text-[11px] text-muted-foreground">Taxa de poupança</p>
-            <p className={cn("text-xl font-bold", plan.savingsRate >= 20 ? "text-success" : "text-warning")}>{plan.savingsRate.toFixed(1)}%</p>
-            <ComparisonChip current={plan.savingsRate} previous={previousPlan.savingsRate} points />
+            <Wallet className="h-5 w-5 text-primary" />
+            <p className="mt-2 text-[11px] text-muted-foreground">Patrimônio total</p>
+            <p className={cn("text-xl font-bold", netWorth.total >= 0 ? "text-success" : "text-destructive")}>{formatCurrency(netWorth.total)}</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">{formatCurrency(netWorth.goals)} em cofrinhos{netWorth.debts > 0 ? ` · ${formatCurrency(netWorth.debts)} em dívidas` : ""}</p>
           </CardContent></Card>
         </section>
 
@@ -438,26 +432,33 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
                 <button type="button" className={cn("rounded-md px-2 py-1 text-xs font-semibold", chartRange === 12 ? "bg-primary text-primary-foreground" : "text-muted-foreground")} onClick={() => setChartRange(12)}>12M</button>
               </div>
             </div>
-            <div className="h-72"><ResponsiveContainer width="100%" height="100%"><AreaChart data={evolutionData}>
-              <defs>
-                <linearGradient id="incomePlanning" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="hsl(152, 55%, 48%)" stopOpacity={0.28} /><stop offset="95%" stopColor="hsl(152, 55%, 48%)" stopOpacity={0} /></linearGradient>
-                <linearGradient id="expensePlanning" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="hsl(0, 72%, 55%)" stopOpacity={0.24} /><stop offset="95%" stopColor="hsl(0, 72%, 55%)" stopOpacity={0} /></linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
-              <Tooltip formatter={(value: number, name: string) => [formatCurrency(value), name === "receitas" ? "Receitas" : name === "despesas" ? "Despesas" : "Sobra"]} contentStyle={{ borderRadius: "12px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} />
-              <Area type="monotone" dataKey="receitas" stroke="hsl(152, 55%, 48%)" fill="url(#incomePlanning)" strokeWidth={2} />
-              <Area type="monotone" dataKey="despesas" stroke="hsl(0, 72%, 55%)" fill="url(#expensePlanning)" strokeWidth={2} />
-              <Line type="monotone" dataKey="sobra" stroke="#1E40AF" strokeWidth={2.4} dot={{ r: 3 }} />
-            </AreaChart></ResponsiveContainer></div>
+            <div className="h-72"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={evolutionData}>
+              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11 }} tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
+              <ReferenceLine y={0} stroke="hsl(var(--foreground))" strokeOpacity={0.35} />
+              <Tooltip
+                formatter={(value: number, name: string) => [formatCurrency(name === "Despesas" ? Math.abs(value) : value), name]}
+                contentStyle={{ borderRadius: "12px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }}
+              />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Bar dataKey="receitas" name="Receitas" fill="hsl(var(--success))" fillOpacity={0.82} radius={[3, 3, 0, 0]} />
+              <Bar dataKey="despesasNegativas" name="Despesas" fill="hsl(var(--destructive))" fillOpacity={0.72} radius={[0, 0, 3, 3]} />
+              <Line type="monotone" dataKey="sobra" name="Resultado" stroke="hsl(var(--primary))" strokeWidth={2.4} dot={{ r: 3 }} />
+            </ComposedChart></ResponsiveContainer></div>
           </CardContent></Card>
 
           <Card className="border-0 shadow-card"><CardContent className="space-y-3 p-4">
-            <div><h2 className="font-heading text-sm font-bold">Para onde foi o dinheiro</h2><p className="text-xs text-muted-foreground">Participação nas despesas de {fullMonthLabel(referenceMonth)}.</p></div>
-            {categoryDistribution.length === 0 ? <p className="text-sm text-muted-foreground">Sem despesas no mês selecionado.</p> : <>
-              <div className="h-48"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={categoryDistribution} dataKey="value" nameKey="label" innerRadius="48%" outerRadius="78%" paddingAngle={2}>{categoryDistribution.map((item) => <Cell key={item.key} fill={item.color} />)}</Pie><Tooltip formatter={(value: number) => formatCurrency(value)} /></PieChart></ResponsiveContainer></div>
-              <div className="space-y-1.5">{categoryDistribution.slice(0, 5).map((item) => <div key={item.key} className="flex items-center justify-between text-xs"><div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} /><span>{item.label}</span></div><span className="font-semibold">{item.percentage.toFixed(1)}%</span></div>)}</div>
+            <div className="flex items-start justify-between gap-2">
+              <div><h2 className="font-heading text-sm font-bold">Para onde foi o dinheiro</h2><p className="text-xs text-muted-foreground">Participação nas despesas de {fullMonthLabel(referenceMonth)}.</p></div>
+              <div className="flex shrink-0 gap-1 rounded-lg border border-border p-1">
+                <button type="button" className={cn("rounded-md px-2 py-1 text-[10px] font-semibold", breakdownMode === "category" ? "bg-primary text-primary-foreground" : "text-muted-foreground")} onClick={() => setBreakdownMode("category")}>Categorias</button>
+                <button type="button" className={cn("rounded-md px-2 py-1 text-[10px] font-semibold", breakdownMode === "card" ? "bg-primary text-primary-foreground" : "text-muted-foreground")} onClick={() => setBreakdownMode("card")}>Cartões</button>
+              </div>
+            </div>
+            {spendingDistribution.length === 0 ? <p className="text-sm text-muted-foreground">Sem despesas no mês selecionado.</p> : <>
+              <div className="h-48"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={spendingDistribution} dataKey="value" nameKey="label" innerRadius="48%" outerRadius="78%" paddingAngle={2}>{spendingDistribution.map((item) => <Cell key={item.key} fill={item.color} />)}</Pie><Tooltip formatter={(value: number) => formatCurrency(value)} /></PieChart></ResponsiveContainer></div>
+              <div className="space-y-1.5">{spendingDistribution.slice(0, 5).map((item) => <div key={item.key} className="flex items-center justify-between text-xs"><div className="flex min-w-0 items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} /><span className="truncate">{item.label}</span></div><span className="font-semibold">{item.percentage.toFixed(1)}%</span></div>)}</div>
             </>}
           </CardContent></Card>
         </section>
@@ -497,15 +498,6 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
           />
         </section>
       </div>
-
-      <AddTransactionDialog
-        key={quickDialogType}
-        open={quickDialogOpen}
-        onOpenChange={setQuickDialogOpen}
-        userId={userId}
-        defaultType={quickDialogType}
-      />
-    </>
   );
 };
 

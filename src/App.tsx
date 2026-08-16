@@ -2,7 +2,7 @@
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { applyAccentTheme, getStoredAccentTheme } from "@/lib/accentTheme";
@@ -16,7 +16,6 @@ import Purchases from "./pages/Purchases";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 import FinanceDashboard from "./pages/finance/FinanceDashboard";
-import FinanceHome from "./pages/finance/FinanceHome";
 import AccountsPage from "./pages/finance/AccountsPage";
 import CategoriesPage from "./pages/finance/CategoriesPage";
 import TransactionsPage from "./pages/finance/TransactionsPage";
@@ -115,8 +114,8 @@ const AppRoutes = () => {
         <Route path="/compras" element={<Purchases initialUserId={session?.user?.id} />} />
         <Route path="/perfil" element={<Profile />} />
         <Route path="/financas" element={<FinanceLayout userId={session?.user?.id} />}>
-          <Route index element={<FinanceHome userId={session?.user?.id} />} />
-          <Route path="fechamento" element={<FinanceDashboard userId={session?.user?.id} />} />
+          <Route index element={<FinanceDashboard userId={session?.user?.id} />} />
+          <Route path="fechamento" element={<Navigate to="/financas" replace />} />
           <Route path="contas" element={<AccountsPage userId={session?.user?.id} />} />
           <Route path="categorias" element={<CategoriesPage userId={session?.user?.id} />} />
           <Route path="transacoes" element={<TransactionsPage userId={session?.user?.id} />} />

@@ -1,12 +1,11 @@
 import React from "react";
-import { ArrowLeftRight, LayoutDashboard, Target, Upload, Wallet } from "lucide-react";
+import { ArrowLeftRight, LayoutDashboard, Upload, Wallet } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 
 const NAV_ITEMS = [
   { to: "/financas", icon: LayoutDashboard, label: "Início" },
   { to: "/financas/transacoes", icon: ArrowLeftRight, label: "Lançamentos" },
   { to: "/financas/importacoes", icon: Upload, label: "Importar", primary: true },
-  { to: "/financas/orcamento", icon: Target, label: "Planejar" },
   { to: "/financas/contas", icon: Wallet, label: "Contas" },
 ];
 
