@@ -37,11 +37,11 @@ describe("financeAnalytics", () => {
     expect(Math.round(points[1].savingsRate)).toBe(50);
   });
 
-  it("agrupa despesas por conta/cartão com percentuais", () => {
-    const byAccount = buildExpenseBreakdown(transactions, "account", { months: ["2026-08"] });
-    expect(byAccount.map((item) => item.name)).toEqual(["Nubank", "Conta Corrente"]);
-    expect(byAccount[0].value).toBe(2000);
-    expect(Math.round(byAccount[0].percentage)).toBe(80);
+  it("agrupa somente despesas de cartões com percentuais", () => {
+    const byCard = buildExpenseBreakdown(transactions, "card", { months: ["2026-08"] });
+    expect(byCard.map((item) => item.name)).toEqual(["Nubank"]);
+    expect(byCard[0].value).toBe(2000);
+    expect(Math.round(byCard[0].percentage)).toBe(100);
   });
 
   it("agrupa despesas por categoria", () => {
@@ -55,5 +55,14 @@ describe("financeAnalytics", () => {
     expect(trend.direction).toBe("saving");
     expect(trend.delta).toBe(500);
     expect(trend.expensesDelta).toBe(-500);
+  });
+
+  it("inclui aportes e retiradas dos cofrinhos sem alterar a sobra", () => {
+    const points = buildMonthlyEvolution(transactions, keys, [
+      { amount: 800, type: "deposit", ref_month: "2026-08" },
+      { amount: 200, type: "withdraw", ref_month: "2026-08" },
+    ]);
+
+    expect(points[1]).toMatchObject({ saldo: 2500, aportes: 800, retiradas: 200, reservaLiquida: 600 });
   });
 });

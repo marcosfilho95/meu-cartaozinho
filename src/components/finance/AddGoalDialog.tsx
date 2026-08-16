@@ -27,6 +27,7 @@ const GOAL_TYPES = [
 
 const GOAL_TEMPLATES = [
   { label: "Emergência", name: "Reserva de emergência", type: "emergency", target: "30000", monthly: "1000" },
+  { label: "Poupança", name: "Minha poupança", type: "other", target: "20000", monthly: "500" },
   { label: "Viagem", name: "Viagem dos sonhos", type: "travel", target: "12000", monthly: "500" },
   { label: "Apartamento", name: "Entrada do apartamento", type: "home", target: "100000", monthly: "2000" },
   { label: "Filhos", name: "Futuro dos filhos", type: "family", target: "30000", monthly: "500" },
@@ -104,7 +105,7 @@ export const AddGoalDialog: React.FC<AddGoalDialogProps> = ({ open, onOpenChange
             <div className="mt-1.5 flex flex-wrap gap-2">
               {GOAL_TEMPLATES.map((template) => (
                 <button
-                  key={template.type}
+                  key={template.label}
                   type="button"
                   onClick={() => {
                     setName(template.name);

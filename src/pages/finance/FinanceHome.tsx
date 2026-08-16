@@ -33,6 +33,13 @@ import {
 } from "@/lib/financeShared";
 import { getExpensesByCategory } from "@/lib/financeSelectors";
 import {
+  calculateMonthlyResult,
+  calculateNetWorth,
+  calculateReserveMovement,
+  getTransactionReferenceMonth,
+  type GoalMovement,
+} from "@/lib/financeOverview";
+import {
   fetchExpectedBillsForMonth,
   generateExpectedBillsForMonth,
   type FixedBillPreview,
@@ -61,16 +68,20 @@ type AccountRow = {
   include_in_net_worth: boolean;
 };
 
+type GoalRow = { current_amount: number | null };
+
 const fullMonthLabel = (key: string) =>
   new Date(`${key}-15T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 
-const inMonth = (tx: FinanceTx, key: string) => (tx.due_date || tx.transaction_date).slice(0, 7) === key;
+const inMonth = (tx: FinanceTx, key: string) => getTransactionReferenceMonth(tx) === key;
 
 const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<FinanceTx[]>([]);
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
+  const [goals, setGoals] = useState<GoalRow[]>([]);
+  const [goalMovements, setGoalMovements] = useState<GoalMovement[]>([]);
   const [fixedExpenses, setFixedExpenses] = useState<FixedExpense[]>([]);
   const [refMonth, setRefMonth] = useState(() => monthKey(new Date()));
   const [togglingId, setTogglingId] = useState<string | null>(null);
@@ -83,7 +94,7 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
     setLoading(true);
     await Promise.allSettled([ensureDefaultAccounts(userId), ensureDefaultCategories(userId)]);
     try {
-      const [txs, accountsRes, recurrencesRes] = await Promise.all([
+      const [txs, accountsRes, goalsRes, goalMovementsRes, recurrencesRes] = await Promise.all([
         fetchFinanceTransactions(userId, 12),
         supabase
           .from("accounts")
@@ -91,6 +102,12 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
           .eq("user_id", userId)
           .eq("is_active", true)
           .order("name"),
+        supabase.from("goals").select("current_amount").eq("user_id", userId),
+        untypedSupabase
+          .from("goal_transactions")
+          .select("amount, type, ref_month, created_at")
+          .eq("user_id", userId)
+          .limit(1000),
         untypedSupabase
           .from("recurrences")
           .select("id, name, amount, day_of_month, frequency, is_active, template_payload")
@@ -99,6 +116,8 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
       ]);
       setTransactions(txs || []);
       setAccounts((accountsRes.data || []) as AccountRow[]);
+      setGoals((goalsRes.data || []) as GoalRow[]);
+      setGoalMovements((goalMovementsRes.data || []) as GoalMovement[]);
       setFixedExpenses(((recurrencesRes.data || []) as FixedExpense[]) || []);
     } catch {
       toast.error("Não foi possível carregar o painel financeiro.");
@@ -150,30 +169,19 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
     [refMonth, transactions],
   );
 
-  const income = useMemo(
-    () => monthTransactions.filter((tx) => tx.type === "income").reduce((s, tx) => s + Number(tx.amount), 0),
-    [monthTransactions],
+  const monthSummary = useMemo(
+    () => calculateMonthlyResult(transactions, refMonth),
+    [refMonth, transactions],
   );
-  const expenses = useMemo(
-    () => monthTransactions.filter((tx) => tx.type === "expense").reduce((s, tx) => s + Number(tx.amount), 0),
-    [monthTransactions],
+  const reserveMovement = useMemo(
+    () => calculateReserveMovement(goalMovements, refMonth),
+    [goalMovements, refMonth],
   );
-  const pendingExpenses = useMemo(
-    () =>
-      monthTransactions
-        .filter((tx) => tx.type === "expense" && (tx.status === "pending" || tx.status === "overdue"))
-        .reduce((s, tx) => s + Number(tx.amount), 0),
-    [monthTransactions],
-  );
-  const balance = income - expenses;
-
-  const cashBalance = useMemo(
-    () =>
-      accounts
-        .filter((account) => account.include_in_net_worth && account.type !== "credit_card")
-        .reduce((sum, account) => sum + Number(account.current_balance || 0), 0),
-    [accounts],
-  );
+  const netWorth = useMemo(() => calculateNetWorth(accounts, goals), [accounts, goals]);
+  const income = monthSummary.income;
+  const expenses = monthSummary.expenses;
+  const pendingExpenses = monthSummary.pendingExpenses;
+  const balance = monthSummary.result;
 
   const distribution = useMemo(() => {
     const items = getExpensesByCategory(monthTransactions).slice(0, 6);
@@ -276,14 +284,14 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
           <Card className="border-0 shadow-card">
             <CardContent className="p-4">
               <ArrowUpCircle className="h-5 w-5 text-success" />
-              <p className="mt-2 text-[11px] text-muted-foreground">Entradas do mês</p>
+              <p className="mt-2 text-[11px] text-muted-foreground">Receitas do mês</p>
               <p className="text-xl font-bold text-success">{formatCurrency(income)}</p>
             </CardContent>
           </Card>
           <Card className="border-0 shadow-card">
             <CardContent className="p-4">
               <ArrowDownCircle className="h-5 w-5 text-destructive" />
-              <p className="mt-2 text-[11px] text-muted-foreground">Saídas do mês</p>
+              <p className="mt-2 text-[11px] text-muted-foreground">Despesas do mês</p>
               <p className="text-xl font-bold text-destructive">{formatCurrency(expenses)}</p>
               <p className="mt-1 text-[11px] text-muted-foreground">{formatCurrency(pendingExpenses)} ainda a pagar</p>
             </CardContent>
@@ -291,18 +299,34 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
           <Card className="border-0 shadow-card">
             <CardContent className="p-4">
               <PiggyBank className="h-5 w-5 text-primary" />
-              <p className="mt-2 text-[11px] text-muted-foreground">Saldo do mês</p>
+              <p className="mt-2 text-[11px] text-muted-foreground">Resultado do mês</p>
               <p className={cn("text-xl font-bold", balance >= 0 ? "text-success" : "text-destructive")}>
                 {formatCurrency(balance)}
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {balance < 0 && reserveMovement.withdrawals > 0
+                  ? `Gastou ${formatCurrency(Math.abs(balance))} a mais e retirou ${formatCurrency(reserveMovement.withdrawals)} das reservas`
+                  : reserveMovement.withdrawals > 0
+                    ? `Retirou ${formatCurrency(reserveMovement.withdrawals)} das reservas`
+                  : reserveMovement.deposits > 0
+                    ? `Guardou ${formatCurrency(reserveMovement.deposits)} nos cofrinhos`
+                    : balance < 0
+                      ? "Nenhuma retirada de reserva registrada"
+                      : "Receitas menos despesas registradas"}
               </p>
             </CardContent>
           </Card>
           <Card className="border-0 shadow-card">
             <CardContent className="p-4">
               <Wallet className="h-5 w-5 text-primary" />
-              <p className="mt-2 text-[11px] text-muted-foreground">Saldo em contas</p>
-              <p className="text-xl font-bold">{formatCurrency(cashBalance)}</p>
-              <p className="mt-1 text-[11px] text-muted-foreground">{accounts.length} contas ativas</p>
+              <p className="mt-2 text-[11px] text-muted-foreground">Patrimônio total</p>
+              <p className={cn("text-xl font-bold", netWorth.total >= 0 ? "text-success" : "text-destructive")}>
+                {formatCurrency(netWorth.total)}
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {formatCurrency(netWorth.goals)} em cofrinhos
+                {netWorth.debts > 0 ? ` · ${formatCurrency(netWorth.debts)} em dívidas` : ""}
+              </p>
             </CardContent>
           </Card>
         </section>

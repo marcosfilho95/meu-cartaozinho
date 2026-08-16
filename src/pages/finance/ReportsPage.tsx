@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { BarChart3, CreditCard, Loader2, PieChart as PieChartIcon, TrendingDown, TrendingUp } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/constants";
 import { FinanceTx, fetchFinanceTransactions, getLastMonthKeys } from "@/lib/financeShared";
 import { buildExpenseBreakdown, buildMonthlyEvolution, buildSavingsTrend } from "@/lib/financeAnalytics";
+import { untypedSupabase } from "@/lib/supabaseUntyped";
+import type { GoalMovement } from "@/lib/financeOverview";
 
 interface ReportsPageProps {
   userId: string;
@@ -18,14 +20,24 @@ const RANGES = [3, 6, 12] as const;
 const ReportsPage: React.FC<ReportsPageProps> = ({ userId }) => {
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<FinanceTx[]>([]);
+  const [goalMovements, setGoalMovements] = useState<GoalMovement[]>([]);
   const [range, setRange] = useState<number>(6);
-  const [dimension, setDimension] = useState<"category" | "account">("category");
+  const [dimension, setDimension] = useState<"category" | "card">("category");
 
   useEffect(() => {
     let mounted = true;
-    fetchFinanceTransactions(userId, 12)
-      .then((data) => {
-        if (mounted) setTransactions(data);
+    Promise.all([
+      fetchFinanceTransactions(userId, 12),
+      untypedSupabase
+        .from("goal_transactions")
+        .select("amount, type, ref_month, created_at")
+        .eq("user_id", userId)
+        .limit(1000),
+    ])
+      .then(([data, goalMovementResult]) => {
+        if (!mounted) return;
+        setTransactions(data);
+        setGoalMovements((goalMovementResult.data || []) as GoalMovement[]);
       })
       .finally(() => {
         if (mounted) setLoading(false);
@@ -36,12 +48,16 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userId }) => {
   }, [userId]);
 
   const monthKeys = useMemo(() => getLastMonthKeys(range), [range]);
-  const monthData = useMemo(() => buildMonthlyEvolution(transactions, monthKeys), [transactions, monthKeys]);
+  const monthData = useMemo(
+    () => buildMonthlyEvolution(transactions, monthKeys, goalMovements),
+    [goalMovements, monthKeys, transactions],
+  );
   const breakdown = useMemo(
     () => buildExpenseBreakdown(transactions, dimension, { months: monthKeys }),
     [transactions, dimension, monthKeys],
   );
   const trend = useMemo(() => buildSavingsTrend(monthData), [monthData]);
+  const latest = monthData[monthData.length - 1];
 
   if (loading) {
     return (
@@ -76,7 +92,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userId }) => {
       </section>
 
       <Card className="border-0 shadow-card">
-        <CardContent className="grid gap-4 p-4 sm:grid-cols-3">
+        <CardContent className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-4">
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground">Sobra do último mês</p>
             <p className={`font-heading text-xl font-bold ${trend.current >= 0 ? "text-success" : "text-destructive"}`}>
@@ -86,8 +102,17 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userId }) => {
               <TrendIcon className="h-3 w-3" />
               {trend.direction === "stable"
                 ? "Estável em relação ao mês anterior"
-                : `${trendPositive ? "Poupando" : "Gastando"} ${formatCurrency(Math.abs(trend.delta))} a ${trendPositive ? "mais" : "menos de sobra"}`}
+                : `${formatCurrency(Math.abs(trend.delta))} ${trendPositive ? "a mais" : "a menos"} de sobra`}
             </Badge>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">Cofrinhos no último mês</p>
+            <p className={`font-heading text-xl font-bold ${(latest?.reservaLiquida || 0) >= 0 ? "text-success" : "text-destructive"}`}>
+              {(latest?.reservaLiquida || 0) > 0 ? "+" : ""}{formatCurrency(latest?.reservaLiquida || 0)}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              {formatCurrency(latest?.aportes || 0)} guardados · {formatCurrency(latest?.retiradas || 0)} retirados
+            </p>
           </div>
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground">Média de sobra no período</p>
@@ -132,14 +157,14 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userId }) => {
               <div className="flex items-center gap-2">
                 {dimension === "category" ? <PieChartIcon className="h-4 w-4 text-primary" /> : <CreditCard className="h-4 w-4 text-primary" />}
                 <h2 className="font-heading text-base font-bold">
-                  {dimension === "category" ? "Gastos por categoria" : "Gastos por cartão/conta"}
+                  {dimension === "category" ? "Gastos por categoria" : "Gastos por cartão"}
                 </h2>
               </div>
               <div className="flex gap-1.5">
                 <Button size="sm" variant={dimension === "category" ? "default" : "outline"} onClick={() => setDimension("category")}>
                   Categorias
                 </Button>
-                <Button size="sm" variant={dimension === "account" ? "default" : "outline"} onClick={() => setDimension("account")}>
+                <Button size="sm" variant={dimension === "card" ? "default" : "outline"} onClick={() => setDimension("card")}>
                   Cartões
                 </Button>
               </div>
@@ -186,7 +211,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userId }) => {
             <TrendingUp className="h-4 w-4 text-primary" />
             <div>
               <h2 className="font-heading text-base font-bold">Evolução da sobra</h2>
-              <p className="text-xs text-muted-foreground">Acima de zero você poupou; abaixo, gastou mais do que recebeu.</p>
+              <p className="text-xs text-muted-foreground">A sobra mostra receitas menos despesas; a linha dos cofrinhos mostra o que foi realmente guardado ou retirado.</p>
             </div>
           </div>
           <div className="h-64">
@@ -197,12 +222,17 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userId }) => {
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={(value) => `${Math.round(Number(value) / 1000)}k`} />
                 <ReferenceLine y={0} stroke="hsl(var(--border))" />
                 <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))" }} />
-                <Line type="monotone" dataKey="saldo" stroke="hsl(var(--primary))" strokeWidth={2.4} dot={{ r: 3 }} />
+                <Legend />
+                <Line type="monotone" dataKey="saldo" name="Sobra do mês" stroke="hsl(var(--primary))" strokeWidth={2.4} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="reservaLiquida" name="Cofrinhos" stroke="hsl(152, 55%, 42%)" strokeWidth={2.2} dot={{ r: 3 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </CardContent>
       </Card>
+      <p className="text-center text-[11px] text-muted-foreground">
+        O mês atual pode estar incompleto. Despesas são agrupadas pelo mês de referência do lançamento, não pelo pagamento da fatura.
+      </p>
     </div>
   );
 };

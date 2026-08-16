@@ -1,13 +1,19 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { untypedSupabase } from "@/lib/supabaseUntyped";
 import { AppHeader } from "@/components/AppHeader";
 import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
 import { formatCurrency } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { fetchFinanceTransactions, getCycleScopedTransactions, monthKey } from "@/lib/financeShared";
-import { getDashboardSummary } from "@/lib/financeSelectors";
-import { ArrowUpRight, CreditCard, TrendingUp, Wallet } from "lucide-react";
+import { fetchFinanceTransactions, monthKey } from "@/lib/financeShared";
+import {
+  calculateMonthlyResult,
+  calculateNetWorth,
+  calculateReserveMovement,
+  type GoalMovement,
+} from "@/lib/financeOverview";
+import { ArrowUpRight, CreditCard, PiggyBank, TrendingUp, Wallet } from "lucide-react";
 
 interface HomeProps {
   userId: string;
@@ -15,8 +21,13 @@ interface HomeProps {
 
 interface QuickStats {
   totalBalance: number;
+  accountAssets: number;
+  goalsBalance: number;
+  debts: number;
   monthIncome: number;
   monthExpense: number;
+  reserveDeposits: number;
+  reserveWithdrawals: number;
   pendingCount: number;
   pendingAmount: number;
 }
@@ -50,8 +61,13 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
   const navigate = useNavigate();
   const [stats, setStats] = useState<QuickStats>({
     totalBalance: 0,
+    accountAssets: 0,
+    goalsBalance: 0,
+    debts: 0,
     monthIncome: 0,
     monthExpense: 0,
+    reserveDeposits: 0,
+    reserveWithdrawals: 0,
     pendingCount: 0,
     pendingAmount: 0,
   });
@@ -67,37 +83,50 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
       try {
         const now = new Date();
         const currentMonth = monthKey(now);
-        const todayDay = now.getDate();
-
-        const [accsRes, txsRaw] = await Promise.all([
+        const [accsRes, goalsRes, goalTxRes, txsRaw] = await Promise.all([
           supabase.from("accounts").select("*").eq("user_id", userId).eq("is_active", true),
+          supabase.from("goals").select("current_amount").eq("user_id", userId),
+          untypedSupabase
+            .from("goal_transactions")
+            .select("amount, type, ref_month, created_at")
+            .eq("user_id", userId)
+            .limit(1000),
           fetchFinanceTransactions(userId, 18),
         ]);
 
         const accs = accsRes.data || [];
-        const txs = getCycleScopedTransactions(txsRaw, currentMonth, todayDay);
-
-        const totalBalance = accs.reduce((sum, account) => {
-          return sum + (account.include_in_net_worth ? Number(account.current_balance) : 0);
-        }, 0);
-
-        const monthSummary = getDashboardSummary(txs);
-        const monthIncome = monthSummary.totalIncome;
-        const monthExpense = monthSummary.totalExpense;
-        const pendingTxs = txs.filter((tx: any) => tx.status === "pending" || tx.status === "overdue");
+        const goals = goalsRes.data || [];
+        const goalMovements = (goalTxRes.data || []) as GoalMovement[];
+        const netWorth = calculateNetWorth(accs, goals);
+        const monthSummary = calculateMonthlyResult(txsRaw, currentMonth);
+        const reserveMovement = calculateReserveMovement(goalMovements, currentMonth);
+        const pendingTxs = txsRaw.filter(
+          (tx) => tx.type === "expense" && (tx.status === "pending" || tx.status === "overdue"),
+        );
         const pendingCount = pendingTxs.length;
-        const pendingAmount = pendingTxs.reduce((sum: number, tx: any) => sum + Number(tx.amount), 0);
+        const pendingAmount = pendingTxs.reduce((sum, tx) => sum + Number(tx.amount), 0);
 
-        setStats({ totalBalance, monthIncome, monthExpense, pendingCount, pendingAmount });
+        setStats({
+          totalBalance: netWorth.total,
+          accountAssets: netWorth.assets,
+          goalsBalance: netWorth.goals,
+          debts: netWorth.debts,
+          monthIncome: monthSummary.income,
+          monthExpense: monthSummary.expenses,
+          reserveDeposits: reserveMovement.deposits,
+          reserveWithdrawals: reserveMovement.withdrawals,
+          pendingCount,
+          pendingAmount,
+        });
 
         const today = now.toISOString().slice(0, 10);
         const threeDaysLater = new Date(now.getTime() + 3 * 86400000).toISOString().slice(0, 10);
 
-        const overdue = txs.filter(
-          (tx: any) => tx.status === "overdue" || (tx.status === "pending" && tx.due_date && tx.due_date < today),
+        const overdue = pendingTxs.filter(
+          (tx) => tx.status === "overdue" || (tx.status === "pending" && tx.due_date && tx.due_date < today),
         );
-        const dueSoon = txs.filter(
-          (tx: any) => tx.status === "pending" && tx.due_date && tx.due_date >= today && tx.due_date <= threeDaysLater,
+        const dueSoon = pendingTxs.filter(
+          (tx) => tx.status === "pending" && tx.due_date && tx.due_date >= today && tx.due_date <= threeDaysLater,
         );
 
         const builtAlerts: Alert[] = [];
@@ -128,6 +157,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
   }, [userId]);
 
   const netFlow = stats.monthIncome - stats.monthExpense;
+  const reserveNet = stats.reserveDeposits - stats.reserveWithdrawals;
   const monthLabel = new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
   const monthLabelCapped = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
 
@@ -169,9 +199,14 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
             >
               {formatCurrency(stats.totalBalance)}
             </p>
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+              <span>Contas e investimentos {formatCurrency(stats.accountAssets)}</span>
+              <span>Cofrinhos {formatCurrency(stats.goalsBalance)}</span>
+              {stats.debts > 0 && <span>Dívidas −{formatCurrency(stats.debts)}</span>}
+            </div>
             <div className="mt-5 flex items-center gap-2 border-t border-border/60 pt-4 text-xs">
               <TrendingUp className={cn("h-3.5 w-3.5", netFlow >= 0 ? "text-success" : "text-destructive")} />
-              <span className="font-medium text-muted-foreground">Saldo do mês</span>
+              <span className="font-medium text-muted-foreground">Resultado do mês</span>
               <span
                 className={cn(
                   "ml-auto font-semibold tabular-nums",
@@ -182,6 +217,29 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
                 {formatCurrency(netFlow)}
               </span>
             </div>
+            <button
+              type="button"
+              onClick={() => navigate("/financas/cofrinhos")}
+              className="mt-3 flex w-full items-center gap-2 text-left text-xs text-muted-foreground transition hover:text-primary"
+            >
+              <PiggyBank className="h-3.5 w-3.5" />
+              {stats.reserveWithdrawals > 0 ? (
+                <span>
+                  Retirou {formatCurrency(stats.reserveWithdrawals)} das reservas neste mês
+                </span>
+              ) : stats.reserveDeposits > 0 ? (
+                <span>
+                  Guardou {formatCurrency(stats.reserveDeposits)} nos cofrinhos neste mês
+                </span>
+              ) : (
+                <span>Nenhuma movimentação nos cofrinhos neste mês</span>
+              )}
+              {reserveNet !== 0 && (
+                <span className={cn("ml-auto font-semibold", reserveNet > 0 ? "text-success" : "text-destructive")}>
+                  {reserveNet > 0 ? "+" : "−"}{formatCurrency(Math.abs(reserveNet))}
+                </span>
+              )}
+            </button>
           </div>
 
           {/* Pendências */}

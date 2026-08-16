@@ -1,5 +1,6 @@
 import type { FinanceTx } from "@/lib/financeShared";
 import { BANK_COLORS, CATEGORY_COLORS, getMonthLabel, normalizeLabel } from "@/lib/financeShared";
+import { calculateReserveMovement, getTransactionReferenceMonth, type GoalMovement } from "@/lib/financeOverview";
 
 export type MonthPoint = {
   key: string;
@@ -8,6 +9,9 @@ export type MonthPoint = {
   despesas: number;
   saldo: number;
   savingsRate: number;
+  aportes: number;
+  retiradas: number;
+  reservaLiquida: number;
 };
 
 export type BreakdownItem = {
@@ -36,17 +40,31 @@ export const resolveAccountColor = (name: string, index: number) => {
   return match ? BANK_COLORS[match] : CATEGORY_COLORS[index % CATEGORY_COLORS.length];
 };
 
-export const buildMonthlyEvolution = (transactions: FinanceTx[], keys: string[]): MonthPoint[] => {
+export const buildMonthlyEvolution = (
+  transactions: FinanceTx[],
+  keys: string[],
+  goalMovements: GoalMovement[] = [],
+): MonthPoint[] => {
   const map = new Map<string, MonthPoint>(
     keys.map((key) => [
       key,
-      { key, month: getMonthLabel(key), receitas: 0, despesas: 0, saldo: 0, savingsRate: 0 },
+      {
+        key,
+        month: getMonthLabel(key),
+        receitas: 0,
+        despesas: 0,
+        saldo: 0,
+        savingsRate: 0,
+        aportes: 0,
+        retiradas: 0,
+        reservaLiquida: 0,
+      },
     ]),
   );
 
   transactions.forEach((tx) => {
     if (!isCountable(tx)) return;
-    const point = map.get(tx.transaction_date.slice(0, 7));
+    const point = map.get(getTransactionReferenceMonth(tx));
     if (!point) return;
     const amount = Number(tx.amount) || 0;
     if (tx.type === "income") point.receitas += amount;
@@ -56,17 +74,21 @@ export const buildMonthlyEvolution = (transactions: FinanceTx[], keys: string[])
   return keys.map((key) => {
     const point = map.get(key)!;
     const saldo = point.receitas - point.despesas;
+    const reserveMovement = calculateReserveMovement(goalMovements, key);
     return {
       ...point,
       saldo,
       savingsRate: point.receitas > 0 ? (saldo / point.receitas) * 100 : 0,
+      aportes: reserveMovement.deposits,
+      retiradas: reserveMovement.withdrawals,
+      reservaLiquida: reserveMovement.net,
     };
   });
 };
 
 export const buildExpenseBreakdown = (
   transactions: FinanceTx[],
-  dimension: "category" | "account",
+  dimension: "category" | "card",
   options: { months?: string[]; limit?: number } = {},
 ): BreakdownItem[] => {
   const { months, limit = 8 } = options;
@@ -75,16 +97,17 @@ export const buildExpenseBreakdown = (
 
   transactions.forEach((tx) => {
     if (!isCountable(tx) || tx.type !== "expense") return;
-    if (monthSet && !monthSet.has(tx.transaction_date.slice(0, 7))) return;
+    if (monthSet && !monthSet.has(getTransactionReferenceMonth(tx))) return;
+    if (dimension === "card" && tx.accounts?.type !== "credit_card") return;
 
     const key =
       dimension === "category"
         ? tx.category_id || "sem-categoria"
-        : tx.account_id || "sem-conta";
+        : tx.account_id || "sem-cartao";
     const name =
       dimension === "category"
         ? tx.categories?.name || "Sem categoria"
-        : tx.accounts?.name || "Sem conta";
+        : tx.accounts?.name || "Sem cartão";
 
     const existing = map.get(key);
     if (existing) {

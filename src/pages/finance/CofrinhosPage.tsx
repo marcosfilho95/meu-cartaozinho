@@ -3,9 +3,11 @@ import { Loader2, PiggyBank } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
+import { untypedSupabase } from "@/lib/supabaseUntyped";
 import { GoalsSection } from "@/components/finance/GoalsSection";
 import { fetchFinanceTransactions, monthKey } from "@/lib/financeShared";
 import { getSavingsPlan, getTransactionsForMonth, type PlanningGoal } from "@/lib/financePlanning";
+import { calculateReserveMovement, type GoalMovement } from "@/lib/financeOverview";
 
 interface CofrinhosPageProps {
   userId: string;
@@ -35,9 +37,9 @@ const CofrinhosPage: React.FC<CofrinhosPageProps> = ({ userId }) => {
           .eq("is_active", true)
           .order("name"),
         fetchFinanceTransactions(userId, 3),
-        supabase
+        untypedSupabase
           .from("goal_transactions")
-          .select("amount, type, created_at")
+          .select("amount, type, ref_month, created_at")
           .eq("user_id", userId)
           .limit(1000),
       ]);
@@ -59,12 +61,8 @@ const CofrinhosPage: React.FC<CofrinhosPageProps> = ({ userId }) => {
       const plan = getSavingsPlan({ income, expenses, goals: loadedGoals, refMonth });
       setSurplus(plan.positiveSurplus);
 
-      const monthAllocation = (goalTxRes.data || []).reduce((sum, row) => {
-        const record = row as { amount: number; type: string; created_at: string };
-        if (record.created_at.slice(0, 7) !== refMonth) return sum;
-        return sum + (record.type === "deposit" ? Number(record.amount) : -Number(record.amount));
-      }, 0);
-      setAllocated(Math.max(monthAllocation, 0));
+      const reserveMovement = calculateReserveMovement((goalTxRes.data || []) as GoalMovement[], refMonth);
+      setAllocated(Math.max(reserveMovement.net, 0));
     } catch {
       toast.error("Não foi possível carregar seus cofrinhos.");
     } finally {
