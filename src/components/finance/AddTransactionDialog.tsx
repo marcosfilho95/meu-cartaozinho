@@ -33,6 +33,8 @@ import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatCurrency } from "@/lib/constants";
 import { normalizeLabel } from "@/lib/financeShared";
+import type { FinanceTx } from "@/lib/financeShared";
+import { calculateAccountBalanceEffect } from "@/lib/financeOverview";
 
 type TxType = "income" | "expense";
 type PaymentMethod = "pix" | "boleto" | "credit" | "debit" | "cash";
@@ -44,6 +46,7 @@ interface AddTransactionDialogProps {
   onOpenChange: (open: boolean) => void;
   userId: string;
   defaultType?: TxType;
+  editingTransaction?: FinanceTx | null;
 }
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string; icon: React.ReactNode }[] = [
@@ -98,6 +101,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
   onOpenChange,
   userId,
   defaultType = "expense",
+  editingTransaction = null,
 }) => {
   const queryClient = useQueryClient();
 
@@ -119,6 +123,25 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
 
   const [accounts, setAccounts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+
+  const isEditing = Boolean(editingTransaction);
+
+  useEffect(() => {
+    if (!open || !editingTransaction) return;
+    const editingType: TxType = editingTransaction.type === "income" ? "income" : "expense";
+    const savedMethod = PAYMENT_METHODS.some((item) => item.value === editingTransaction.payment_method)
+      ? editingTransaction.payment_method as PaymentMethod
+      : editingType === "income" ? "pix" : "debit";
+    setType(editingType);
+    setPaymentMethod(savedMethod);
+    setAccountId(editingTransaction.account_id || "");
+    setCategoryId(editingTransaction.category_id || "");
+    setMode("single");
+    setAmount(Number(editingTransaction.amount).toFixed(2).replace(".", ","));
+    setDescription(editingTransaction.source || "");
+    setTransactionDate(editingTransaction.transaction_date);
+    setStatus(editingTransaction.status === "paid" ? "paid" : "pending");
+  }, [editingTransaction, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -171,10 +194,11 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
   const selectedAccount = useMemo(() => accounts.find((account: any) => account.id === accountId) || null, [accounts, accountId]);
 
   useEffect(() => {
+    if (isEditing) return;
     if (!selectedAccount) return;
     const dueDay = Number(selectedAccount?.due_day || 0);
     if (dueDay > 0) setTransactionDate(getNextDueDate(dueDay));
-  }, [selectedAccount]);
+  }, [isEditing, selectedAccount]);
 
   useEffect(() => {
     if (accountId && accountOptions.some((account: any) => account.id === accountId)) return;
@@ -227,7 +251,108 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
 
     try {
       const resolvedCategoryId = categoryId || null;
-      if (mode === "installment" && type === "expense") {
+      if (editingTransaction) {
+        const oldAmount = Number(editingTransaction.amount);
+        const oldEffect = calculateAccountBalanceEffect(editingTransaction);
+        const newEffect = calculateAccountBalanceEffect({ amount: numAmount, type, status });
+        const oldAccount = accounts.find((account: any) => account.id === editingTransaction.account_id);
+        const newAccount = accounts.find((account: any) => account.id === accountId);
+
+        const updatePayload = {
+          account_id: accountId,
+          category_id: resolvedCategoryId,
+          type,
+          amount: numAmount,
+          transaction_date: transactionDate,
+          due_date: transactionDate,
+          status,
+          source: description.trim(),
+          payment_method: paymentMethod,
+        };
+        const { error } = await supabase
+          .from("transactions")
+          .update(updatePayload)
+          .eq("id", editingTransaction.id)
+          .eq("user_id", userId);
+        if (error) throw error;
+
+        const rollbackTransaction = async () => {
+          await supabase
+            .from("transactions")
+            .update({
+              account_id: editingTransaction.account_id,
+              category_id: editingTransaction.category_id,
+              type: editingTransaction.type,
+              amount: oldAmount,
+              transaction_date: editingTransaction.transaction_date,
+              due_date: editingTransaction.due_date,
+              status: editingTransaction.status,
+              source: editingTransaction.source,
+              payment_method: editingTransaction.payment_method,
+            })
+            .eq("id", editingTransaction.id)
+            .eq("user_id", userId);
+        };
+
+        if (editingTransaction.account_id === accountId) {
+          const delta = newEffect - oldEffect;
+          if (Math.abs(delta) > 0.001 && !newAccount) {
+            await rollbackTransaction();
+            throw new Error("Conta do lançamento não encontrada para corrigir o saldo.");
+          }
+          if (newAccount && Math.abs(delta) > 0.001) {
+            const { error: balanceError } = await supabase
+              .from("accounts")
+              .update({ current_balance: Number(newAccount.current_balance || 0) + delta })
+              .eq("id", accountId)
+              .eq("user_id", userId);
+            if (balanceError) {
+              await rollbackTransaction();
+              throw balanceError;
+            }
+          }
+        } else {
+          if (Math.abs(oldEffect) > 0.001 && !oldAccount) {
+            await rollbackTransaction();
+            throw new Error("Conta anterior não encontrada para corrigir o saldo.");
+          }
+          if (Math.abs(newEffect) > 0.001 && !newAccount) {
+            await rollbackTransaction();
+            throw new Error("Nova conta não encontrada para corrigir o saldo.");
+          }
+          let oldBalanceChanged = false;
+          if (oldAccount && Math.abs(oldEffect) > 0.001) {
+            const { error: oldBalanceError } = await supabase
+              .from("accounts")
+              .update({ current_balance: Number(oldAccount.current_balance || 0) - oldEffect })
+              .eq("id", editingTransaction.account_id)
+              .eq("user_id", userId);
+            if (oldBalanceError) {
+              await rollbackTransaction();
+              throw oldBalanceError;
+            }
+            oldBalanceChanged = true;
+          }
+          if (newAccount && Math.abs(newEffect) > 0.001) {
+            const { error: newBalanceError } = await supabase
+              .from("accounts")
+              .update({ current_balance: Number(newAccount.current_balance || 0) + newEffect })
+              .eq("id", accountId)
+              .eq("user_id", userId);
+            if (newBalanceError) {
+              if (oldBalanceChanged && oldAccount) {
+                await supabase
+                  .from("accounts")
+                  .update({ current_balance: Number(oldAccount.current_balance || 0) })
+                  .eq("id", editingTransaction.account_id)
+                  .eq("user_id", userId);
+              }
+              await rollbackTransaction();
+              throw newBalanceError;
+            }
+          }
+        }
+      } else if (mode === "installment" && type === "expense") {
         const rows = [];
         for (let i = 0; i < installmentCount; i += 1) {
           const amountForRow = Math.round(numAmount * 100) / 100;
@@ -319,7 +444,9 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
       }
 
       toast.success(
-        mode === "installment"
+        editingTransaction
+          ? "Transação atualizada!"
+          : mode === "installment"
           ? `${installmentCount} parcelas registradas!`
           : mode === "recurrence"
             ? "Transação recorrente criada!"
@@ -359,7 +486,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg overflow-hidden rounded-2xl p-0">
         <DialogHeader className="px-5 pb-2 pt-5">
-          <DialogTitle className="font-heading text-lg">Nova transação</DialogTitle>
+          <DialogTitle className="font-heading text-lg">{isEditing ? "Editar transação" : "Nova transação"}</DialogTitle>
         </DialogHeader>
 
         <div className="max-h-[75vh] space-y-4 overflow-y-auto px-5 pb-5">
@@ -474,7 +601,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
             </Select>
           </div>
 
-          <div>
+          {!isEditing && <div>
             <Label className="mb-2 block text-xs text-muted-foreground">
               {type === "income" ? "Tipo de receita" : "Tipo de gasto"}
             </Label>
@@ -502,7 +629,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
                   </button>
                 ))}
             </div>
-          </div>
+          </div>}
 
           {mode === "installment" && type === "expense" && (
             <div className="space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
@@ -567,7 +694,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs text-muted-foreground">Vencimento</Label>
+              <Label className="text-xs text-muted-foreground">{isEditing ? "Data do lançamento" : "Vencimento"}</Label>
               <Input
                 type="date"
                 value={transactionDate}
@@ -598,6 +725,8 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
           >
             {saving ? (
               <Loader2 className="h-5 w-5 animate-spin" />
+            ) : isEditing ? (
+              "Salvar alterações"
             ) : mode === "installment" ? (
               `Salvar ${installmentCount} parcelas`
             ) : mode === "recurrence" ? (

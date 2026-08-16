@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-import { ArrowDownCircle, ArrowUpCircle, Check, Clock, Loader2, Search, Trash2 } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, Check, Clock, Loader2, Pencil, Search, Trash2 } from "lucide-react";
 import { formatCurrency, TRANSACTION_STATUS_COLORS, TRANSACTION_STATUS_LABELS } from "@/lib/constants";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -14,6 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { getFinanceTransactionsCache, setFinanceTransactionsCache } from "@/lib/financePageCache";
 import { FinanceTx, fetchFinanceTransactions, getCycleScopedTransactions, monthKey } from "@/lib/financeShared";
 import { getDashboardSummary } from "@/lib/financeSelectors";
+import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
+import { calculateAccountBalanceEffect } from "@/lib/financeOverview";
 
 interface TransactionsPageProps {
   userId: string;
@@ -29,6 +31,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
   const [viewMode, setViewMode] = useState<"billing" | "calendar">("billing");
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(VISIBLE_BATCH_SIZE);
+  const [editingTransaction, setEditingTransaction] = useState<FinanceTx | null>(null);
 
   const cachedTransactions = userId ? getFinanceTransactionsCache<FinanceTx[]>(userId) || [] : [];
   const currentMonth = monthKey(new Date());
@@ -130,17 +133,45 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (tx: FinanceTx) => {
+    if (!window.confirm(`Excluir "${tx.source || "este lançamento"}"? Essa ação também corrige o saldo da conta.`)) return;
+    const deletedAt = new Date().toISOString();
     const { error } = await supabase
       .from("transactions")
-      .update({ deleted_at: new Date().toISOString() })
-      .eq("id", id);
+      .update({ deleted_at: deletedAt })
+      .eq("id", tx.id)
+      .eq("user_id", userId);
     if (error) {
       toast.error(error.message);
       return;
     }
+
+    if (tx.status === "paid" && tx.account_id && (tx.type === "income" || tx.type === "expense")) {
+      const { data: account, error: accountReadError } = await supabase
+        .from("accounts")
+        .select("id, current_balance")
+        .eq("id", tx.account_id)
+        .eq("user_id", userId)
+        .maybeSingle();
+      const oldEffect = calculateAccountBalanceEffect(tx);
+      const { error: balanceError } = accountReadError || !account
+        ? { error: accountReadError || new Error("Conta do lançamento não encontrada.") }
+        : await supabase
+          .from("accounts")
+          .update({ current_balance: Number(account.current_balance || 0) - oldEffect })
+          .eq("id", tx.account_id)
+          .eq("user_id", userId);
+      if (balanceError) {
+        await supabase.from("transactions").update({ deleted_at: null }).eq("id", tx.id).eq("user_id", userId);
+        toast.error("Não foi possível corrigir o saldo; o lançamento não foi excluído.");
+        return;
+      }
+    }
+
     toast.success("Transação removida");
     queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    queryClient.invalidateQueries({ queryKey: ["accounts"] });
+    window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId } }));
   };
 
   const grouped = useMemo(() => {
@@ -362,15 +393,33 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
                           </Badge>
                         </div>
 
-                        {/* Delete */}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 shrink-0 rounded-lg text-muted-foreground hover:text-destructive"
-                          onClick={() => handleDelete(tx.id)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                        {/* Edit/delete actions */}
+                        <div className="flex shrink-0 items-center gap-1">
+                          {tx.type !== "transfer" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 gap-1 rounded-lg px-2 text-muted-foreground hover:text-primary"
+                              onClick={() => setEditingTransaction(tx)}
+                              aria-label={`Editar ${tx.source || "lançamento"}`}
+                              title="Editar lançamento"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              <span className="hidden text-[11px] sm:inline">Editar</span>
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 gap-1 rounded-lg px-2 text-muted-foreground hover:text-destructive"
+                            onClick={() => void handleDelete(tx)}
+                            aria-label={`Excluir ${tx.source || "lançamento"}`}
+                            title="Excluir lançamento"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            <span className="hidden text-[11px] sm:inline">Excluir</span>
+                          </Button>
+                        </div>
                       </CardContent>
                     </Card>
                   );
@@ -388,6 +437,14 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
           </>
         )}
       </div>
+      <AddTransactionDialog
+        key={editingTransaction?.id || "no-edit"}
+        open={Boolean(editingTransaction)}
+        onOpenChange={(open) => { if (!open) setEditingTransaction(null); }}
+        userId={userId}
+        defaultType={editingTransaction?.type === "income" ? "income" : "expense"}
+        editingTransaction={editingTransaction}
+      />
     </>
   );
 };

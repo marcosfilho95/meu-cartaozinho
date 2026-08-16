@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { FinanceTx } from "@/lib/financeShared";
 import {
   calculateMonthlyResult,
+  calculateAccountBalanceEffect,
   calculateNetWorth,
   calculateReserveMovement,
 } from "@/lib/financeOverview";
@@ -20,6 +21,13 @@ const tx = (partial: Partial<FinanceTx>): FinanceTx => ({
 });
 
 describe("financeOverview", () => {
+  it("calcula o efeito no saldo ao editar ou excluir lançamentos", () => {
+    expect(calculateAccountBalanceEffect(tx({ type: "income", amount: 500, status: "paid" }))).toBe(500);
+    expect(calculateAccountBalanceEffect(tx({ type: "expense", amount: 120, status: "paid" }))).toBe(-120);
+    expect(calculateAccountBalanceEffect(tx({ type: "income", amount: 500, status: "pending" }))).toBe(0);
+    expect(calculateAccountBalanceEffect(tx({ type: "transfer", amount: 500, status: "paid" }))).toBe(0);
+  });
+
   it("soma contas e cofrinhos sem transformar aportes em perda patrimonial", () => {
     const summary = calculateNetWorth(
       [

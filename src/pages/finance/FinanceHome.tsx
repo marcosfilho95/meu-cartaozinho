@@ -18,15 +18,21 @@ import {
 } from "recharts";
 import {
   ArrowDownCircle,
+  ArrowDown,
+  ArrowUp,
   ArrowUpCircle,
+  AlertTriangle,
   BarChart3,
   CalendarRange,
   CreditCard,
   Loader2,
+  CheckCircle2,
   PiggyBank,
   Repeat,
   Upload,
   Wallet,
+  TrendingDown,
+  TrendingUp,
 } from "lucide-react";
 
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
@@ -60,6 +66,7 @@ import {
   type FixedBillPreview,
 } from "@/lib/finance/fixedBills";
 import { cn } from "@/lib/utils";
+import { buildCategoryMovements, getTransactionsForMonth } from "@/lib/financePlanning";
 
 interface FinanceHomeProps {
   userId: string;
@@ -88,6 +95,38 @@ type GoalRow = { current_amount: number | null };
 const fullMonthLabel = (key: string) =>
   new Date(`${key}-15T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 
+const percentDelta = (current: number, previous: number) => {
+  if (Math.abs(previous) < 0.01) return null;
+  return ((current - previous) / Math.abs(previous)) * 100;
+};
+
+const ComparisonChip = ({ current, previous, inverse = false, points = false }: {
+  current: number;
+  previous: number;
+  inverse?: boolean;
+  points?: boolean;
+}) => {
+  const delta = current - previous;
+  const percentage = percentDelta(current, previous);
+  const stable = Math.abs(delta) < 0.01;
+  const positive = inverse ? delta <= 0 : delta >= 0;
+  return (
+    <div className={cn(
+      "mt-2 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold",
+      stable ? "bg-muted text-muted-foreground" : positive ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive",
+    )}>
+      {stable ? null : delta > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+      {stable
+        ? "Estável vs. mês anterior"
+        : points
+          ? `${delta > 0 ? "+" : ""}${delta.toFixed(1)} p.p.`
+          : percentage === null
+            ? `${delta > 0 ? "+" : ""}${formatCurrency(delta)}`
+            : `${delta > 0 ? "+" : ""}${percentage.toFixed(1)}% vs. mês anterior`}
+    </div>
+  );
+};
+
 const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -102,6 +141,7 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
   const [dialogType, setDialogType] = useState<"expense" | "income">("expense");
   const [monthBills, setMonthBills] = useState<FixedBillPreview[]>([]);
   const [generating, setGenerating] = useState(false);
+  const [chartRange, setChartRange] = useState<6 | 12>(6);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -190,10 +230,39 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
   const expenses = monthSummary.expenses;
   const pendingExpenses = monthSummary.pendingExpenses;
   const balance = monthSummary.result;
+  const previousMonth = addMonthsToKey(refMonth, -1);
+  const previousSummary = useMemo(
+    () => calculateMonthlyResult(transactions, previousMonth),
+    [previousMonth, transactions],
+  );
+  const savingsRate = income > 0 ? (balance / income) * 100 : 0;
+  const previousSavingsRate = previousSummary.income > 0
+    ? (previousSummary.result / previousSummary.income) * 100
+    : 0;
+  const referenceTransactions = useMemo(
+    () => getTransactionsForMonth(transactions, refMonth),
+    [refMonth, transactions],
+  );
+  const previousTransactions = useMemo(
+    () => getTransactionsForMonth(transactions, previousMonth),
+    [previousMonth, transactions],
+  );
+  const categoryMovements = useMemo(
+    () => buildCategoryMovements(referenceTransactions, previousTransactions),
+    [previousTransactions, referenceTransactions],
+  );
+  const biggestIncreases = useMemo(
+    () => categoryMovements.filter((item) => item.delta > 0.01).sort((a, b) => b.delta - a.delta).slice(0, 3),
+    [categoryMovements],
+  );
+  const biggestDecreases = useMemo(
+    () => categoryMovements.filter((item) => item.delta < -0.01).sort((a, b) => a.delta - b.delta).slice(0, 3),
+    [categoryMovements],
+  );
 
   const evolutionMonths = useMemo(
-    () => getLastMonthKeys(6, new Date(`${refMonth}-15T12:00:00`)),
-    [refMonth],
+    () => getLastMonthKeys(chartRange, new Date(`${refMonth}-15T12:00:00`)),
+    [chartRange, refMonth],
   );
   const evolutionData = useMemo(
     () => buildMonthlyEvolution(transactions, evolutionMonths, goalMovements),
@@ -292,7 +361,7 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
               {fullMonthLabel(refMonth)}
             </h1>
             <p className="mt-1 text-xs text-muted-foreground">
-              O que entrou, o que saiu e o que ainda falta pagar neste mês.
+              Resumo do mês, comparação com o anterior e evolução da sua vida financeira.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -312,15 +381,29 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
             <Button size="sm" variant="outline" className="h-9 gap-1.5 text-xs" onClick={() => navigate("/financas/importacoes")}>
               <Upload className="h-3.5 w-3.5" /> Importar
             </Button>
+            <Button size="sm" variant="outline" className="h-9 gap-1.5 text-xs" onClick={() => navigate("/financas/fechamento")}>
+              <PiggyBank className="h-3.5 w-3.5" /> Fechamento completo
+            </Button>
           </div>
         </header>
 
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <Card className="border-0 shadow-card">
+            <CardContent className="p-4">
+              <PiggyBank className="h-5 w-5 text-primary" />
+              <p className="mt-2 text-[11px] text-muted-foreground">Resultado do mês</p>
+              <p className={cn("text-xl font-bold", balance >= 0 ? "text-success" : "text-destructive")}>
+                {formatCurrency(balance)}
+              </p>
+              <ComparisonChip current={balance} previous={previousSummary.result} />
+            </CardContent>
+          </Card>
           <Card className="border-0 shadow-card">
             <CardContent className="p-4">
               <ArrowUpCircle className="h-5 w-5 text-success" />
               <p className="mt-2 text-[11px] text-muted-foreground">Receitas do mês</p>
               <p className="text-xl font-bold text-success">{formatCurrency(income)}</p>
+              <ComparisonChip current={income} previous={previousSummary.income} />
             </CardContent>
           </Card>
           <Card className="border-0 shadow-card">
@@ -329,26 +412,17 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
               <p className="mt-2 text-[11px] text-muted-foreground">Despesas do mês</p>
               <p className="text-xl font-bold text-destructive">{formatCurrency(expenses)}</p>
               <p className="mt-1 text-[11px] text-muted-foreground">{formatCurrency(pendingExpenses)} ainda a pagar</p>
+              <ComparisonChip current={expenses} previous={previousSummary.expenses} inverse />
             </CardContent>
           </Card>
           <Card className="border-0 shadow-card">
             <CardContent className="p-4">
               <PiggyBank className="h-5 w-5 text-primary" />
-              <p className="mt-2 text-[11px] text-muted-foreground">Resultado do mês</p>
-              <p className={cn("text-xl font-bold", balance >= 0 ? "text-success" : "text-destructive")}>
-                {formatCurrency(balance)}
+              <p className="mt-2 text-[11px] text-muted-foreground">Taxa de poupança</p>
+              <p className={cn("text-xl font-bold", savingsRate >= 20 ? "text-success" : savingsRate >= 0 ? "text-warning" : "text-destructive")}>
+                {savingsRate.toFixed(1)}%
               </p>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                {balance < 0 && reserveMovement.withdrawals > 0
-                  ? `Gastou ${formatCurrency(Math.abs(balance))} a mais e retirou ${formatCurrency(reserveMovement.withdrawals)} das reservas`
-                  : reserveMovement.withdrawals > 0
-                    ? `Retirou ${formatCurrency(reserveMovement.withdrawals)} das reservas`
-                  : reserveMovement.deposits > 0
-                    ? `Guardou ${formatCurrency(reserveMovement.deposits)} nos cofrinhos`
-                    : balance < 0
-                      ? "Nenhuma retirada de reserva registrada"
-                      : "Receitas menos despesas registradas"}
-              </p>
+              <ComparisonChip current={savingsRate} previous={previousSavingsRate} points />
             </CardContent>
           </Card>
           <Card className="border-0 shadow-card">
@@ -365,6 +439,50 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
             </CardContent>
           </Card>
         </section>
+
+        <Card className={cn(
+          "border shadow-card",
+          balance < 0
+            ? "border-destructive/30 bg-destructive/5"
+            : savingsRate >= 20
+              ? "border-success/30 bg-success/5"
+              : "border-warning/30 bg-warning/5",
+        )}>
+          <CardContent className="space-y-3 p-4">
+            <div className="flex items-start gap-3">
+              <div className="rounded-xl bg-background/80 p-2">
+                {balance < 0
+                  ? <AlertTriangle className="h-5 w-5 text-destructive" />
+                  : <CheckCircle2 className={cn("h-5 w-5", savingsRate >= 20 ? "text-success" : "text-warning")} />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="font-heading text-base font-bold">
+                  {balance < 0
+                    ? "Você gastou mais do que recebeu neste mês"
+                    : savingsRate >= 20
+                      ? "Você está poupando em um bom ritmo"
+                      : "O mês está positivo, mas ainda há espaço para poupar mais"}
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {balance < 0 && reserveMovement.withdrawals > 0
+                    ? `O resultado ficou negativo em ${formatCurrency(Math.abs(balance))} e houve retirada de ${formatCurrency(reserveMovement.withdrawals)} dos cofrinhos.`
+                    : balance < 0
+                      ? `Faltaram ${formatCurrency(Math.abs(balance))} para o mês fechar no positivo.`
+                      : reserveMovement.deposits > 0
+                        ? `Sobrou ${formatCurrency(balance)} e você já direcionou ${formatCurrency(reserveMovement.deposits)} aos cofrinhos.`
+                        : `Sobrou ${formatCurrency(balance)}. Uma referência simples é guardar pelo menos 20% da renda.`}
+                </p>
+              </div>
+              <Badge variant="outline" className="shrink-0 bg-background/70">Meta 20%</Badge>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-background/80">
+              <div
+                className={cn("h-full rounded-full", savingsRate >= 20 ? "bg-success" : savingsRate >= 0 ? "bg-warning" : "bg-destructive")}
+                style={{ width: `${Math.max(0, Math.min(100, (savingsRate / 20) * 100))}%` }}
+              />
+            </div>
+          </CardContent>
+        </Card>
 
         <DailyOrganizerPanel
           userId={userId}
@@ -384,12 +502,18 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
                   <BarChart3 className="h-4 w-4 text-primary" />
                   <div>
                     <h2 className="font-heading text-base font-bold">Evolução financeira</h2>
-                    <p className="text-[11px] text-muted-foreground">Receitas, despesas e resultado · últimos 6 meses</p>
+                    <p className="text-[11px] text-muted-foreground">Receitas, despesas e resultado · últimos {chartRange} meses</p>
                   </div>
                 </div>
-                <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => navigate("/financas/relatorios")}>
-                  Ver relatório
-                </Button>
+                <div className="flex items-center gap-1">
+                  <div className="flex gap-1 rounded-lg border border-border p-1">
+                    <button type="button" className={cn("rounded-md px-2 py-1 text-[10px] font-semibold", chartRange === 6 ? "bg-primary text-primary-foreground" : "text-muted-foreground")} onClick={() => setChartRange(6)}>6M</button>
+                    <button type="button" className={cn("rounded-md px-2 py-1 text-[10px] font-semibold", chartRange === 12 ? "bg-primary text-primary-foreground" : "text-muted-foreground")} onClick={() => setChartRange(12)}>12M</button>
+                  </div>
+                  <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => navigate("/financas/relatorios")}>
+                    Relatório
+                  </Button>
+                </div>
               </div>
               <div className="mt-4 h-72">
                 {hasEvolutionData ? (
@@ -499,6 +623,50 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
             </CardContent>
           </Card>
         </section>
+
+        <Card className="border-0 shadow-card">
+          <CardContent className="space-y-4 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="font-heading text-base font-bold">O que mudou nos seus gastos</h2>
+                <p className="text-xs text-muted-foreground">Comparação com {fullMonthLabel(previousMonth)}.</p>
+              </div>
+              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => navigate("/financas/fechamento")}>
+                Análise completa
+              </Button>
+            </div>
+            {biggestIncreases.length === 0 && biggestDecreases.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
+                Ainda não há dois meses com despesas suficientes para comparar.
+              </p>
+            ) : (
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <p className="flex items-center gap-1 text-xs font-semibold text-destructive">
+                    <TrendingUp className="h-3.5 w-3.5" /> Onde você gastou mais
+                  </p>
+                  {biggestIncreases.length === 0 ? <p className="text-xs text-muted-foreground">Nenhum aumento relevante.</p> : biggestIncreases.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-border/70 px-3 py-2.5 text-sm">
+                      <span className="min-w-0 truncate font-medium">{item.label}</span>
+                      <span className="shrink-0 font-bold text-destructive">+{formatCurrency(item.delta)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="space-y-2">
+                  <p className="flex items-center gap-1 text-xs font-semibold text-success">
+                    <TrendingDown className="h-3.5 w-3.5" /> Onde você gastou menos
+                  </p>
+                  {biggestDecreases.length === 0 ? <p className="text-xs text-muted-foreground">Nenhuma redução relevante.</p> : biggestDecreases.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-border/70 px-3 py-2.5 text-sm">
+                      <span className="min-w-0 truncate font-medium">{item.label}</span>
+                      <span className="shrink-0 font-bold text-success">-{formatCurrency(Math.abs(item.delta))}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <Card className="border-0 shadow-card">
           <CardContent className="p-4">

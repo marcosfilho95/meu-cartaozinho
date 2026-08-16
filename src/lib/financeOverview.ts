@@ -45,6 +45,14 @@ const LIABILITY_TYPES = new Set(["credit_card", "loan"]);
 
 const amount = (value: number | null | undefined) => Number(value) || 0;
 
+/** Efeito de um lançamento no saldo real da conta. Pendências e transferências não alteram o saldo aqui. */
+export const calculateAccountBalanceEffect = (transaction: Pick<FinanceTx, "amount" | "type" | "status">) => {
+  if (transaction.status !== "paid") return 0;
+  if (transaction.type === "income") return amount(transaction.amount);
+  if (transaction.type === "expense") return -amount(transaction.amount);
+  return 0;
+};
+
 export const getTransactionReferenceMonth = (transaction: FinanceTx) =>
   transaction.transaction_date.slice(0, 7);
 
