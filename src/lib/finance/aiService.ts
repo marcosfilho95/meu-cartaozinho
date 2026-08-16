@@ -19,6 +19,8 @@ export type AiClassifyRow = {
   isTransfer: boolean;
   /** Tipo já determinado pelas regras; a IA escolhe somente a categoria. */
   financialType: "income" | "expense" | "transfer";
+  explicitAccount: string | null;
+  institution: string | null;
 };
 
 export type AiClassifyResult = {
@@ -27,6 +29,7 @@ export type AiClassifyResult = {
   categoryKind: "income" | "expense" | "transfer";
   createIfMissing: boolean;
   confidence: number;
+  accountName?: string | null;
 };
 
 export class FinanceAiError extends Error {
@@ -60,10 +63,15 @@ const normalizeInvokeError = async (error: unknown, data: unknown) => {
 export const classifyTransactionsWithAi = async (
   rows: AiClassifyRow[],
   categories: AiCategoryRef[],
+  accounts: Array<{ name: string; institution?: string | null }> = [],
 ): Promise<AiClassifyResult[]> => {
   if (rows.length === 0) return [];
   const { data, error } = await supabase.functions.invoke("smart-classify-imports", {
-    body: { rows, categories: categories.map((c) => ({ name: c.name, kind: c.kind })) },
+    body: {
+      rows,
+      categories: categories.map((c) => ({ name: c.name, kind: c.kind })),
+      accounts: accounts.map((account) => ({ name: account.name, institution: account.institution || null })),
+    },
   });
   if (error || (data as { error?: unknown } | null)?.error) throw await normalizeInvokeError(error, data);
   return ((data as { results?: AiClassifyResult[] } | null)?.results || []) as AiClassifyResult[];

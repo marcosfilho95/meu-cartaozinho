@@ -3,6 +3,10 @@ import { mercadoPagoTextParser, parseMercadoPagoTextRows } from "@/lib/finance/i
 import { genericCsvParser } from "@/lib/finance/imports/genericCsvParser";
 import { genericTextParser } from "@/lib/finance/imports/genericTextParser";
 import { classifyFinancialRow } from "@/lib/finance/imports/financialRules";
+import {
+  normalizeImportedAccountName,
+  resolveImportedAccountId,
+} from "@/lib/finance/imports/accountNormalization";
 import { parseNubankCsvRows } from "@/lib/finance/imports/nubankCsvParser";
 import { suggestCategoryName } from "@/lib/finance/imports/utils";
 
@@ -109,6 +113,100 @@ Data de Compra;Nome no Cartão;Final do Cartão;Categoria;Descrição;Parcela;Va
       direction: "CREDIT",
       sourceType: "BANK_ACCOUNT",
     });
+  });
+
+  it.each(["banco", "conta", "account", "instituicao"])(
+    "recognizes %s as an explicit account column",
+    async (accountColumn) => {
+      const parsed = await genericCsvParser.parse({
+        fileName: "extrato.csv",
+        mimeType: "text/csv",
+        fileText: `Data;${accountColumn};Descricao;Valor\n12/05/2026;MercadoPago;PIX RECEBIDO;29,90`,
+        fileHash: `account-column-${accountColumn}`,
+      });
+
+      expect(parsed.detection.institution).toBe("MERCADO_PAGO");
+      expect(parsed.metadata.accountColumn).toBe(accountColumn);
+      expect(parsed.transactions[0].sourceAccountName).toBe("Mercado Pago");
+    },
+  );
+
+  it("normalizes Mercado Pago aliases and Mercado Livre only in its card statement", async () => {
+    const parsed = await genericCsvParser.parse({
+      fileName: "fatura.csv",
+      mimeType: "text/csv",
+      fileText: `FATURA MERCADO PAGO
+Data;Banco;Categoria;Descricao;Valor
+12/05/2026;Mercado Pago;Combustivel;MP*PETROBRASPREM;29,90
+13/05/2026;MercadoPago;Compras;MERCADOLIVRE*LOJA;40,00
+14/05/2026;MP;Pet;PREMMIA*BR;10,00
+15/05/2026;Mercado Livre;Compras Online;MERCADOPAGO*XPTO;20,00`,
+      fileHash: "mercado-pago-account-aliases",
+    });
+
+    expect(parsed.detection).toMatchObject({
+      institution: "MERCADO_PAGO",
+      documentType: "CREDIT_CARD_STATEMENT",
+    });
+    expect(parsed.transactions.map((row) => row.sourceAccountName)).toEqual([
+      "Mercado Pago",
+      "Mercado Pago",
+      "Mercado Pago",
+      "Mercado Pago",
+    ]);
+    expect(parsed.transactions[0]).toMatchObject({
+      categorySuggestion: "Gasolina",
+      direction: "DEBIT",
+    });
+  });
+
+  it("auto-detects Mercado Pago only when every populated transaction has that account", async () => {
+    const parsed = await genericCsvParser.parse({
+      fileName: "extrato.csv",
+      mimeType: "text/csv",
+      fileText: "Data;Banco;Descricao;Valor\n12/05/2026;Mercado Pago;PIX RECEBIDO;29,90\n13/05/2026;;PIX RECEBIDO;10,00",
+      fileHash: "partial-mercado-pago-account",
+    });
+
+    expect(parsed.detection.institution).toBe("UNKNOWN");
+    expect(parsed.transactions[0].sourceAccountName).toBe("Mercado Pago");
+    expect(parsed.transactions[1].sourceAccountName).toBeUndefined();
+  });
+
+  it("keeps an explicit CSV account above the detected institution and blocks category names", async () => {
+    const parsed = await genericCsvParser.parse({
+      fileName: "fatura-nubank.csv",
+      mimeType: "text/csv",
+      fileText: "FATURA NUBANK\nData;Banco;Descricao;Valor\n12/05/2026;MP;MERCADOLIVRE*LOJA;29,90",
+      fileHash: "explicit-account-priority",
+      manualInstitution: "NUBANK",
+    });
+    const accounts = [
+      { id: "food", name: "Alimentacao", type: "credit_card" },
+      { id: "nubank", name: "Cartao Nubank", type: "credit_card", institution: "Nubank" },
+      { id: "mp", name: "Mercado Pago", type: "credit_card", institution: "Mercado Pago" },
+    ];
+
+    expect(resolveImportedAccountId(parsed.transactions[0], accounts)).toBe("mp");
+    expect(normalizeImportedAccountName("Gasolina")).toBeUndefined();
+    expect(resolveImportedAccountId({
+      ...parsed.transactions[0],
+      sourceAccountName: undefined,
+      institution: "UNKNOWN",
+    }, [accounts[0]])).toBe("");
+  });
+
+  it("does not replace an unmatched explicit CSV account with another registered account", async () => {
+    const parsed = await genericCsvParser.parse({
+      fileName: "extrato.csv",
+      mimeType: "text/csv",
+      fileText: "Data;Conta;Descricao;Valor\n12/05/2026;Banco Inter;PIX RECEBIDO;29,90",
+      fileHash: "unmatched-explicit-account",
+    });
+
+    expect(resolveImportedAccountId(parsed.transactions[0], [
+      { id: "nubank", name: "Nubank", type: "checking", institution: "Nubank" },
+    ])).toBe("");
   });
 
   it("honors explicit debit and credit columns in a card statement", async () => {

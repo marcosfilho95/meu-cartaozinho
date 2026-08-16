@@ -61,6 +61,7 @@ import {
 import { LocalCategoryClassifier } from "@/lib/finance/imports/classifier";
 import { normalizeLabel } from "@/lib/financeShared";
 import { cn } from "@/lib/utils";
+import { findImportedAccountIdByName, resolveImportedAccountId } from "@/lib/finance/imports/accountNormalization";
 import { classifyTransactionsWithAi, extractFinancialDocumentWithVision } from "@/lib/finance/aiService";
 
 interface ImportsPageProps {
@@ -112,6 +113,7 @@ type ReviewRow = NormalizedTransaction & {
   financialRole: keyof typeof ROLE_LABEL;
   reviewConfirmed: boolean;
   aiCategorySuggestion?: string;
+  aiAccountSuggestion?: string;
   aiConfidence?: number;
 };
 
@@ -203,16 +205,6 @@ const resolveSmartCategoryId = (
   const classifier = new LocalCategoryClassifier(categories as any, rules as any, history);
   const result = classifier.classify(row);
   return result.categoryId || resolveSuggestedCategoryId(row, categories);
-};
-
-const resolveDefaultAccountId = (row: NormalizedTransaction, accounts: AccountOption[]) => {
-  const isCard = row.sourceType === "CREDIT_CARD";
-  const eligible = accounts.filter((a) => (isCard ? a.type === "credit_card" : a.type !== "credit_card"));
-  const pool = eligible.length > 0 ? eligible : accounts;
-  const institution = normalizeLabel(row.institution.replace("_", " "));
-  const byInstitution = pool.find((a) => normalizeLabel(`${a.institution || ""} ${a.name}`).includes(institution));
-  if (byInstitution) return byInstitution.id;
-  return pool[0]?.id || accounts[0]?.id || "";
 };
 
 const buildDidacticError = (raw: string, hadText: boolean): { title: string; body: string; hint: string } => {
@@ -378,7 +370,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
         ...row,
         localId: `${row.fingerprint}-${index}`,
         selected: !row.possibleDuplicate && !needsReview,
-        accountId: resolveDefaultAccountId(row, support.nextAccounts),
+        accountId: resolveImportedAccountId(row, support.nextAccounts),
         categoryId: resolveSmartCategoryId(
           row,
           support.nextCategories,
@@ -639,17 +631,25 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
 
   const suggestedAccountName = useMemo(() => {
     if (!parsedInfo) return "";
+    const explicitNames = rows
+      .map((row) => row.sourceAccountName)
+      .filter((name): name is string => Boolean(name));
+    if (explicitNames.length > 0 && explicitNames.every((name) => name === "Mercado Pago")) {
+      return "Mercado Pago";
+    }
     const institution = parsedInfo.institution;
     if (institution === "UNKNOWN") return "";
     const label = INSTITUTION_LABEL[institution];
     const isCard = parsedInfo.documentType === "CREDIT_CARD_STATEMENT";
     return isCard ? `Cartão ${label}` : `Conta ${label}`;
-  }, [parsedInfo]);
+  }, [parsedInfo, rows]);
 
   const suggestedAccountMissing = useMemo(() => {
     if (!suggestedAccountName || !parsedInfo || parsedInfo.institution === "UNKNOWN") return false;
-    const target = normalizeLabel(parsedInfo.institution.replace("_", " "));
-    return !accounts.some((a) => normalizeLabel(`${a.institution || ""} ${a.name}`).includes(target));
+    return !findImportedAccountIdByName(suggestedAccountName, accounts, {
+      institution: parsedInfo.institution,
+      documentType: parsedInfo.documentType,
+    });
   }, [accounts, parsedInfo, suggestedAccountName]);
 
   const createSuggestedAccount = async () => {
@@ -657,12 +657,15 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
     setCreatingAccount(true);
     try {
       const isCard = parsedInfo.documentType === "CREDIT_CARD_STATEMENT";
+      const institution = suggestedAccountName === "Mercado Pago"
+        ? "Mercado Pago"
+        : INSTITUTION_LABEL[parsedInfo.institution];
       const payload = {
         user_id: userId,
         name: suggestedAccountName,
         type: isCard ? "credit_card" : "checking",
         scope: "personal",
-        institution: INSTITUTION_LABEL[parsedInfo.institution],
+        institution,
         initial_balance: 0,
         current_balance: 0,
         include_in_net_worth: !isCard,
@@ -774,11 +777,14 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
           sourceType: row.sourceType || null,
           isTransfer: Boolean(row.possibleInternalTransfer),
           financialType: row.transactionType,
+          explicitAccount: row.sourceAccountName || null,
+          institution: row.institution !== "UNKNOWN" ? row.institution : null,
         }));
 
         const results = await classifyTransactionsWithAi(
           payloadRows,
           knownCategories.map((c) => ({ name: c.name, kind: c.kind })),
+          accounts.map((account) => ({ name: account.name, institution: account.institution })),
         );
 
         if (results.length === 0) {
@@ -797,9 +803,18 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
             if (pos === -1) return row;
             const r = results.find((x) => x.index === pos);
             if (!r) return row;
+            const hasExplicitAccountSource = Boolean(row.sourceAccountName || row.metadata?.sourceAccountRaw);
+            const mayUseAiAccount = !hasExplicitAccountSource && row.institution === "UNKNOWN";
+            const aiAccountId = mayUseAiAccount && r.accountName
+              ? findImportedAccountIdByName(r.accountName, accounts)
+              : "";
+            const accountPatch = mayUseAiAccount && r.accountName
+              ? { aiAccountSuggestion: r.accountName, accountId: aiAccountId || row.accountId }
+              : {};
             if (r.categoryKind !== row.transactionType) {
               return {
                 ...row,
+                ...accountPatch,
                 aiCategorySuggestion: r.categoryName,
                 aiConfidence: r.confidence,
                 needsReview: true,
@@ -810,10 +825,10 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
             const match = localCats.find(
               (c) => c.kind === r.categoryKind && normalizeCategoryName(c.name) === normalizeCategoryName(r.categoryName),
             );
-            if (!match) return { ...row, aiCategorySuggestion: r.categoryName, aiConfidence: r.confidence };
-            if (row.categoryId === match.id) return { ...row, aiCategorySuggestion: r.categoryName, aiConfidence: r.confidence };
+            if (!match) return { ...row, ...accountPatch, aiCategorySuggestion: r.categoryName, aiConfidence: r.confidence };
+            if (row.categoryId === match.id) return { ...row, ...accountPatch, aiCategorySuggestion: r.categoryName, aiConfidence: r.confidence };
             classified++;
-            return { ...row, categoryId: match.id, aiCategorySuggestion: r.categoryName, aiConfidence: r.confidence };
+            return { ...row, ...accountPatch, categoryId: match.id, aiCategorySuggestion: r.categoryName, aiConfidence: r.confidence };
           });
           return next;
         });
@@ -828,7 +843,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
         setAiClassifying(false);
       }
     },
-    [],
+    [accounts],
   );
 
   const handleConfirm = async () => {
@@ -1536,6 +1551,12 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
                         </div>
                         {row.aiCategorySuggestion && !row.categoryId && (
                           <p className="mt-1 text-[10px] text-primary">IA sugeriu “{row.aiCategorySuggestion}”; escolha uma categoria para confirmar.</p>
+                        )}
+                        {row.sourceAccountName && (
+                          <p className="mt-1 text-[10px] font-medium text-success">Conta do CSV: {row.sourceAccountName}</p>
+                        )}
+                        {!row.sourceAccountName && row.aiAccountSuggestion && (
+                          <p className="mt-1 text-[10px] text-primary">IA sugeriu conta “{row.aiAccountSuggestion}”.</p>
                         )}
                       </div>
 

@@ -31,6 +31,8 @@ export type NormalizedTransaction = {
   institution: InstitutionCode;
   sourceType: "BANK_ACCOUNT" | "CREDIT_CARD";
   sourceAccountId?: string;
+  /** Nome explícito da conta/instituição encontrado no arquivo. */
+  sourceAccountName?: string;
   transactionDate: string;
   postingDate?: string;
   dueDate?: string;

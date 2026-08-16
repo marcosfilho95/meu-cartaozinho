@@ -1,5 +1,5 @@
 // Classifica lote de linhas importadas usando Lovable AI (Gemini).
-// Retorna, para cada linha, categoria sugerida (nome + tipo) e se deve criar categoria nova.
+// Retorna conta de origem e categoria separadamente, preservando fontes explícitas.
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -15,6 +15,8 @@ interface InRow {
   sourceType?: string | null; // BANK | CREDIT_CARD
   isTransfer?: boolean;
   financialType?: "income" | "expense" | "transfer";
+  explicitAccount?: string | null;
+  institution?: string | null;
 }
 
 interface OutRow {
@@ -24,11 +26,42 @@ interface OutRow {
   createIfMissing: boolean;
   confidence: number;
   reason?: string;
+  accountName: string | null;
 }
+
+const normalizeAccountName = (value: unknown) => {
+  const raw = String(value || "").trim();
+  const normalized = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]+/gi, " ").trim().toUpperCase();
+  if (!normalized || ["ALIMENTACAO", "GASOLINA", "COMPRAS ONLINE", "MERCADO", "RESTAURANTE", "TRANSPORTE", "LAZER", "SAUDE", "FARMACIA", "OUTROS"].includes(normalized)) return null;
+  if (["MERCADO PAGO", "MERCADOPAGO", "MP"].includes(normalized)) return "Mercado Pago";
+  if (normalized === "NUBANK") return "Nubank";
+  if (normalized === "PICPAY") return "PicPay";
+  if (/^C6(?: BANK)?$/.test(normalized)) return "C6";
+  if (normalized === "BRADESCARD") return "Bradescard";
+  if (normalized === "BRADESCO") return "Bradesco";
+  return raw.slice(0, 80);
+};
+
+const deterministicAccountName = (row: InRow) => {
+  const explicit = normalizeAccountName(row.explicitAccount);
+  if (explicit) {
+    const normalizedExplicit = String(row.explicitAccount || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+    if (normalizedExplicit.trim() === "MERCADO LIVRE" && row.institution === "MERCADO_PAGO" && row.sourceType === "CREDIT_CARD") return "Mercado Pago";
+    return explicit;
+  }
+  return normalizeAccountName(String(row.institution || "").replaceAll("_", " "));
+};
 
 const SYSTEM_PROMPT = `Você é um classificador financeiro brasileiro EXPERT em reconhecimento de marcas e comerciantes.
 
 O tipo financeiro (income, expense ou transfer) JÁ foi determinado pelo motor de regras antes desta etapa. Você NÃO deve reinterpretar o sinal nem alterar esse tipo; escolha somente uma categoria compatível.
+
+CONTA E CATEGORIA SÃO CAMPOS DIFERENTES:
+- accountName é a instituição financeira de origem. Se contaExplicita estiver preenchida, repita essa conta normalizada e nunca a substitua.
+- categoryName é a finalidade do gasto/receita.
+- Nunca retorne Alimentação, Gasolina, Compras Online, Mercado, Restaurante ou outra categoria em accountName.
+- MERCADOLIVRE*, MERCADOPAGO*, PREMMIA*BR e MP*PETROBRASPREM descrevem o comerciante e ajudam somente na categoria; não provam a conta de origem.
+- Se contaExplicita e instituicaoDetectada estiverem vazias, accountName pode usar uma conta existente somente quando houver evidência financeira inequívoca; caso contrário retorne null.
 
 SEU CONHECIMENTO DE MARCAS (use como se estivesse consultando o Google):
 Você conhece TODAS as principais marcas, lojas, bancos, apps e serviços do Brasil — mesmo que apareçam abreviados, com códigos de maquininha (ex.: "CIELO*NOME", "PAG*NOME", "STONE*NOME", "MP*NOME", "REDE*NOME"), com sufixos de cidade/UF, ou com espaçamento estranho. IGNORE prefixos de adquirente (CIELO, REDE, GETNET, STONE, PAG, PAGSEGURO, MP, MERCPAGO, EBW, PICPAY*) ao identificar o comerciante — o nome real vem depois do asterisco/espaço.
@@ -108,7 +141,7 @@ MAPEAMENTO POR SETOR (não exaustivo — use conhecimento geral para casos não 
 🧾 Impostos: IPTU, IPVA, DARF, GPS, DAS, SIMPLES NACIONAL → "IPTU" / "IPVA" / "Impostos". LICENCIAMENTO e DETRAN seguem a regra de veículo próprio → "Carro".
 
 PROTOCOLO DE RESPOSTA:
-1. Retorne SEMPRE JSON estrito: {"results":[{"index":number,"categoryName":string,"categoryKind":"income"|"expense"|"transfer","createIfMissing":boolean,"confidence":0..1,"reason":string}]}.
+1. Retorne SEMPRE JSON estrito: {"results":[{"index":number,"accountName":string|null,"categoryName":string,"categoryKind":"income"|"expense"|"transfer","createIfMissing":boolean,"confidence":0..1,"reason":string}]}.
 2. PREFIRA categorias EXISTENTES do usuário (use o nome EXATO da lista) quando fizer sentido semântico. Só marque createIfMissing=true quando nenhuma existente serve E a nova categoria é claramente útil.
 3. categoryKind DEVE ser exatamente igual a tipoFinanceiro recebido. A direção é apenas contexto; nunca transforme uma compra de cartão em receita.
 4. Retorne EXATAMENTE um item por index recebido — nunca invente nem descarte linhas.
@@ -160,6 +193,7 @@ async function callGateway(messages: any[]): Promise<OutRow[]> {
       createIfMissing: Boolean(r.createIfMissing),
       confidence: typeof r.confidence === "number" ? r.confidence : 0.7,
       reason: typeof r.reason === "string" ? r.reason.slice(0, 200) : undefined,
+      accountName: normalizeAccountName(r.accountName),
     })) as OutRow[];
 }
 
@@ -272,6 +306,7 @@ const inferFallbackCategory = (row: InRow, categories: Array<{ name: string; kin
     createIfMissing: picked.createIfMissing && !/^OUTROS/.test(normalize(picked.name)),
     confidence,
     reason,
+    accountName: deterministicAccountName(row),
   };
 };
 
@@ -287,7 +322,10 @@ const mergeWithFallback = (
     if (!result || (expectedKind && result.categoryKind !== expectedKind)) {
       return inferFallbackCategory(row, categories);
     }
-    return result;
+    return {
+      ...result,
+      accountName: deterministicAccountName(row) || normalizeAccountName(result.accountName),
+    };
   });
 };
 
@@ -299,6 +337,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const rows: InRow[] = Array.isArray(body?.rows) ? body.rows : [];
     const categories: Array<{ name: string; kind: string }> = Array.isArray(body?.categories) ? body.categories : [];
+    const accounts: Array<{ name: string; institution?: string | null }> = Array.isArray(body?.accounts) ? body.accounts : [];
     if (rows.length === 0) {
       return new Response(JSON.stringify({ results: [] }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -312,6 +351,7 @@ Deno.serve(async (req) => {
       const slice = rows.slice(i, i + CHUNK);
       const userMsg = {
         categoriesExistentes: categories.map((c) => ({ nome: c.name, tipo: c.kind })),
+        contasExistentes: accounts.map((account) => ({ nome: account.name, instituicao: account.institution || null })),
         linhas: slice.map((r) => ({
           index: r.index,
           descricao: r.description,
@@ -321,6 +361,8 @@ Deno.serve(async (req) => {
           origem: r.sourceType || null,
           transferencia: Boolean(r.isTransfer),
           tipoFinanceiro: r.financialType || (r.isTransfer ? "transfer" : r.direction === "CREDIT" ? "income" : "expense"),
+          contaExplicita: r.explicitAccount || null,
+          instituicaoDetectada: r.institution || null,
         })),
       };
       try {

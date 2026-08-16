@@ -8,6 +8,7 @@ import {
   suggestCategoryName,
 } from "./utils";
 import { normalizeCardStatementDirection, parseImportDate } from "./normalization";
+import { normalizeImportedAccountName } from "./accountNormalization";
 
 const splitCsvLine = (line: string, delimiter: string) => {
   const cells: string[] = [];
@@ -63,6 +64,7 @@ const AMOUNT_BLOCK = ["us$", "usd", "u$s", "dolar", "dólar", "cotacao", "cotaç
 const CREDIT_KEYS = ["credito", "crédito", "credit", "entrada", "entradas"];
 const DEBIT_KEYS = ["debito", "débito", "debit", "saida", "saída", "saidas", "saídas"];
 const CATEGORY_KEYS = ["categoria", "category"];
+const ACCOUNT_KEYS = ["banco", "conta", "account", "instituicao", "instituição"];
 const INSTALLMENT_KEYS = ["parcela", "parcelas", "installment", "installments"];
 const CARD_FINAL_KEYS = ["final do cartão", "final do cartao", "final cartão", "final cartao"];
 
@@ -162,9 +164,19 @@ const detectDocument = (context: ParserContext, lines: string[], headerInfo: Csv
   const prefix = normalizeText(lines.slice(0, Math.min((headerInfo?.index || 0) + 1, 20)).join(" "));
   const header = normalizeText(headerInfo?.header.join(" ") || "");
   const fileName = normalizeText(context.fileName);
+  const accountIdx = headerInfo ? findColumn(headerInfo.header, ACCOUNT_KEYS) : -1;
+  const explicitAccountValues = accountIdx >= 0 && headerInfo
+    ? lines.slice(headerInfo.index + 1)
+      .map((line) => splitCsvLine(line, headerInfo.delimiter))
+      .filter((cells) => Boolean(cells[headerInfo.dateIdx] || cells[headerInfo.descIdx]))
+      .map((cells) => cells[accountIdx] || "")
+    : [];
+  const allExplicitAccountsAreMercadoPago = explicitAccountValues.length > 0
+    && explicitAccountValues.every((value) => Boolean(value.trim()) && normalizeImportedAccountName(value) === "Mercado Pago");
   const isC6 = prefix.includes("FATURA C6")
     || (header.includes("NOME NO CARTAO") && header.includes("FINAL DO CARTAO"));
-  const hasCardStatementSignal = /FATURA(?: DO)? CARTAO|CARTAO DE CREDITO|CREDIT CARD/.test(`${prefix} ${fileName}`);
+  const isMercadoPago = /MERCADO PAGO|MERCADOPAGO/.test(`${prefix} ${fileName}`) || allExplicitAccountsAreMercadoPago;
+  const hasCardStatementSignal = /\bFATURA\b|CARTAO DE CREDITO|CREDIT CARD/.test(`${prefix} ${fileName}`);
   const isCreditCard = context.manualDocumentType === "CREDIT_CARD_STATEMENT"
     || isC6
     || hasCardStatementSignal
@@ -172,7 +184,9 @@ const detectDocument = (context: ParserContext, lines: string[], headerInfo: Csv
     || (header.includes("PARCELA") && header.includes("NOME NO CARTAO"));
 
   return {
-    institution: isC6 ? "C6" as const : "UNKNOWN" as const,
+    institution: context.manualInstitution && context.manualInstitution !== "UNKNOWN"
+      ? context.manualInstitution
+      : isC6 ? "C6" as const : isMercadoPago ? "MERCADO_PAGO" as const : "UNKNOWN" as const,
     documentType: isCreditCard ? "CREDIT_CARD_STATEMENT" as const : "BANK_STATEMENT" as const,
   };
 };
@@ -213,7 +227,7 @@ export const genericCsvParser: FinancialFileParser = {
     const headerInfo = findCsvHeader(lines);
     const document = detectDocument(context, lines, headerInfo);
     const score = headerInfo
-      ? 0.7 + (isCsvName ? 0.05 : 0) + (document.institution === "C6" ? 0.1 : 0)
+      ? 0.7 + (isCsvName ? 0.05 : 0) + (document.institution !== "UNKNOWN" ? 0.1 : 0)
       : (isCsvName ? 0.1 : 0);
 
     return {
@@ -222,7 +236,7 @@ export const genericCsvParser: FinancialFileParser = {
       documentType: headerInfo ? document.documentType : "UNKNOWN",
       format: isSpreadsheet ? "XLSX" : "CSV",
       reason: headerInfo
-        ? `${document.institution === "C6" ? "Fatura C6" : "CSV genérico"} com colunas reconhecíveis${headerInfo.index > 0 ? " após linhas introdutórias" : ""}.`
+        ? `${document.institution === "C6" ? "Fatura C6" : document.institution === "MERCADO_PAGO" ? "Arquivo Mercado Pago" : "CSV genérico"} com colunas reconhecíveis${headerInfo.index > 0 ? " após linhas introdutórias" : ""}.`
         : "CSV sem colunas padrão reconhecíveis.",
     };
   },
@@ -235,6 +249,7 @@ export const genericCsvParser: FinancialFileParser = {
     if (!headerInfo) throw new Error("Não consegui identificar as colunas de data, descrição e valor.");
     const { delimiter, header, dateIdx, descIdx, amountIdx, creditIdx, debitIdx } = headerInfo;
     const categoryIdx = findColumn(header, CATEGORY_KEYS);
+    const accountIdx = findColumn(header, ACCOUNT_KEYS);
     const installmentIdx = findColumn(header, INSTALLMENT_KEYS);
     const cardFinalIdx = findColumn(header, CARD_FINAL_KEYS);
     const isCreditCard = detection.documentType === "CREDIT_CARD_STATEMENT";
@@ -279,7 +294,13 @@ export const genericCsvParser: FinancialFileParser = {
         : proposedDirection;
       const amount = Math.abs(signedValue).toFixed(2);
       const normalized = normalizeMerchantName(original);
-      const accountHint = cardFinalIdx >= 0 ? cells[cardFinalIdx] || undefined : undefined;
+      const cardHint = cardFinalIdx >= 0 ? cells[cardFinalIdx] || undefined : undefined;
+      const sourceAccountRaw = accountIdx >= 0 ? cells[accountIdx] || "" : "";
+      const sourceAccountName = normalizeImportedAccountName(sourceAccountRaw, {
+        institution: detection.institution,
+        documentType: detection.documentType,
+      });
+      const accountHint = sourceAccountName || cardHint;
       const sourceCategory = categoryIdx >= 0 ? cells[categoryIdx] || "" : "";
       const installment = installmentIdx >= 0 ? parseInstallment(cells[installmentIdx] || "") : {};
       const fingerprint = await getTransactionFingerprint({
@@ -294,7 +315,8 @@ export const genericCsvParser: FinancialFileParser = {
       transactions.push({
         institution: detection.institution,
         sourceType: isCreditCard ? "CREDIT_CARD" : "BANK_ACCOUNT",
-        sourceAccountId: accountHint,
+        sourceAccountId: cardHint,
+        sourceAccountName,
         transactionDate: date,
         descriptionOriginal: original,
         descriptionNormalized: normalized,
@@ -303,11 +325,19 @@ export const genericCsvParser: FinancialFileParser = {
         direction,
         ...installment,
         currency: "BRL",
-        confidence: detection.institution === "C6" ? 0.85 : 0.7,
+        confidence: detection.institution !== "UNKNOWN" ? 0.85 : 0.7,
         categorySuggestion: suggestFromSourceCategory(sourceCategory) || suggestCategoryName(original, direction),
         fingerprint,
         possibleInternalTransfer: isLikelyInternalTransfer(original),
-        metadata: { parser: "generic-csv", rawLine: line, sourceCategory, accountHint },
+        metadata: {
+          parser: "generic-csv",
+          rawLine: line,
+          sourceCategory,
+          accountHint: cardHint,
+          sourceAccountRaw: sourceAccountRaw || null,
+          sourceAccountName: sourceAccountName || null,
+          accountSource: sourceAccountRaw.trim() ? "csv_column" : detection.institution !== "UNKNOWN" ? "document_header" : null,
+        },
       });
     }
 
@@ -321,6 +351,7 @@ export const genericCsvParser: FinancialFileParser = {
         fileHash: context.fileHash,
         delimiter,
         headerLine: headerInfo.index + 1,
+        accountColumn: accountIdx >= 0 ? header[accountIdx] : null,
       },
     };
   },
