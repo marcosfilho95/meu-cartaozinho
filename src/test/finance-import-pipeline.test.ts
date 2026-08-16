@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
 
 import { classifyFinancialRow } from "@/lib/finance/imports/financialRules";
+import { LocalCategoryClassifier } from "@/lib/finance/imports/classifier";
 import { ofxParser } from "@/lib/finance/imports/ofxParser";
 import { nubankPdfParser } from "@/lib/finance/imports/nubankPdfParser";
 import { reconcileDocument } from "@/lib/finance/imports/reconciliation";
@@ -25,6 +26,20 @@ const row = (patch: Partial<NormalizedTransaction>): NormalizedTransaction => ({
 });
 
 describe("financial import pipeline", () => {
+  it("uses the determined financial type before choosing a category", () => {
+    const classifier = new LocalCategoryClassifier([
+      { id: "expense-other", name: "Outros", kind: "expense" },
+      { id: "income-other", name: "Outros (Receita)", kind: "income" },
+    ], []);
+    const result = classifier.classify(row({
+      sourceType: "CREDIT_CARD",
+      direction: "CREDIT",
+      transactionType: "expense",
+      descriptionOriginal: "Estorno Amazon",
+    }));
+    expect(result.categoryId).toBe("expense-other");
+  });
+
   it.each([
     ["Rendimento da conta", "CREDIT", "income", "yield", false],
     ["Aplicação automática CDB", "DEBIT", "transfer", "investment_in", false],
@@ -110,5 +125,29 @@ describe("financial import pipeline", () => {
       pageNumber: 1,
     });
     expect(document.transactions[1]).toMatchObject({ possibleDuplicate: true, needsReview: true, pageNumber: 2 });
+  });
+
+  it("corrects a vision model that labels a card purchase as credit", async () => {
+    const document = await buildVisionDocument([{
+      institution: "BRADESCARD",
+      document_type: "CREDIT_CARD_STATEMENT",
+      statement_month: "2026-06",
+      transactions: [{
+        description_original: "AMAZON BR",
+        amount: 29.9,
+        direction: "CREDIT",
+        transaction_date: "2026-05-12",
+        category_hint: "Recebimentos",
+        confidence: 0.95,
+        page_number: 1,
+      }],
+    }], { fileName: "fatura-amazon.png", fileHash: "vision-card-sign", format: "IMAGE" });
+
+    expect(document.transactions[0]).toMatchObject({
+      sourceType: "CREDIT_CARD",
+      direction: "DEBIT",
+      classificationReason: "Compra no cartão: despesa.",
+    });
+    expect(document.transactions[0].categorySuggestion).toBeUndefined();
   });
 });

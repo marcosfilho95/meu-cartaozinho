@@ -14,6 +14,8 @@ export type ParserContext = {
   manualInstitution?: InstitutionCode;
   manualDocumentType?: FinancialDocumentType;
   manualFormat?: FinancialFileFormat;
+  /** Mês da fatura escolhido pelo usuário, usado para completar datas MM-DD. */
+  statementMonth?: string;
 };
 
 export type ParserDetectionResult = {

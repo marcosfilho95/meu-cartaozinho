@@ -14,6 +14,7 @@ interface InRow {
   direction: "CREDIT" | "DEBIT";
   sourceType?: string | null; // BANK | CREDIT_CARD
   isTransfer?: boolean;
+  financialType?: "income" | "expense" | "transfer";
 }
 
 interface OutRow {
@@ -26,6 +27,8 @@ interface OutRow {
 }
 
 const SYSTEM_PROMPT = `Você é um classificador financeiro brasileiro EXPERT em reconhecimento de marcas e comerciantes.
+
+O tipo financeiro (income, expense ou transfer) JÁ foi determinado pelo motor de regras antes desta etapa. Você NÃO deve reinterpretar o sinal nem alterar esse tipo; escolha somente uma categoria compatível.
 
 SEU CONHECIMENTO DE MARCAS (use como se estivesse consultando o Google):
 Você conhece TODAS as principais marcas, lojas, bancos, apps e serviços do Brasil — mesmo que apareçam abreviados, com códigos de maquininha (ex.: "CIELO*NOME", "PAG*NOME", "STONE*NOME", "MP*NOME", "REDE*NOME"), com sufixos de cidade/UF, ou com espaçamento estranho. IGNORE prefixos de adquirente (CIELO, REDE, GETNET, STONE, PAG, PAGSEGURO, MP, MERCPAGO, EBW, PICPAY*) ao identificar o comerciante — o nome real vem depois do asterisco/espaço.
@@ -107,7 +110,7 @@ MAPEAMENTO POR SETOR (não exaustivo — use conhecimento geral para casos não 
 PROTOCOLO DE RESPOSTA:
 1. Retorne SEMPRE JSON estrito: {"results":[{"index":number,"categoryName":string,"categoryKind":"income"|"expense"|"transfer","createIfMissing":boolean,"confidence":0..1,"reason":string}]}.
 2. PREFIRA categorias EXISTENTES do usuário (use o nome EXATO da lista) quando fizer sentido semântico. Só marque createIfMissing=true quando nenhuma existente serve E a nova categoria é claramente útil.
-3. categoryKind DEVE bater com a direção: DEBIT→expense (ou transfer), CREDIT→income (ou transfer). NUNCA income para DEBIT.
+3. categoryKind DEVE ser exatamente igual a tipoFinanceiro recebido. A direção é apenas contexto; nunca transforme uma compra de cartão em receita.
 4. Retorne EXATAMENTE um item por index recebido — nunca invente nem descarte linhas.
 5. Nomes de categoria em português, curtos, capitalizados (ex.: "Farmácia", "Pet Shop", "Streaming").
 6. Em "reason" (máx 120 chars) explique brevemente: "COBASI = pet shop", "IFD* = iFood delivery", "APPLE.COM/BILL = assinatura Apple".
@@ -190,19 +193,23 @@ const pickExistingCategory = (
 
 const inferFallbackCategory = (row: InRow, categories: Array<{ name: string; kind: string }>): OutRow => {
   const text = normalize(`${row.description || ""} ${row.merchant || ""}`);
-  let kind: OutRow["categoryKind"] = row.direction === "CREDIT" ? "income" : "expense";
+  let kind: OutRow["categoryKind"] = row.financialType === "transfer"
+    ? "transfer"
+    : row.financialType === "income"
+      ? "income"
+      : row.financialType === "expense"
+        ? "expense"
+        : row.direction === "CREDIT" ? "income" : "expense";
   let preferred = kind === "income" ? ["Outros (Receita)", "Recebimentos"] : ["Outros"];
   let confidence = 0.45;
   let reason = "Classificação local por palavra-chave.";
 
-  if (row.isTransfer || /DINHEIRO (RESERVADO|RETIRADO)|COFRINHO|PAGAMENTO CARTAO|CARTAO DE CREDITO|PGTO CARTAO/.test(text)) {
-    kind = "transfer";
+  if (kind === "transfer") {
     preferred = /CARTAO/.test(text) ? ["Pagamento de Cartão", "Entre Contas", "Transferência"] : ["Entre Contas", "Transferência"];
     confidence = 0.88;
     reason = "Movimentação entre contas/cartão.";
-  } else if (row.direction === "CREDIT") {
-    kind = "income";
-    if (/RESGATE|RETIRADA DE INVESTIMENTO|LIQUIDACAO CDB/.test(text)) {
+  } else if (kind === "income") {
+    if (!row.financialType && /RESGATE|RETIRADA DE INVESTIMENTO|LIQUIDACAO CDB/.test(text)) {
       kind = "transfer";
       preferred = ["Investimentos", "Entre Contas", "Transferência"];
       confidence = 0.55;
@@ -274,7 +281,14 @@ const mergeWithFallback = (
   results: OutRow[],
 ) => {
   const byIndex = new Map(results.map((r) => [r.index, r]));
-  return rows.map((row) => byIndex.get(row.index) || inferFallbackCategory(row, categories));
+  return rows.map((row) => {
+    const result = byIndex.get(row.index);
+    const expectedKind = row.financialType;
+    if (!result || (expectedKind && result.categoryKind !== expectedKind)) {
+      return inferFallbackCategory(row, categories);
+    }
+    return result;
+  });
 };
 
 Deno.serve(async (req) => {
@@ -306,6 +320,7 @@ Deno.serve(async (req) => {
           direcao: r.direction,
           origem: r.sourceType || null,
           transferencia: Boolean(r.isTransfer),
+          tipoFinanceiro: r.financialType || (r.isTransfer ? "transfer" : r.direction === "CREDIT" ? "income" : "expense"),
         })),
       };
       try {

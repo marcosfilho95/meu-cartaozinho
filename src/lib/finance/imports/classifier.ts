@@ -52,6 +52,9 @@ export interface CategoryClassifier {
 const norm = (value: string) => normalizeText(value).replace(/\s+/g, " ").trim();
 
 const rowKind = (row: NormalizedTransaction): "income" | "expense" | "transfer" => {
+  if (row.transactionType === "income" || row.transactionType === "expense" || row.transactionType === "transfer") {
+    return row.transactionType;
+  }
   if (row.possibleInternalTransfer) return "transfer";
   return row.direction === "CREDIT" ? "income" : "expense";
 };

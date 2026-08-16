@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { mercadoPagoTextParser, parseMercadoPagoTextRows } from "@/lib/finance/imports/mercadoPagoTextParser";
 import { genericCsvParser } from "@/lib/finance/imports/genericCsvParser";
+import { genericTextParser } from "@/lib/finance/imports/genericTextParser";
+import { classifyFinancialRow } from "@/lib/finance/imports/financialRules";
 import { parseNubankCsvRows } from "@/lib/finance/imports/nubankCsvParser";
 import { suggestCategoryName } from "@/lib/finance/imports/utils";
 
@@ -52,6 +54,72 @@ Data de Compra;Nome no Cartão;Final do Cartão;Categoria;Descrição;Parcela;Va
       categorySuggestion: "Educacao",
       sourceAccountId: "8419",
     });
+  });
+
+  it("treats a positive MM-DD card purchase as an expense", async () => {
+    const parsed = await genericCsvParser.parse({
+      fileName: "fatura-cartao.txt",
+      mimeType: "text/plain",
+      fileText: "FATURA DO CARTAO\n05-12 | AMAZON BR | 29,90",
+      fileHash: "positive-card-purchase",
+      statementMonth: "2026-06",
+    });
+
+    expect(parsed.detection.documentType).toBe("CREDIT_CARD_STATEMENT");
+    expect(parsed.transactions).toHaveLength(1);
+    expect(parsed.transactions[0]).toMatchObject({
+      transactionDate: "2026-05-12",
+      descriptionOriginal: "AMAZON BR",
+      amount: "29.90",
+      direction: "DEBIT",
+      sourceType: "CREDIT_CARD",
+    });
+    expect(classifyFinancialRow(parsed.transactions[0]).type).toBe("expense");
+  });
+
+  it("applies the same positive-purchase rule to pasted invoice text", async () => {
+    const parsed = await genericTextParser.parse({
+      fileName: "fatura.txt",
+      mimeType: "text/plain",
+      fileText: "FATURA DO CARTAO\n05-12 AMAZON BR 29,90",
+      fileHash: "positive-card-text",
+      statementMonth: "2026-06",
+    });
+
+    expect(parsed.transactions[0]).toMatchObject({
+      transactionDate: "2026-05-12",
+      amount: "29.90",
+      direction: "DEBIT",
+      sourceType: "CREDIT_CARD",
+    });
+  });
+
+  it("keeps a positive bank-statement value as income", async () => {
+    const parsed = await genericCsvParser.parse({
+      fileName: "extrato.csv",
+      mimeType: "text/csv",
+      fileText: "Data;Descricao;Valor\n12/05/2026;PIX RECEBIDO;29,90",
+      fileHash: "positive-bank-credit",
+    });
+
+    expect(parsed.detection.documentType).toBe("BANK_STATEMENT");
+    expect(parsed.transactions[0]).toMatchObject({
+      transactionDate: "2026-05-12",
+      amount: "29.90",
+      direction: "CREDIT",
+      sourceType: "BANK_ACCOUNT",
+    });
+  });
+
+  it("honors explicit debit and credit columns in a card statement", async () => {
+    const parsed = await genericCsvParser.parse({
+      fileName: "fatura.csv",
+      mimeType: "text/csv",
+      fileText: "FATURA DO CARTAO\nData;Descricao;Credito;Debito\n12/05/2026;AMAZON BR;;29,90\n13/05/2026;CREDITO PROMOCIONAL;10,00;",
+      fileHash: "card-explicit-columns",
+    });
+
+    expect(parsed.transactions.map((transaction) => transaction.direction)).toEqual(["DEBIT", "CREDIT"]);
   });
 
   it("parses Nubank CSV with Brazilian money and installments", async () => {

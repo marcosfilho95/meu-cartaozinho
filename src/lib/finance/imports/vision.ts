@@ -7,6 +7,7 @@ import type {
 } from "./types";
 import { classifyFinancialRow } from "./financialRules";
 import { getTransactionFingerprint, isLikelyInternalTransfer, normalizeMerchantName } from "./utils";
+import { normalizeCardStatementDirection } from "./normalization";
 
 export type VisionTransaction = {
   external_id?: string | null;
@@ -64,8 +65,13 @@ export const buildVisionDocument = async (
     const amountNumber = Math.abs(Number(raw.amount));
     const original = String(raw.description_original || "").trim();
     if (!date || !original || !Number.isFinite(amountNumber) || amountNumber <= 0) continue;
-    const direction: TransactionDirection = raw.direction === "CREDIT" ? "CREDIT" : "DEBIT";
-    const sourceType = raw.source_type || (documentType === "CREDIT_CARD_STATEMENT" ? "CREDIT_CARD" : "BANK_ACCOUNT");
+    const proposedDirection: TransactionDirection = raw.direction === "CREDIT" ? "CREDIT" : "DEBIT";
+    const sourceType = documentType === "CREDIT_CARD_STATEMENT"
+      ? "CREDIT_CARD"
+      : raw.source_type || "BANK_ACCOUNT";
+    const direction = sourceType === "CREDIT_CARD"
+      ? normalizeCardStatementDirection({ description: original, proposedDirection })
+      : proposedDirection;
     const normalized = normalizeMerchantName(raw.merchant_name || original);
     const fingerprint = await getTransactionFingerprint({
       institution,
@@ -105,7 +111,8 @@ export const buildVisionDocument = async (
       classificationReason: raw.reason || undefined,
       classificationSource: "ai",
       needsReview: Boolean(raw.needs_review) || Number(raw.confidence) < 0.7 || repeatedFingerprint,
-      categorySuggestion: raw.category_hint || undefined,
+      // A visão extrai fatos; a categoria só é escolhida depois do tipo financeiro.
+      categorySuggestion: undefined,
       fingerprint,
       possibleDuplicate: repeatedFingerprint,
       possibleInternalTransfer: isLikelyInternalTransfer(original),

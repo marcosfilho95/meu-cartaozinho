@@ -12,7 +12,8 @@ Retorne APENAS JSON estrito neste formato:
 Regras obrigatórias:
 - Extraia somente linhas visíveis. Nunca invente descrição, data ou valor.
 - amount é sempre positivo; direction representa entrada/crédito ou saída/débito.
-- Em fatura de cartão, compras são DEBIT e pagamentos/estornos são CREDIT.
+- Em fatura de cartão, TODA compra é DEBIT mesmo quando o valor impresso está positivo; somente pagamentos, estornos e créditos explícitos são CREDIT.
+- Não classifique categoria nesta etapa: retorne category_hint=null. A aplicação primeiro determina receita/despesa/transferência e só depois categoriza.
 - Não descarte pagamento de fatura, estorno, tarifa, rendimento, aplicação ou resgate; a aplicação classificará essas linhas depois.
 - PIX/TED sem contexto, texto ilegível e resgate com rendimento misturado devem ter needs_review=true.
 - purchase/transaction_date é a data original da compra. posting_date é a data de lançamento, se o documento mostrar ambas.
@@ -52,7 +53,7 @@ const sanitize = (raw: any, allowedPages: Set<number>) => {
       card_last4: /^\d{4}$/.test(String(tx?.card_last4 || "")) ? String(tx.card_last4) : null,
       installment_current: Number.isInteger(Number(tx?.installment_current)) ? Number(tx.installment_current) : null,
       installment_total: Number.isInteger(Number(tx?.installment_total)) ? Number(tx.installment_total) : null,
-      category_hint: tx?.category_hint ? String(tx.category_hint).slice(0, 80) : null,
+      category_hint: null,
       confidence,
       reason: String(tx?.reason || "Extraído da imagem.").slice(0, 200),
       needs_review: Boolean(tx?.needs_review) || confidence < 0.7,

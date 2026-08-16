@@ -17,6 +17,8 @@ export type AiClassifyRow = {
   direction: string;
   sourceType: string | null;
   isTransfer: boolean;
+  /** Tipo já determinado pelas regras; a IA escolhe somente a categoria. */
+  financialType: "income" | "expense" | "transfer";
 };
 
 export type AiClassifyResult = {

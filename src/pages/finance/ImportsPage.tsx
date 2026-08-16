@@ -362,6 +362,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
         statementMonth: isCard ? forcedMonth || raw.statementMonth || raw.dueDate?.slice(0, 7) : undefined,
         competenceMonth: raw.competenceMonth || raw.transactionDate.slice(0, 7),
         possibleInternalTransfer: classification.type === "transfer" || raw.possibleInternalTransfer,
+        transactionType: classification.type,
         needsReview,
         classificationReason: classification.reason || raw.classificationReason,
         classificationSource: "rule",
@@ -450,6 +451,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
           manualInstitution: "UNKNOWN",
           manualDocumentType: "UNKNOWN",
           manualFormat: "UNKNOWN",
+          statementMonth: forcedMonth || undefined,
         },
         existing,
       );
@@ -771,6 +773,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
           direction: row.direction,
           sourceType: row.sourceType || null,
           isTransfer: Boolean(row.possibleInternalTransfer),
+          financialType: row.transactionType,
         }));
 
         const results = await classifyTransactionsWithAi(

@@ -7,6 +7,7 @@ import {
   parseBrazilianMoney,
   suggestCategoryName,
 } from "./utils";
+import { normalizeCardStatementDirection, parseImportDate } from "./normalization";
 
 const splitCsvLine = (line: string, delimiter: string) => {
   const cells: string[] = [];
@@ -40,9 +41,9 @@ const detectDelimiter = (headerLine: string) => {
   const semis = (headerLine.match(/;/g) || []).length;
   const commas = (headerLine.match(/,/g) || []).length;
   const tabs = (headerLine.match(/\t/g) || []).length;
-  if (tabs > semis && tabs > commas) return "\t";
-  if (semis > commas) return ";";
-  return ",";
+  const pipes = (headerLine.match(/\|/g) || []).length;
+  const counts = [[";", semis], [",", commas], ["\t", tabs], ["|", pipes]] as const;
+  return counts.reduce((best, current) => current[1] > best[1] ? current : best)[0];
 };
 
 const DATE_KEYS = ["data", "date", "dt", "data lançamento", "data lancamento", "data movim", "data movimento"];
@@ -101,7 +102,7 @@ const getNonEmptyLines = (text: string) =>
 const findCsvHeader = (lines: string[]): CsvHeaderInfo | null => {
   for (let index = 0; index < Math.min(lines.length, 100); index += 1) {
     const line = lines[index];
-    if (!/[,;\t]/.test(line)) continue;
+    if (!/[,;\t|]/.test(line)) continue;
     const delimiter = detectDelimiter(line);
     const header = splitCsvLine(line, delimiter);
     const dateIdx = findColumn(header, DATE_KEYS);
@@ -116,18 +117,16 @@ const findCsvHeader = (lines: string[]): CsvHeaderInfo | null => {
     }
   }
 
-  // Fallback: some pastes come without a recognizable header row (or headers get
-  // mangled by copy-paste). If a line looks like `dd/mm/yyyy;...;<valor>` with
-  // semicolons and a monetary last column, treat it as a semicolon CSV and
-  // synthesize a positional header (data + descricao + valor).
+  // Fallback para colagens sem cabeçalho: sintetiza data + descrição + valor.
   for (let index = 0; index < Math.min(lines.length, 100); index += 1) {
     const line = lines[index];
-    if (!/;/.test(line)) continue;
-    const cells = splitCsvLine(line, ";");
+    if (!/[,;\t|]/.test(line)) continue;
+    const delimiter = detectDelimiter(line);
+    const cells = splitCsvLine(line, delimiter);
     if (cells.length < 3) continue;
     const first = cells[0];
     const last = cells[cells.length - 1];
-    const looksDate = /^\d{2}[/-]\d{2}[/-]\d{2,4}$/.test(first);
+    const looksDate = /^(?:\d{2}[/-]\d{2}[/-]\d{2,4}|\d{2}-\d{2})$/.test(first);
     const looksAmount = /-?\s*R?\$?\s*\d[\d.,]*$/.test(last);
     if (!looksDate || !looksAmount) continue;
     const header = cells.map((_, i) => {
@@ -146,7 +145,7 @@ const findCsvHeader = (lines: string[]): CsvHeaderInfo | null => {
     header[bestDescIdx] = "Descricao";
     return {
       index: index - 1,
-      delimiter: ";",
+      delimiter,
       header,
       dateIdx: 0,
       descIdx: bestDescIdx,
@@ -159,12 +158,16 @@ const findCsvHeader = (lines: string[]): CsvHeaderInfo | null => {
   return null;
 };
 
-const detectDocument = (lines: string[], headerInfo: CsvHeaderInfo | null) => {
+const detectDocument = (context: ParserContext, lines: string[], headerInfo: CsvHeaderInfo | null) => {
   const prefix = normalizeText(lines.slice(0, Math.min((headerInfo?.index || 0) + 1, 20)).join(" "));
   const header = normalizeText(headerInfo?.header.join(" ") || "");
+  const fileName = normalizeText(context.fileName);
   const isC6 = prefix.includes("FATURA C6")
     || (header.includes("NOME NO CARTAO") && header.includes("FINAL DO CARTAO"));
-  const isCreditCard = isC6
+  const hasCardStatementSignal = /FATURA(?: DO)? CARTAO|CARTAO DE CREDITO|CREDIT CARD/.test(`${prefix} ${fileName}`);
+  const isCreditCard = context.manualDocumentType === "CREDIT_CARD_STATEMENT"
+    || isC6
+    || hasCardStatementSignal
     || header.includes("FINAL DO CARTAO")
     || (header.includes("PARCELA") && header.includes("NOME NO CARTAO"));
 
@@ -199,19 +202,6 @@ const suggestFromSourceCategory = (raw: string) => {
   return undefined;
 };
 
-const parseFlexibleDate = (raw: string): string | null => {
-  const value = raw.trim();
-  if (!value) return null;
-  const iso = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
-  const br = value.match(/^(\d{2})[/-](\d{2})[/-](\d{2,4})$/);
-  if (br) {
-    const year = br[3].length === 2 ? `20${br[3]}` : br[3];
-    return `${year}-${br[2]}-${br[1]}`;
-  }
-  return null;
-};
-
 export const genericCsvParser: FinancialFileParser = {
   name: "generic-csv",
 
@@ -221,7 +211,7 @@ export const genericCsvParser: FinancialFileParser = {
     const isSpreadsheet = /\.(xlsx|xls|xlsm)$/i.test(context.fileName);
     const isCsvName = /\.csv$/i.test(context.fileName) || context.mimeType?.includes("csv") || isSpreadsheet;
     const headerInfo = findCsvHeader(lines);
-    const document = detectDocument(lines, headerInfo);
+    const document = detectDocument(context, lines, headerInfo);
     const score = headerInfo
       ? 0.7 + (isCsvName ? 0.05 : 0) + (document.institution === "C6" ? 0.1 : 0)
       : (isCsvName ? 0.1 : 0);
@@ -248,7 +238,6 @@ export const genericCsvParser: FinancialFileParser = {
     const installmentIdx = findColumn(header, INSTALLMENT_KEYS);
     const cardFinalIdx = findColumn(header, CARD_FINAL_KEYS);
     const isCreditCard = detection.documentType === "CREDIT_CARD_STATEMENT";
-    const invertC6CardSign = detection.institution === "C6" && isCreditCard;
 
     if (dateIdx < 0 || descIdx < 0 || (amountIdx < 0 && creditIdx < 0 && debitIdx < 0)) {
       throw new Error("Não consegui identificar as colunas de data, descrição e valor.");
@@ -260,7 +249,11 @@ export const genericCsvParser: FinancialFileParser = {
     for (const line of lines.slice(headerInfo.index + 1)) {
       const cells = splitCsvLine(line, delimiter);
       const dateRaw = cells[dateIdx] || "";
-      const date = parseFlexibleDate(dateRaw);
+      const date = parseImportDate(dateRaw, {
+        documentType: detection.documentType,
+        statementMonth: context.statementMonth,
+        referenceText: context.fileText,
+      });
       if (!date) {
         warnings.push(`Linha ignorada (data inválida): ${dateRaw}`);
         continue;
@@ -275,9 +268,15 @@ export const genericCsvParser: FinancialFileParser = {
         signedValue = credit - Math.abs(debit);
       }
       if (!Number.isFinite(signedValue) || signedValue === 0) continue;
-      const direction: "CREDIT" | "DEBIT" = invertC6CardSign
-        ? (signedValue >= 0 ? "DEBIT" : "CREDIT")
-        : (signedValue >= 0 ? "CREDIT" : "DEBIT");
+      const proposedDirection: "CREDIT" | "DEBIT" = signedValue >= 0 ? "CREDIT" : "DEBIT";
+      const direction = isCreditCard
+        ? normalizeCardStatementDirection({
+          description: original,
+          signedAmount: signedValue,
+          proposedDirection,
+          hasExplicitDirectionColumns: amountIdx < 0,
+        })
+        : proposedDirection;
       const amount = Math.abs(signedValue).toFixed(2);
       const normalized = normalizeMerchantName(original);
       const accountHint = cardFinalIdx >= 0 ? cells[cardFinalIdx] || undefined : undefined;

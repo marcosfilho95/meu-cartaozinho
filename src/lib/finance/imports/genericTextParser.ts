@@ -6,14 +6,16 @@ import {
   parseBrazilianMoney,
   suggestCategoryName,
 } from "./utils";
+import { normalizeCardStatementDirection, parseImportDate } from "./normalization";
 
-const LINE_PATTERN = /^(\d{2}[/-]\d{2}[/-]\d{2,4})\s+(.+?)\s+(-?\s*R?\$?\s*[\d.,]+)\s*$/;
+const LINE_PATTERN = /^(\d{2}[/-]\d{2}(?:[/-]\d{2,4})?)\s+(.+?)\s+(-?\s*R?\$?\s*[\d.,]+)\s*$/;
 
-const parseFlexibleDate = (raw: string): string | null => {
-  const match = raw.match(/^(\d{2})[/-](\d{2})[/-](\d{2,4})$/);
-  if (!match) return null;
-  const year = match[3].length === 2 ? `20${match[3]}` : match[3];
-  return `${year}-${match[2]}-${match[1]}`;
+const detectTextDocumentType = (context: ParserContext) => {
+  if (context.manualDocumentType && context.manualDocumentType !== "UNKNOWN") return context.manualDocumentType;
+  const signal = `${normalizeMerchantName(context.fileName)} ${normalizeMerchantName(context.fileText.slice(0, 2000))}`;
+  return /FATURA(?: DO)? CARTAO|CARTAO DE CREDITO|CREDIT CARD/.test(signal)
+    ? "CREDIT_CARD_STATEMENT" as const
+    : "BANK_STATEMENT" as const;
 };
 
 export const genericTextParser: FinancialFileParser = {
@@ -24,10 +26,11 @@ export const genericTextParser: FinancialFileParser = {
     if (lines.length === 0) return { confidence: 0, institution: "UNKNOWN", documentType: "UNKNOWN", format: "TXT", reason: "vazio" };
     const matches = lines.filter((l) => LINE_PATTERN.test(l.trim())).length;
     const ratio = matches / Math.max(lines.length, 1);
+    const documentType = detectTextDocumentType(context);
     return {
       confidence: Math.min(ratio * 0.9, 0.6),
       institution: "UNKNOWN",
-      documentType: "BANK_STATEMENT",
+      documentType,
       format: "TXT",
       reason: matches > 0 ? `${matches} linhas em formato "data descrição valor".` : "Nenhuma linha reconhecida.",
     };
@@ -44,13 +47,20 @@ export const genericTextParser: FinancialFileParser = {
       if (!line) continue;
       const match = line.match(LINE_PATTERN);
       if (!match) continue;
-      const date = parseFlexibleDate(match[1]);
+      const date = parseImportDate(match[1], {
+        documentType: detection.documentType,
+        statementMonth: context.statementMonth,
+        referenceText: context.fileText,
+      });
       if (!date) continue;
       const original = match[2].trim();
       let signed: number;
       try { signed = Number(parseBrazilianMoney(match[3])); } catch { continue; }
       if (!Number.isFinite(signed) || signed === 0) continue;
-      const direction: "CREDIT" | "DEBIT" = signed >= 0 ? "CREDIT" : "DEBIT";
+      const proposedDirection: "CREDIT" | "DEBIT" = signed >= 0 ? "CREDIT" : "DEBIT";
+      const direction = detection.documentType === "CREDIT_CARD_STATEMENT"
+        ? normalizeCardStatementDirection({ description: original, signedAmount: signed, proposedDirection })
+        : proposedDirection;
       const amount = Math.abs(signed).toFixed(2);
       const normalized = normalizeMerchantName(original);
       const fingerprint = await getTransactionFingerprint({
@@ -63,7 +73,7 @@ export const genericTextParser: FinancialFileParser = {
 
       transactions.push({
         institution: "UNKNOWN",
-        sourceType: "BANK_ACCOUNT",
+        sourceType: detection.documentType === "CREDIT_CARD_STATEMENT" ? "CREDIT_CARD" : "BANK_ACCOUNT",
         transactionDate: date,
         descriptionOriginal: original,
         descriptionNormalized: normalized,
