@@ -890,7 +890,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
         const isCard = row.sourceType === "CREDIT_CARD";
         const fingerprint = await getTransactionFingerprint({
           institution: row.institution,
-          accountHint: row.sourceAccountId,
+          accountHint: row.sourceAccountName || row.sourceAccountId,
           transactionDate: row.transactionDate,
           amount: Math.abs(Number(row.amount)).toFixed(2),
           descriptionNormalized: row.descriptionNormalized || row.descriptionOriginal,
@@ -941,7 +941,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
         };
       }));
 
-      const { error: confirmError } = await untypedSupabase.rpc("confirm_financial_import", {
+      const { data: confirmData, error: confirmError } = await untypedSupabase.rpc("confirm_financial_import", {
         p_file: filePayload,
         p_import: {
           status: "confirmed",
@@ -955,9 +955,20 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
       });
       if (confirmError) throw confirmError;
 
+      const confirmation = (confirmData || {}) as {
+        transactions_total?: number;
+        duplicates_skipped?: number;
+      };
+      const importedCount = Number(confirmation.transactions_total ?? selectedRows.length);
+      const skippedCount = Number(confirmation.duplicates_skipped ?? 0);
+
       await learnCategorizationRules(selectedRows);
 
-      toast.success(`${selectedRows.length} movimentações importadas.`);
+      toast.success(
+        skippedCount > 0
+          ? `${importedCount} movimentação(ões) importada(s); ${skippedCount} duplicada(s) ignorada(s).`
+          : `${importedCount} movimentação(ões) importada(s).`,
+      );
       setRows([]);
       setParsedInfo(null);
       setReconciliation(null);

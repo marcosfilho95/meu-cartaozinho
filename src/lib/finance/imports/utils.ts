@@ -254,10 +254,16 @@ export const markDuplicates = (transactions: NormalizedTransaction[], existing: 
   const externalIds = new Set(existing.map((tx) => tx.external_id).filter(Boolean));
   const fingerprints = new Set(existing.map((tx) => tx.fingerprint).filter(Boolean));
 
-  return transactions.map((tx) => ({
-    ...tx,
-    possibleDuplicate: Boolean(tx.possibleDuplicate || (tx.externalId && externalIds.has(tx.externalId)) || fingerprints.has(tx.fingerprint)),
-  }));
+  return transactions.map((tx) => {
+    const possibleDuplicate = Boolean(
+      tx.possibleDuplicate
+      || (tx.externalId && externalIds.has(tx.externalId))
+      || fingerprints.has(tx.fingerprint),
+    );
+    if (tx.externalId) externalIds.add(tx.externalId);
+    fingerprints.add(tx.fingerprint);
+    return { ...tx, possibleDuplicate };
+  });
 };
 
 export const isLikelyInternalTransfer = (description: string) => {

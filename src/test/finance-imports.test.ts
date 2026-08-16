@@ -8,9 +8,21 @@ import {
   resolveImportedAccountId,
 } from "@/lib/finance/imports/accountNormalization";
 import { parseNubankCsvRows } from "@/lib/finance/imports/nubankCsvParser";
-import { suggestCategoryName } from "@/lib/finance/imports/utils";
+import { markDuplicates, suggestCategoryName } from "@/lib/finance/imports/utils";
 
 describe("financial imports", () => {
+  it("marks repeated rows inside the same imported document as duplicates", async () => {
+    const parsed = await genericCsvParser.parse({
+      fileName: "extrato.csv",
+      mimeType: "text/csv",
+      fileText: "Data;Conta;Descricao;Valor\n12/05/2026;Mercado Pago;PIX RECEBIDO;29,90\n12/05/2026;Mercado Pago;PIX RECEBIDO;29,90",
+      fileHash: "same-document-duplicates",
+    });
+
+    const marked = markDuplicates(parsed.transactions, []);
+    expect(marked.map((row) => row.possibleDuplicate)).toEqual([false, true]);
+  });
+
   it("parses pasted C6 card CSV with introductory lines and semicolon columns", async () => {
     const text = `FATURA C6 2026-06-05
 
