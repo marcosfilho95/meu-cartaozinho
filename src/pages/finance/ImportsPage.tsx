@@ -6,7 +6,9 @@ import {
   ArrowUpCircle,
   CheckCircle2,
   ClipboardPaste,
+  Camera,
   FileText,
+  Image as ImageIcon,
   Info,
   Loader2,
   ShieldAlert,
@@ -14,6 +16,7 @@ import {
   Wand2,
   Trash2,
   Upload,
+  RotateCw,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -38,15 +41,27 @@ import {
   FinancialFileFormat,
   InstitutionCode,
   NormalizedTransaction,
+  ParsedFinancialDocument,
+  ReconciliationReport,
+  ROLE_LABEL,
+  buildVisionDocument,
+  classifyFinancialRow,
   getFileHash,
+  getTransactionFingerprint,
+  isImageFile,
+  isPdfTextSufficient,
+  markDuplicates,
+  optimizeImageFile,
   parseFinancialFile,
   readFileAsText,
+  reconcileDocument,
+  renderPdfPagesToImages,
   sha256Hex,
 } from "@/lib/finance/imports";
 import { LocalCategoryClassifier } from "@/lib/finance/imports/classifier";
 import { normalizeLabel } from "@/lib/financeShared";
 import { cn } from "@/lib/utils";
-import { classifyTransactionsWithAi } from "@/lib/finance/aiService";
+import { classifyTransactionsWithAi, extractFinancialDocumentWithVision } from "@/lib/finance/aiService";
 
 interface ImportsPageProps {
   userId: string;
@@ -84,6 +99,7 @@ type ExistingTx = {
   transaction_date: string;
   source?: string | null;
   type: "income" | "expense" | "transfer";
+  category_id?: string | null;
 };
 
 type ReviewRow = NormalizedTransaction & {
@@ -92,7 +108,14 @@ type ReviewRow = NormalizedTransaction & {
   accountId: string;
   categoryId: string;
   status: "paid" | "pending";
+  transactionType: "income" | "expense" | "transfer";
+  financialRole: keyof typeof ROLE_LABEL;
+  reviewConfirmed: boolean;
+  aiCategorySuggestion?: string;
+  aiConfidence?: number;
 };
+
+type ImagePreview = { id: string; name: string; dataUrl: string };
 
 const INSTITUTION_LABEL: Record<InstitutionCode, string> = {
   UNKNOWN: "Detectando…",
@@ -100,6 +123,8 @@ const INSTITUTION_LABEL: Record<InstitutionCode, string> = {
   MERCADO_PAGO: "Mercado Pago",
   PICPAY: "PicPay",
   C6: "C6",
+  BRADESCARD: "Bradescard (Amazon)",
+  BRADESCO: "Bradesco",
 };
 
 const DOCUMENT_LABEL: Record<FinancialDocumentType, string> = {
@@ -114,54 +139,27 @@ const FORMAT_LABEL: Record<FinancialFileFormat, string> = {
   OFX: "OFX",
   XLSX: "XLSX",
   PDF_TEXT: "PDF (texto)",
+  PDF_IMAGE: "PDF (imagem + IA)",
+  IMAGE: "Foto/imagem + IA",
   TXT: "Texto",
 };
 
 const normalizeCategoryName = (value: string) => normalizeLabel(value).replace(/\s+/g, " ");
 const normalizeRulePattern = (value: string) => normalizeLabel(value).replace(/\s+/g, " ").trim();
 
-// Detecta pagamento de fatura de cartão (dinheiro entrando pra quitar a dívida).
-// Isso NÃO é receita — é uma transferência da conta corrente pro cartão.
-const CARD_PAYMENT_KEYWORDS = [
-  "PAGAMENTO RECEBIDO",
-  "PAGAMENTO DE FATURA",
-  "PAGAMENTO EFETUADO",
-  "PGTO FATURA",
-  "PGTO. FATURA",
-  "PAGTO FATURA",
-  "PAGAMENTO CARTAO",
-  "PAGAMENTO DE CARTAO",
-];
-
-const isCardBillPayment = (row: NormalizedTransaction) => {
-  if (row.sourceType !== "CREDIT_CARD") return false;
-  if (row.direction !== "CREDIT") return false;
-  const hay = normalizeLabel(`${row.descriptionOriginal} ${row.descriptionNormalized}`).toUpperCase();
-  return CARD_PAYMENT_KEYWORDS.some((k) => hay.includes(k));
-};
-
-// Estorno / reembolso / crédito na fatura que NÃO é pagamento.
-// Trata como redutor da despesa original (valor negativo na categoria do comerciante).
-const isCardRefund = (row: NormalizedTransaction) =>
-  row.sourceType === "CREDIT_CARD" && row.direction === "CREDIT" && !isCardBillPayment(row);
-
 const transactionTypeFromRow = (row: NormalizedTransaction): "income" | "expense" | "transfer" => {
-  if (isCardBillPayment(row)) return "transfer";
-  if (isCardRefund(row)) return "expense"; // classifica na categoria da compra (será negativo no salvamento)
-  if (row.possibleInternalTransfer) return "transfer";
-  return row.direction === "CREDIT" ? "income" : "expense";
+  return classifyFinancialRow(row).type;
 };
 
 const rowIcon = (row: NormalizedTransaction) => {
-  if (isCardBillPayment(row)) return ArrowRightLeft;
-  if (row.possibleInternalTransfer) return ArrowRightLeft;
+  if (classifyFinancialRow(row).type === "transfer") return ArrowRightLeft;
   return row.direction === "CREDIT" ? ArrowUpCircle : ArrowDownCircle;
 };
 
 const rowAmountClass = (row: NormalizedTransaction) => {
-  if (isCardBillPayment(row)) return "text-primary";
-  if (isCardRefund(row)) return "text-emerald-600/70 dark:text-emerald-400/70";
-  if (row.possibleInternalTransfer) return "text-primary";
+  const classification = classifyFinancialRow(row);
+  if (classification.type === "transfer") return "text-primary";
+  if (classification.negativeAmount) return "text-emerald-600/70 dark:text-emerald-400/70";
   return row.direction === "CREDIT" ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400";
 };
 
@@ -250,8 +248,9 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
   const [mimeType, setMimeType] = useState("");
   const [fileText, setFileText] = useState("");
   const [pastedText, setPastedText] = useState("");
-  const [forcedMonth, setForcedMonth] = useState<string>(""); // YYYY-MM — força todas as linhas nesse mês
+  const [forcedMonth, setForcedMonth] = useState<string>(""); // YYYY-MM — define statement_month sem alterar datas originais
   const [loading, setLoading] = useState(false);
+  const [progressMessage, setProgressMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [parseError, setParseError] = useState<{ title: string; body: string; hint: string } | null>(null);
   const [showDiagnostic, setShowDiagnostic] = useState(false);
@@ -265,6 +264,8 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
     warnings: string[];
   } | null>(null);
   const [rows, setRows] = useState<ReviewRow[]>([]);
+  const [reconciliation, setReconciliation] = useState<ReconciliationReport | null>(null);
+  const [imagePreviews, setImagePreviews] = useState<ImagePreview[]>([]);
   const [creatingAccount, setCreatingAccount] = useState(false);
   const [aiClassifying, setAiClassifying] = useState(false);
   const [aiSummary, setAiSummary] = useState<{ classified: number; created: number } | null>(null);
@@ -347,15 +348,93 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
     return [];
   }, [userId]);
 
+  const applyParsedDocument = (
+    parsed: ParsedFinancialDocument,
+    support: { nextAccounts: AccountOption[]; nextCategories: CategoryOption[]; nextRules: CategorizationRule[] },
+    existing: ExistingTx[],
+  ) => {
+    const reviewRows: ReviewRow[] = parsed.transactions.map((raw, index) => {
+      const classification = classifyFinancialRow(raw);
+      const isCard = raw.sourceType === "CREDIT_CARD";
+      const needsReview = Boolean(raw.needsReview) || classification.needsReview;
+      const row: NormalizedTransaction = {
+        ...raw,
+        statementMonth: isCard ? forcedMonth || raw.statementMonth || raw.dueDate?.slice(0, 7) : undefined,
+        competenceMonth: raw.competenceMonth || raw.transactionDate.slice(0, 7),
+        possibleInternalTransfer: classification.type === "transfer" || raw.possibleInternalTransfer,
+        needsReview,
+        classificationReason: classification.reason || raw.classificationReason,
+        classificationSource: "rule",
+        categorySuggestion: classification.categoryHint || raw.categorySuggestion,
+        metadata: {
+          ...(raw.metadata || {}),
+          financialRole: classification.role,
+          financialType: classification.type,
+          negativeAmount: classification.negativeAmount,
+        },
+      };
+      return {
+        ...row,
+        localId: `${row.fingerprint}-${index}`,
+        selected: !row.possibleDuplicate && !needsReview,
+        accountId: resolveDefaultAccountId(row, support.nextAccounts),
+        categoryId: resolveSmartCategoryId(
+          row,
+          support.nextCategories,
+          support.nextRules,
+          existing.map((tx) => ({
+            description: tx.source || "",
+            merchantName: tx.source || "",
+            category_id: (tx as ExistingTx & { category_id?: string | null }).category_id ?? null,
+            direction: tx.type === "income" ? "CREDIT" : tx.type === "expense" ? "DEBIT" : null,
+          })),
+        ),
+        status: "paid",
+        transactionType: classification.type,
+        financialRole: classification.role,
+        reviewConfirmed: !needsReview,
+      };
+    });
+
+    const report = reconcileDocument(parsed.transactions, {
+      totalCredits: parsed.totals?.totalCredits,
+      totalDebits: parsed.totals?.totalDebits,
+      statementTotal: parsed.totals?.statementTotal,
+    });
+    setRows(reviewRows);
+    setReconciliation(report);
+    setParsedInfo({
+      parserName: parsed.parserName,
+      institution: parsed.detection.institution,
+      documentType: parsed.detection.documentType,
+      format: parsed.detection.format,
+      confidence: parsed.detection.confidence,
+      reason: parsed.detection.reason,
+      warnings: parsed.warnings,
+    });
+    if (reviewRows.length > 0) {
+      toast.success(`${reviewRows.length} movimentações prontas para revisão.`);
+      const uncertainRows = reviewRows.filter((row) => {
+        if (row.transactionType === "transfer") return false;
+        const category = support.nextCategories.find((item) => item.id === row.categoryId);
+        return !category || normalizeCategoryName(category.name).startsWith("outros");
+      });
+      if (uncertainRows.length > 0) void classifyWithAI(uncertainRows, support.nextCategories, { silent: true });
+    } else {
+      toast.warning("Arquivo lido, mas nenhuma movimentação foi extraída.");
+    }
+  };
+
   const processText = async (input: { name: string; text: string; hash: string; size: number | null; mime: string }) => {
     setLoading(true);
     setRows([]);
     setParsedInfo(null);
     setParseError(null);
+    setReconciliation(null);
     setShowDiagnostic(false);
 
     try {
-      const [{ nextAccounts, nextCategories, nextRules }, existing] = await Promise.all([loadSupportData(), fetchExistingForDedup()]);
+      const [support, existing] = await Promise.all([loadSupportData(), fetchExistingForDedup()]);
       setFileName(input.name);
       setMimeType(input.mime);
       setFileSize(input.size);
@@ -375,78 +454,168 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
         existing,
       );
 
-      const remapDate = (iso: string | undefined | null): string | undefined => {
-        if (!forcedMonth) return iso ?? undefined;
-        if (!iso) return undefined;
-        const [y, m] = forcedMonth.split("-").map(Number);
-        const day = Number((iso.match(/-(\d{2})$/) || [])[1] || iso.slice(-2)) || 1;
-        const lastDay = new Date(y, m, 0).getDate();
-        const clampedDay = Math.min(Math.max(day, 1), lastDay);
-        return `${forcedMonth}-${String(clampedDay).padStart(2, "0")}`;
-      };
-
-      const reviewRows = parsed.transactions.map((raw, index) => {
-        const row = forcedMonth
-          ? {
-              ...raw,
-              transactionDate: remapDate(raw.transactionDate) || raw.transactionDate,
-              postingDate: remapDate(raw.postingDate) || raw.postingDate,
-            }
-          : raw;
-        return {
-        ...row,
-        localId: `${row.fingerprint}-${index}`,
-        selected: !row.possibleDuplicate,
-        accountId: resolveDefaultAccountId(row, nextAccounts),
-        categoryId: resolveSmartCategoryId(
-          row,
-          nextCategories,
-          nextRules,
-          existing.map((tx) => ({
-            description: tx.source || "",
-            merchantName: tx.source || "",
-            category_id: (tx as any).category_id ?? null,
-            direction: tx.type === "income" ? "CREDIT" : tx.type === "expense" ? "DEBIT" : null,
-          })),
-        ),
-        status: "paid" as const,
-        };
-      });
-
-      setRows(reviewRows);
-      setParsedInfo({
-        parserName: parsed.parserName,
-        institution: parsed.detection.institution,
-        documentType: parsed.detection.documentType,
-        format: parsed.detection.format,
-        confidence: parsed.detection.confidence,
-        reason: parsed.detection.reason,
-        warnings: parsed.warnings,
-      });
-
-      if (reviewRows.length > 0) {
-        toast.success(`${reviewRows.length} movimentações prontas para revisão.`);
-        // Auto-classificar com IA em background (não bloqueia UI)
-        void classifyWithAI(reviewRows, nextCategories, { silent: true });
-      } else {
-        toast.warning("Arquivo lido, mas nenhuma movimentação foi extraída.");
-      }
+      applyParsedDocument(parsed, support, existing);
+      return parsed.transactions.length > 0;
     } catch (error) {
       const msg = getErrorMessage(error, "Falha ao importar arquivo.");
       setParseError(buildDidacticError(msg, Boolean(input.text?.length)));
+      return false;
     } finally {
       setLoading(false);
+      setProgressMessage("");
+    }
+  };
+
+  const processVisionImages = async (input: {
+    name: string;
+    hash: string;
+    size: number | null;
+    mime: string;
+    format: "PDF_IMAGE" | "IMAGE";
+    images: Array<{ pageNumber: number; dataUrl: string }>;
+  }) => {
+    setImagePreviews(input.images.map((image, index) => ({
+      id: crypto.randomUUID(),
+      name: input.format === "PDF_IMAGE" ? `${input.name} · página ${image.pageNumber}` : input.name,
+      dataUrl: image.dataUrl,
+    })));
+    setLoading(true);
+    setRows([]);
+    setParsedInfo(null);
+    setParseError(null);
+    setReconciliation(null);
+    setFileName(input.name);
+    setMimeType(input.mime);
+    setFileSize(input.size);
+    setFileHash(input.hash);
+    setFileText("");
+    try {
+      const [support, existing] = await Promise.all([loadSupportData(), fetchExistingForDedup()]);
+      const batches = [];
+      const batchSize = 3;
+      for (let start = 0; start < input.images.length; start += batchSize) {
+        const slice = input.images.slice(start, start + batchSize);
+        setProgressMessage(`IA lendo páginas ${slice[0].pageNumber}–${slice[slice.length - 1].pageNumber} de ${input.images.length}…`);
+        batches.push(await extractFinancialDocumentWithVision({ images: slice, fileName: input.name, pageOffset: start }));
+      }
+      const parsed = await buildVisionDocument(batches, { fileName: input.name, fileHash: input.hash, format: input.format });
+      const withDuplicates = { ...parsed, transactions: markDuplicates(parsed.transactions, existing) };
+      if (withDuplicates.transactions.length === 0) {
+        throw new Error("A IA não encontrou transações legíveis nas imagens. Tente fotos mais nítidas e sem cortes.");
+      }
+      applyParsedDocument(withDuplicates, support, existing);
+      return true;
+    } catch (error) {
+      const msg = getErrorMessage(error, "Falha ao ler documento com IA.");
+      setParseError({
+        title: "Não consegui interpretar as imagens",
+        body: msg,
+        hint: "As imagens foram mantidas nesta tela. Você pode tentar novamente quando a IA estiver disponível ou enviar fotos mais nítidas.",
+      });
+      return false;
+    } finally {
+      setLoading(false);
+      setProgressMessage("");
     }
   };
 
   const handleFile = async (file: File) => {
     try {
-      const [text, hash] = await Promise.all([readFileAsText(file), getFileHash(file)]);
+      if (file.size > 25 * 1024 * 1024) throw new Error("Arquivo muito grande. O limite é 25 MB.");
+      const hash = await getFileHash(file);
+      if (isImageFile(file)) {
+        setProgressMessage("Preparando imagem…");
+        const dataUrl = await optimizeImageFile(file);
+        await processVisionImages({
+          name: file.name,
+          hash,
+          size: file.size,
+          mime: file.type || "image/jpeg",
+          format: "IMAGE",
+          images: [{ pageNumber: 1, dataUrl }],
+        });
+        return;
+      }
+
+      const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+      if (isPdf) {
+        setProgressMessage("Tentando extrair o texto do PDF…");
+        let text = "";
+        try { text = await readFileAsText(file); } catch { /* visão tentará abrir as páginas */ }
+        if (isPdfTextSufficient(text)) {
+          const parsedText = await processText({ name: file.name, text, hash, size: file.size, mime: "application/pdf" });
+          if (parsedText) return;
+        }
+        setLoading(true);
+        setParseError(null);
+        setProgressMessage("PDF escaneado detectado. Preparando páginas…");
+        const images = await renderPdfPagesToImages(file, (done, total) => {
+          setProgressMessage(`Preparando página ${done} de ${total}…`);
+        });
+        await processVisionImages({ name: file.name, hash, size: file.size, mime: "application/pdf", format: "PDF_IMAGE", images });
+        return;
+      }
+
+      const text = await readFileAsText(file);
       await processText({ name: file.name, text, hash, size: file.size, mime: file.type || "text/plain" });
     } catch (error) {
       const msg = getErrorMessage(error, "Falha ao ler arquivo.");
       setParseError(buildDidacticError(msg, false));
+      setLoading(false);
+      setProgressMessage("");
     }
+  };
+
+  const addImagePreviews = async (files: File[]) => {
+    const accepted = files.filter(isImageFile).slice(0, Math.max(0, 12 - imagePreviews.length));
+    if (!accepted.length) {
+      toast.error("Selecione imagens PNG, JPG ou WEBP.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const prepared: ImagePreview[] = [];
+      for (const file of accepted) {
+        if (file.size > 12 * 1024 * 1024) throw new Error(`${file.name} excede 12 MB.`);
+        prepared.push({ id: crypto.randomUUID(), name: file.name, dataUrl: await optimizeImageFile(file) });
+      }
+      setImagePreviews((current) => [...current, ...prepared]);
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Falha ao preparar imagem."));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const rotatePreview = async (id: string) => {
+    const current = imagePreviews.find((image) => image.id === id);
+    if (!current) return;
+    const blob = await (await fetch(current.dataUrl)).blob();
+    const rotated = await optimizeImageFile(new File([blob], current.name, { type: blob.type }), 90);
+    setImagePreviews((images) => images.map((image) => image.id === id ? { ...image, dataUrl: rotated } : image));
+  };
+
+  const movePreview = (index: number, delta: -1 | 1) => {
+    setImagePreviews((images) => {
+      const target = index + delta;
+      if (target < 0 || target >= images.length) return images;
+      const next = [...images];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
+  const analyzeImagePreviews = async () => {
+    if (!imagePreviews.length) return;
+    const hash = await sha256Hex(imagePreviews.map((image) => image.dataUrl).join("|"));
+    await processVisionImages({
+      name: imagePreviews.length === 1 ? imagePreviews[0].name : `${imagePreviews.length}-imagens`,
+      hash,
+      size: Math.round(imagePreviews.reduce((sum, image) => sum + image.dataUrl.length, 0) * 0.75),
+      mime: "image/jpeg",
+      format: "IMAGE",
+      images: imagePreviews.map((image, index) => ({ pageNumber: index + 1, dataUrl: image.dataUrl })),
+    });
   };
 
   const handlePastedText = async () => {
@@ -514,15 +683,15 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
   const internalTransfers = rows.filter((r) => r.possibleInternalTransfer).length;
   // Entradas = créditos REAIS (não conta pagamento de fatura nem estorno de cartão).
   const totalCredits = selectedRows
-    .filter((r) => r.direction === "CREDIT" && !isCardBillPayment(r) && !isCardRefund(r))
+    .filter((r) => r.transactionType === "income")
     .reduce((s, r) => s + Number(r.amount), 0);
   // Saídas = despesas MENOS estornos (líquido real do mês).
-  const totalRefunds = selectedRows.filter(isCardRefund).reduce((s, r) => s + Number(r.amount), 0);
-  const totalDebitsGross = selectedRows.filter((r) => r.direction === "DEBIT").reduce((s, r) => s + Number(r.amount), 0);
+  const totalRefunds = selectedRows.filter((r) => r.financialRole === "refund").reduce((s, r) => s + Number(r.amount), 0);
+  const totalDebitsGross = selectedRows.filter((r) => r.transactionType === "expense" && r.financialRole !== "refund").reduce((s, r) => s + Number(r.amount), 0);
   const totalDebits = Math.max(0, totalDebitsGross - totalRefunds);
-  const totalCardPayments = selectedRows.filter(isCardBillPayment).reduce((s, r) => s + Number(r.amount), 0);
-  const cardPaymentsCount = selectedRows.filter(isCardBillPayment).length;
-  const refundsCount = selectedRows.filter(isCardRefund).length;
+  const totalCardPayments = selectedRows.filter((r) => r.financialRole === "bill_payment").reduce((s, r) => s + Number(r.amount), 0);
+  const cardPaymentsCount = selectedRows.filter((r) => r.financialRole === "bill_payment").length;
+  const refundsCount = selectedRows.filter((r) => r.financialRole === "refund").length;
 
   const updateRow = (localId: string, patch: Partial<ReviewRow>) => {
     setRows((cur) => cur.map((r) => (r.localId === localId ? { ...r, ...patch } : r)));
@@ -534,8 +703,21 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
   const bulkApplyAccount = (accountId: string) => {
     setRows((cur) => cur.map((r) => (r.selected ? { ...r, accountId } : r)));
   };
+  const bulkApplyType = (transactionType: "income" | "expense" | "transfer") => {
+    setRows((cur) => cur.map((r) => r.selected ? {
+      ...r,
+      transactionType,
+      financialRole: transactionType,
+      categoryId: categories.some((c) => c.id === r.categoryId && c.kind === transactionType) ? r.categoryId : "",
+      reviewConfirmed: true,
+    } : r));
+  };
+  const bulkApplyStatementMonth = (statementMonth: string) => {
+    if (!/^\d{4}-\d{2}$/.test(statementMonth)) return;
+    setRows((cur) => cur.map((r) => r.selected ? { ...r, statementMonth, reviewConfirmed: true } : r));
+  };
   const bulkToggleAll = (value: boolean) => {
-    setRows((cur) => cur.map((r) => ({ ...r, selected: value })));
+    setRows((cur) => cur.map((r) => ({ ...r, selected: value, reviewConfirmed: value ? true : r.reviewConfirmed })));
   };
 
   const learnCategorizationRules = async (confirmedRows: ReviewRow[]) => {
@@ -545,7 +727,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
     const nextRules = new Map<string, any>();
 
     confirmedRows.forEach((row) => {
-      if (!row.categoryId || row.possibleInternalTransfer) return;
+      if (!row.categoryId || row.transactionType === "transfer" || !row.reviewConfirmed) return;
       const merchant = normalizeRulePattern(row.merchantName || row.descriptionNormalized || row.descriptionOriginal);
       if (!merchant || merchant.length < 4 || merchant === "OUTROS") return;
       const key = `${merchant}|${row.categoryId}|${row.direction}`;
@@ -601,41 +783,9 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
           return;
         }
 
-        // Descobrir categorias a criar (nome+kind únicos, ainda não existentes)
-        let localCats = [...knownCategories];
-        const wantCreate = new Map<string, { name: string; kind: "income" | "expense" | "transfer" }>();
-        for (const r of results) {
-          const targetKind = r.categoryKind;
-          const key = `${normalizeCategoryName(r.categoryName)}|${targetKind}`;
-          const exists = localCats.some(
-            (c) => c.kind === targetKind && normalizeCategoryName(c.name) === normalizeCategoryName(r.categoryName),
-          );
-          if (!exists && r.createIfMissing) {
-            wantCreate.set(key, { name: r.categoryName, kind: targetKind });
-          }
-        }
-
-        let createdCount = 0;
-        if (wantCreate.size > 0) {
-          const insertPayload = Array.from(wantCreate.values()).map((c) => ({
-            user_id: userId,
-            name: c.name,
-            kind: c.kind,
-            is_system: false,
-          }));
-          const { data: created, error: insErr } = await supabase
-            .from("categories")
-            .insert(insertPayload as any)
-            .select("id, name, kind, parent_id");
-          if (!insErr && created) {
-            const createdList = created as CategoryOption[];
-            localCats = [...localCats, ...createdList];
-            createdCount = createdList.length;
-            setCategories(localCats);
-          }
-        }
-
-        // Aplicar categoria em cada linha
+        // A IA sugere; só categorias que já existem são aplicadas. Nada é criado
+        // antes da confirmação explícita do usuário.
+        const localCats = [...knownCategories];
         let classified = 0;
         setRows((cur) => {
           const rowIds = targetRows.map((r) => r.localId);
@@ -644,24 +794,30 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
             if (pos === -1) return row;
             const r = results.find((x) => x.index === pos);
             if (!r) return row;
+            if (r.categoryKind !== row.transactionType) {
+              return {
+                ...row,
+                aiCategorySuggestion: r.categoryName,
+                aiConfidence: r.confidence,
+                needsReview: true,
+                reviewConfirmed: false,
+                selected: false,
+              };
+            }
             const match = localCats.find(
               (c) => c.kind === r.categoryKind && normalizeCategoryName(c.name) === normalizeCategoryName(r.categoryName),
             );
-            if (!match) return row;
-            if (row.categoryId === match.id) return row;
+            if (!match) return { ...row, aiCategorySuggestion: r.categoryName, aiConfidence: r.confidence };
+            if (row.categoryId === match.id) return { ...row, aiCategorySuggestion: r.categoryName, aiConfidence: r.confidence };
             classified++;
-            return { ...row, categoryId: match.id };
+            return { ...row, categoryId: match.id, aiCategorySuggestion: r.categoryName, aiConfidence: r.confidence };
           });
           return next;
         });
 
-        setAiSummary({ classified, created: createdCount });
+        setAiSummary({ classified, created: 0 });
         if (!opts?.silent) {
-          toast.success(
-            createdCount > 0
-              ? `IA classificou ${classified} linhas e criou ${createdCount} categoria(s).`
-              : `IA classificou ${classified} linhas.`,
-          );
+          toast.success(`IA classificou ${classified} linhas. Sugestões novas ficaram para sua revisão.`);
         }
       } catch (err) {
         if (!opts?.silent) toast.error(getErrorMessage(err, "Falha na classificação com IA."));
@@ -669,7 +825,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
         setAiClassifying(false);
       }
     },
-    [userId],
+    [],
   );
 
   const handleConfirm = async () => {
@@ -681,6 +837,15 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
     if (invalid) {
       toast.error("Escolha uma conta para todas as movimentações selecionadas.");
       return;
+    }
+    const unreviewed = selectedRows.find((r) => r.needsReview && !r.reviewConfirmed);
+    if (unreviewed) {
+      toast.error("Confirme as linhas marcadas como 'precisa revisar' antes de importar.");
+      return;
+    }
+    if (reconciliation?.hasTotals && !reconciliation.ok) {
+      const details = reconciliation.lines.filter((line) => !line.ok).map((line) => line.message).join("\n");
+      if (!window.confirm(`Os totais do documento não conferem:\n\n${details}\n\nDeseja importar mesmo assim?`)) return;
     }
 
     setSaving(true);
@@ -698,50 +863,23 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
         metadata: { originalLength: fileText.length },
       };
 
-      const { data: importedFileRaw, error: fileError } = await untypedSupabase
-        .from("imported_files")
-        .upsert(filePayload, { onConflict: "user_id,file_hash" })
-        .select("id")
-        .single();
-      if (fileError) throw fileError;
-      const importedFile = importedFileRaw as { id: string };
-
-      const { data: importRowRaw, error: importError } = await untypedSupabase
-        .from("imports")
-        .insert({
-          user_id: userId,
-          imported_file_id: importedFile.id,
-          status: "confirmed",
-          institution: parsedInfo?.institution || "UNKNOWN",
-          document_type: parsedInfo?.documentType || "UNKNOWN",
-          parser_name: parsedInfo?.parserName || "manual",
-          transactions_total: selectedRows.length,
-          duplicates_total: duplicatedRows,
-          confirmed_at: new Date().toISOString(),
-          metadata: { internalTransfers },
-        })
-        .select("id")
-        .single();
-      if (importError) throw importError;
-      const importRow = importRowRaw as { id: string };
-
-      const txPayload = selectedRows.map((row) => {
-        const type = transactionTypeFromRow(row);
+      const txPayload = await Promise.all(selectedRows.map(async (row) => {
+        const type = row.transactionType;
         // Estornos entram como valor NEGATIVO na categoria original — redutor de despesa.
         // Pagamento de fatura vira transferência (não conta como receita).
-        const amountValue = isCardRefund(row) ? -Math.abs(Number(row.amount)) : Number(row.amount);
-        const effectiveDate = row.postingDate || row.transactionDate;
-        const competenceMonth = (forcedMonth || effectiveDate.slice(0, 7)) as string;
+        const amountValue = row.financialRole === "refund" ? -Math.abs(Number(row.amount)) : Number(row.amount);
+        const competenceMonth = row.competenceMonth || row.transactionDate.slice(0, 7);
         const isCard = row.sourceType === "CREDIT_CARD";
-        const role = isCardRefund(row)
-          ? "refund"
-          : type === "transfer"
-            ? "transfer"
-            : isCard
-              ? "card_purchase"
-              : type === "income"
-                ? "income"
-                : "expense";
+        const fingerprint = await getTransactionFingerprint({
+          institution: row.institution,
+          accountHint: row.sourceAccountId,
+          transactionDate: row.transactionDate,
+          amount: Math.abs(Number(row.amount)).toFixed(2),
+          descriptionNormalized: row.descriptionNormalized || row.descriptionOriginal,
+          direction: row.direction,
+          installmentCurrent: row.installmentCurrent,
+          installmentTotal: row.installmentTotal,
+        });
         return {
           user_id: userId,
           account_id: row.accountId,
@@ -749,17 +887,18 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
           type,
           amount: amountValue,
           transaction_date: row.transactionDate,
-          due_date: row.postingDate || row.transactionDate,
+          purchase_date: row.transactionDate,
+          posting_date: row.postingDate || null,
+          due_date: row.dueDate || null,
+          paid_at: row.status === "paid" && row.sourceType === "BANK_ACCOUNT" ? row.postingDate || row.transactionDate : null,
           status: row.status,
           source: row.descriptionNormalized || row.descriptionOriginal,
           notes: row.descriptionOriginal,
           payment_method: row.sourceType === "CREDIT_CARD" ? "credit" : type === "transfer" ? "transferencia" : "import",
           is_reviewed: true,
-          is_reconciled: false,
+          is_reconciled: Boolean(reconciliation?.hasTotals && reconciliation.ok),
           external_id: row.externalId || null,
-          fingerprint: row.fingerprint,
-          import_id: importRow.id,
-          imported_file_id: importedFile.id,
+          fingerprint,
           source_origin: "import",
           description_original: row.descriptionOriginal,
           description_normalized: row.descriptionNormalized,
@@ -768,29 +907,43 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
           installment_total: row.installmentTotal ?? null,
           possible_duplicate: Boolean(row.possibleDuplicate),
           possible_internal_transfer: Boolean(row.possibleInternalTransfer),
-          purchase_date: row.transactionDate,
           competence_month: competenceMonth,
-          statement_month: isCard ? competenceMonth : null,
-          transaction_role: role,
+          statement_month: isCard ? row.statementMonth || null : null,
+          transaction_role: row.financialRole,
           institution: row.institution || parsedInfo?.institution || null,
           card_last4: (row.metadata?.cardLast4 as string | undefined) || null,
-          metadata: { ...(row.metadata || {}), forcedMonth: forcedMonth || null },
+          metadata: {
+            ...(row.metadata || {}),
+            forcedStatementMonth: forcedMonth || null,
+            classificationReason: row.classificationReason || null,
+            classificationSource: row.classificationSource || null,
+            aiCategorySuggestion: row.aiCategorySuggestion || null,
+            pageNumber: row.pageNumber || null,
+          },
         };
-      });
+      }));
 
-      const { error: txError } = await supabase.from("transactions").insert(txPayload as never);
-      if (txError) {
-        // Importação atômica: nada de import órfão sem lançamentos.
-        await untypedSupabase.from("transactions").delete().eq("import_id", importRow.id);
-        await untypedSupabase.from("imports").delete().eq("id", importRow.id);
-        throw txError;
-      }
+      const { error: confirmError } = await untypedSupabase.rpc("confirm_financial_import", {
+        p_file: filePayload,
+        p_import: {
+          status: "confirmed",
+          institution: parsedInfo?.institution || "UNKNOWN",
+          document_type: parsedInfo?.documentType || "UNKNOWN",
+          parser_name: parsedInfo?.parserName || "manual",
+          duplicates_total: duplicatedRows,
+          metadata: { internalTransfers, reconciliation },
+        },
+        p_transactions: txPayload,
+      });
+      if (confirmError) throw confirmError;
 
       await learnCategorizationRules(selectedRows);
 
       toast.success(`${selectedRows.length} movimentações importadas.`);
       setRows([]);
       setParsedInfo(null);
+      setReconciliation(null);
+      setImagePreviews([]);
       setFileText("");
       setFileName("");
       setFileHash("");
@@ -803,7 +956,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
     }
   };
 
-  const step = parsedInfo || parseError ? 2 : rows.length > 0 ? 3 : 1;
+  const step = rows.length > 0 ? 3 : parsedInfo || parseError ? 2 : 1;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 pb-28">
@@ -855,7 +1008,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
                 Forçar mês da fatura <span className="text-muted-foreground font-normal">(opcional)</span>
               </Label>
               <p className="text-[11px] leading-tight text-muted-foreground">
-                Se marcar, todas as movimentações importadas vão para este mês — evita erros quando a data da compra difere do mês da fatura.
+                Define somente o mês da fatura. As datas originais das compras continuam intactas.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -898,17 +1051,26 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
           </div>
 
           <Tabs defaultValue="file">
-            <TabsList className="mb-4 bg-muted/40">
+            <TabsList className="mb-4 grid w-full max-w-md grid-cols-3 bg-muted/40">
               <TabsTrigger value="file" className="gap-1.5 text-xs">
                 <FileText className="h-3.5 w-3.5" /> Arquivo
               </TabsTrigger>
               <TabsTrigger value="paste" className="gap-1.5 text-xs">
                 <ClipboardPaste className="h-3.5 w-3.5" /> Colar texto
               </TabsTrigger>
+              <TabsTrigger value="image" className="gap-1.5 text-xs">
+                <ImageIcon className="h-3.5 w-3.5" /> Foto ou imagem
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="file" className="mt-0">
               <label
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const file = event.dataTransfer.files?.[0];
+                  if (file) void handleFile(file);
+                }}
                 className={cn(
                   "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/20 p-10 text-center transition",
                   "hover:border-primary/60 hover:bg-primary/5",
@@ -921,15 +1083,16 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
                   <Upload className="h-8 w-8 text-muted-foreground" strokeWidth={1.6} />
                 )}
                 <p className="text-sm font-medium text-foreground">
-                  {loading ? "Lendo arquivo…" : "Escolha ou arraste o arquivo aqui"}
+                  {loading ? progressMessage || "Lendo arquivo…" : "Escolha ou arraste o arquivo aqui"}
                 </p>
                 <p className="max-w-md text-xs text-muted-foreground">
-                  Aceita CSV do banco (Nubank, genérico), PDF com texto selecionável (Mercado Pago) e TXT.
-                  <br />O sistema detecta o banco e o tipo de documento automaticamente.
+                  PDF normal ou escaneado, CSV, OFX, XLSX, TXT e imagens de qualquer instituição.
+                  <br />Se o PDF não tiver texto, a leitura por imagem começa automaticamente.
+                  <br />As páginas escaneadas são enviadas à IA somente para extração e não são salvas como arquivo.
                 </p>
                 <Input
                   type="file"
-                  accept=".csv,.txt,.ofx,.pdf,text/csv,text/plain,application/pdf"
+                  accept=".csv,.txt,.ofx,.qfx,.pdf,.xlsx,.xls,.xlsm,.png,.jpg,.jpeg,.webp,text/csv,text/plain,application/pdf,image/*"
                   className="sr-only"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
@@ -951,6 +1114,69 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
               <Button type="button" className="w-full gap-2" onClick={handlePastedText} disabled={loading}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                 Analisar texto
+              </Button>
+            </TabsContent>
+
+            <TabsContent value="image" className="mt-0 space-y-4">
+              <div className="flex flex-wrap gap-2">
+                <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent">
+                  <ImageIcon className="h-4 w-4" /> Selecionar imagens
+                  <Input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    multiple
+                    className="sr-only"
+                    onChange={(event) => {
+                      void addImagePreviews(Array.from(event.target.files || []));
+                      event.target.value = "";
+                    }}
+                  />
+                </label>
+                <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent">
+                  <Camera className="h-4 w-4" /> Tirar foto
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="sr-only"
+                    onChange={(event) => {
+                      void addImagePreviews(Array.from(event.target.files || []));
+                      event.target.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+              {imagePreviews.length === 0 ? (
+                <div className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/20 text-center text-muted-foreground">
+                  <ImageIcon className="h-8 w-8" />
+                  <p className="text-sm font-medium">Adicione uma ou mais páginas</p>
+                  <p className="max-w-md text-xs">Fotografe sem cortes, reflexos ou sombras. A ordem abaixo será usada como número da página.</p>
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {imagePreviews.map((image, index) => (
+                    <div key={image.id} className="overflow-hidden rounded-lg border bg-muted/20">
+                      <img src={image.dataUrl} alt={`Página ${index + 1}`} className="h-40 w-full object-contain" />
+                      <div className="flex items-center justify-between gap-2 border-t p-2">
+                        <span className="truncate text-[11px]">Página {index + 1} · {image.name}</span>
+                        <div className="flex">
+                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={index === 0} onClick={() => movePreview(index, -1)} title="Mover para antes">↑</Button>
+                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={index === imagePreviews.length - 1} onClick={() => movePreview(index, 1)} title="Mover para depois">↓</Button>
+                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => void rotatePreview(image.id)} title="Girar">
+                            <RotateCw className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setImagePreviews((images) => images.filter((item) => item.id !== image.id))} title="Remover">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <Button type="button" className="w-full gap-2" onClick={() => void analyzeImagePreviews()} disabled={loading || imagePreviews.length === 0}>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {loading ? progressMessage || "Analisando imagens…" : `Analisar ${imagePreviews.length || ""} imagem(ns) com IA`}
               </Button>
             </TabsContent>
           </Tabs>
@@ -1055,6 +1281,23 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
                 {parsedInfo.warnings.length > 3 && (
                   <p className="pl-5 text-[11px] text-muted-foreground">+ {parsedInfo.warnings.length - 3} avisos</p>
                 )}
+              </div>
+            )}
+
+            {reconciliation?.hasTotals && (
+              <div className={cn(
+                "space-y-1 rounded-lg border px-3 py-2 text-xs",
+                reconciliation.ok
+                  ? "border-emerald-500/25 bg-emerald-500/5"
+                  : "border-amber-500/30 bg-amber-500/5",
+              )}>
+                <div className="flex items-center gap-2 font-medium">
+                  {reconciliation.ok
+                    ? <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    : <AlertTriangle className="h-4 w-4 text-amber-600" />}
+                  {reconciliation.ok ? "Valores do documento conferem" : "Há diferença nos totais do documento"}
+                </div>
+                {reconciliation.lines.map((line) => <p key={line.label} className="pl-6 text-muted-foreground">{line.message}</p>)}
               </div>
             )}
 
@@ -1174,46 +1417,66 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
                     ))}
                   </SelectContent>
                 </Select>
+                <Select onValueChange={(value) => bulkApplyType(value as ReviewRow["transactionType"])}>
+                  <SelectTrigger className="h-7 w-36 text-[11px]">
+                    <SelectValue placeholder="Tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="expense">Despesa</SelectItem>
+                    <SelectItem value="income">Receita</SelectItem>
+                    <SelectItem value="transfer">Transferência</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="month"
+                  aria-label="Mês da fatura em massa"
+                  className="h-7 w-36 text-[11px]"
+                  onChange={(event) => bulkApplyStatementMonth(event.target.value)}
+                />
               </div>
             )}
 
             {/* Table */}
             <div className="overflow-hidden rounded-lg border border-border/60">
-              <div className="hidden grid-cols-[32px_1.4fr_100px_120px_180px_180px_90px] gap-3 border-b border-border/60 bg-muted/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground lg:grid">
+              <div className="hidden grid-cols-[32px_1.3fr_112px_110px_150px_150px_125px_90px] gap-3 border-b border-border/60 bg-muted/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground lg:grid">
                 <span />
                 <span>Descrição</span>
-                <span>Data</span>
+                <span>Data da compra</span>
                 <span className="text-right">Valor</span>
                 <span>Conta</span>
                 <span>Categoria</span>
+                <span>Tipo</span>
                 <span>Status</span>
               </div>
               <div className="divide-y divide-border/60">
                 {rows.map((row) => {
                   const Icon = rowIcon(row);
-                  const type = transactionTypeFromRow(row);
+                  const type = row.transactionType;
                   const categoryOptions = categories.filter((c) => c.kind === type);
 
                   return (
                     <div
                       key={row.localId}
                       className={cn(
-                        "grid grid-cols-1 gap-3 px-3 py-3 lg:grid-cols-[32px_1.4fr_100px_120px_180px_180px_90px]",
+                        "grid grid-cols-1 gap-3 px-3 py-3 lg:grid-cols-[32px_1.3fr_112px_110px_150px_150px_125px_90px]",
                         row.possibleDuplicate && "bg-amber-50/40 dark:bg-amber-500/5",
                         row.possibleInternalTransfer && "bg-primary/5",
                         !row.selected && "opacity-50",
                       )}
                     >
                       <div className="flex items-start pt-1">
-                        <Checkbox checked={row.selected} onCheckedChange={(v) => updateRow(row.localId, { selected: Boolean(v) })} />
+                        <Checkbox checked={row.selected} onCheckedChange={(v) => updateRow(row.localId, { selected: Boolean(v), reviewConfirmed: Boolean(v) || row.reviewConfirmed })} />
                       </div>
 
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <Icon className={cn("h-3.5 w-3.5 shrink-0", rowAmountClass(row))} />
-                          <p className="truncate text-sm font-medium text-foreground">
-                            {row.descriptionNormalized || row.descriptionOriginal}
-                          </p>
+                          <Input
+                            value={row.descriptionNormalized || row.descriptionOriginal}
+                            onChange={(event) => updateRow(row.localId, { descriptionNormalized: event.target.value, reviewConfirmed: true })}
+                            className="h-8 min-w-0 text-sm font-medium"
+                            aria-label="Descrição"
+                          />
                         </div>
                         {row.descriptionOriginal !== row.descriptionNormalized && (
                           <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{row.descriptionOriginal}</p>
@@ -1234,20 +1497,46 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
                               transferência
                             </Badge>
                           )}
-                          {isCardBillPayment(row) && (
+                          <Badge variant="outline" className="rounded-md px-1.5 py-0 text-[9px] font-normal" title={row.classificationReason}>
+                            {ROLE_LABEL[row.financialRole]}
+                          </Badge>
+                          <Badge variant="outline" className="rounded-md px-1.5 py-0 text-[9px] font-normal">
+                            {Math.round(row.confidence * 100)}% confiança
+                          </Badge>
+                          {row.pageNumber && (
+                            <Badge variant="outline" className="rounded-md px-1.5 py-0 text-[9px] font-normal">pág. {row.pageNumber}</Badge>
+                          )}
+                          {row.needsReview && !row.reviewConfirmed && (
+                            <Badge className="rounded-md border-amber-300 bg-amber-100 px-1.5 py-0 text-[9px] font-normal text-amber-800 hover:bg-amber-100">precisa revisar</Badge>
+                          )}
+                          {row.financialRole === "bill_payment" && (
                             <Badge className="rounded-md border-primary/30 bg-primary/10 px-1.5 py-0 text-[9px] font-normal text-primary hover:bg-primary/10">
                               pagamento de fatura
                             </Badge>
                           )}
-                          {isCardRefund(row) && (
+                          {row.financialRole === "refund" && (
                             <Badge className="rounded-md border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0 text-[9px] font-normal text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400">
                               estorno (reduz categoria)
                             </Badge>
                           )}
                         </div>
+                        <div className="mt-2 grid grid-cols-3 gap-1">
+                          <label className="text-[9px] text-muted-foreground">Lançamento
+                            <Input type="date" value={row.postingDate || ""} onChange={(event) => updateRow(row.localId, { postingDate: event.target.value || undefined, reviewConfirmed: true })} className="mt-0.5 h-7 px-1 text-[10px]" />
+                          </label>
+                          <label className="text-[9px] text-muted-foreground">Vencimento
+                            <Input type="date" value={row.dueDate || ""} onChange={(event) => updateRow(row.localId, { dueDate: event.target.value || undefined, reviewConfirmed: true })} className="mt-0.5 h-7 px-1 text-[10px]" />
+                          </label>
+                          <label className="text-[9px] text-muted-foreground">Mês fatura
+                            <Input type="month" value={row.statementMonth || ""} onChange={(event) => updateRow(row.localId, { statementMonth: event.target.value || undefined, reviewConfirmed: true })} className="mt-0.5 h-7 px-1 text-[10px]" />
+                          </label>
+                        </div>
+                        {row.aiCategorySuggestion && !row.categoryId && (
+                          <p className="mt-1 text-[10px] text-primary">IA sugeriu “{row.aiCategorySuggestion}”; escolha uma categoria para confirmar.</p>
+                        )}
                       </div>
 
-                      <div className="text-xs tabular-nums text-muted-foreground lg:pt-1">{row.transactionDate.slice(5)}</div>
+                      <Input type="date" value={row.transactionDate} onChange={(event) => updateRow(row.localId, { transactionDate: event.target.value, competenceMonth: event.target.value.slice(0, 7), reviewConfirmed: true })} className="h-8 px-1 text-[10px]" />
 
                       <div className={cn("text-sm font-semibold tabular-nums lg:pt-1 lg:text-right", rowAmountClass(row))}>
                         {row.direction === "CREDIT" ? "+" : "−"}
@@ -1285,6 +1574,23 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
                               {c.name}
                             </SelectItem>
                           ))}
+                        </SelectContent>
+                      </Select>
+
+                      <Select
+                        value={row.transactionType}
+                        onValueChange={(value) => updateRow(row.localId, {
+                          transactionType: value as ReviewRow["transactionType"],
+                          financialRole: value as "income" | "expense" | "transfer",
+                          categoryId: categories.some((category) => category.id === row.categoryId && category.kind === value) ? row.categoryId : "",
+                          reviewConfirmed: true,
+                        })}
+                      >
+                        <SelectTrigger className="h-8 rounded-md text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="expense">Despesa</SelectItem>
+                          <SelectItem value="income">Receita</SelectItem>
+                          <SelectItem value="transfer">Transferência</SelectItem>
                         </SelectContent>
                       </Select>
 

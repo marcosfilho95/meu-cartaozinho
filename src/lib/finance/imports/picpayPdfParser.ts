@@ -11,11 +11,12 @@ import {
 const LINE_PATTERN = /^(\d{2})\/(\d{2})\s+(.+?)\s+(-?\s*R?\$?\s*[\d.]*\d,\d{2})\s*$/;
 const CARD_PATTERN = /Picpay\s*Card.*final\s*(\d{3,4})/i;
 const CLOSING_PATTERN = /Fechamento[:\s]+(\d{2})[/-](\d{2})[/-](\d{4})/i;
+const DUE_PATTERN = /Vencimento[:\s]+(\d{2})[/-](\d{2})[/-](\d{4})/i;
+const TOTAL_PATTERN = /total\s+(?:geral\s+dos\s+lan[cç]amentos|da\s+fatura)[^\d-]*R?\$?\s*([\d.]+,\d{2})/i;
 
 const isNoise = (description: string) => {
   const upper = description.toUpperCase();
   return (
-    upper.includes("PAGAMENTO DE FATURA") ||
     upper.includes("SUBTOTAL DOS LANCAMENTOS") ||
     upper.includes("TOTAL GERAL DOS LANCAMENTOS")
   );
@@ -42,6 +43,10 @@ export const picpayPdfParser: FinancialFileParser = {
     const detection = await this.canHandle(context);
     const text = context.fileText;
     const closing = text.match(CLOSING_PATTERN);
+    const due = text.match(DUE_PATTERN);
+    const dueDate = due ? `${due[3]}-${due[2]}-${due[1]}` : undefined;
+    const statementMonth = dueDate?.slice(0, 7) || (closing ? `${closing[3]}-${closing[2]}` : undefined);
+    const totalMatch = text.match(TOTAL_PATTERN);
     const closingMonth = closing ? Number(closing[2]) : new Date().getMonth() + 1;
     const closingYear = closing ? Number(closing[3]) : new Date().getFullYear();
 
@@ -107,6 +112,9 @@ export const picpayPdfParser: FinancialFileParser = {
         institution: "PICPAY",
         sourceType: "CREDIT_CARD",
         transactionDate: date,
+        dueDate,
+        statementMonth,
+        competenceMonth: date.slice(0, 7),
         descriptionOriginal: rawDesc,
         descriptionNormalized: normalized,
         merchantName: normalized,
@@ -131,9 +139,10 @@ export const picpayPdfParser: FinancialFileParser = {
       parserName: this.name,
       detection,
       period: closing ? { end: `${closing[3]}-${closing[2]}-${closing[1]}` } : undefined,
+      totals: totalMatch ? { statementTotal: parseBrazilianMoney(totalMatch[1]) } : undefined,
       transactions,
       warnings,
-      metadata: { fileName: context.fileName, fileHash: context.fileHash, closingDate: closing?.[0] },
+      metadata: { fileName: context.fileName, fileHash: context.fileHash, closingDate: closing?.[0], dueDate },
     };
   },
 };

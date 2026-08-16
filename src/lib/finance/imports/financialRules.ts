@@ -156,6 +156,16 @@ export const classifyFinancialRow = (row: ClassifiableRow): FinancialClassificat
       categoryHint: "Investimentos",
     };
   }
+  if (has(text, INVESTMENT_TERMS) && isCredit) {
+    return {
+      role: "investment_out",
+      type: "transfer",
+      negativeAmount: false,
+      needsReview: true,
+      reason: "Crédito ligado a investimento: confirme se é resgate do principal ou rendimento separado.",
+      categoryHint: "Investimentos",
+    };
+  }
 
   // 4. Tarifas, juros e encargos são despesas bancárias.
   if (!isCredit && has(text, FEE_TERMS)) {

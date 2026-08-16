@@ -33,6 +33,8 @@ const detectInstitution = (text: string) => {
   if (upper.includes("MERCADO PAGO") || upper.includes("MERCADOPAGO")) return "MERCADO_PAGO" as const;
   if (upper.includes("PICPAY")) return "PICPAY" as const;
   if (upper.includes("C6 BANK") || upper.includes("BANCO C6")) return "C6" as const;
+  if (upper.includes("BRADESCARD") || upper.includes("AMAZON PRIME")) return "BRADESCARD" as const;
+  if (upper.includes("BRADESCO")) return "BRADESCO" as const;
   return "UNKNOWN" as const;
 };
 
@@ -59,10 +61,19 @@ export const ofxParser: FinancialFileParser = {
   async parse(context: ParserContext) {
     const detection = await this.canHandle(context);
     const text = context.fileText;
-    const blocks = text.match(/<STMTTRN>[\s\S]*?<\/STMTTRN>/gi) || [];
+    // OFX XML fecha STMTTRN; OFX SGML antigo normalmente não fecha.
+    const blocks = text
+      .split(/<STMTTRN>/i)
+      .slice(1)
+      .map((part) => part.split(/<\/STMTTRN>|<\/BANKTRANLIST>|<\/CCSTMTTRNRS>/i)[0])
+      .filter(Boolean);
     const warnings: string[] = [];
     const transactions: NormalizedTransaction[] = [];
     const isCard = detection.documentType === "CREDIT_CARD_STATEMENT";
+
+    const accountId = [tag(text, "BANKID"), tag(text, "ACCTID") || tag(text, "ACCTKEY")]
+      .filter(Boolean)
+      .join(":") || undefined;
 
     for (const block of blocks) {
       const date = parseOfxDate(tag(block, "DTPOSTED"));
@@ -74,9 +85,11 @@ export const ofxParser: FinancialFileParser = {
       const direction: "CREDIT" | "DEBIT" = signed > 0 ? "CREDIT" : "DEBIT";
       const amount = Math.abs(signed).toFixed(2);
       const normalized = normalizeMerchantName(description);
-      const externalId = tag(block, "FITID") || undefined;
+      const rawFitId = tag(block, "FITID") || undefined;
+      const externalId = rawFitId ? `${detection.institution}:${accountId || "default"}:${rawFitId}` : undefined;
       const fingerprint = await getTransactionFingerprint({
         institution: detection.institution,
+        accountHint: accountId,
         transactionDate: date,
         amount,
         descriptionNormalized: normalized,
@@ -87,6 +100,7 @@ export const ofxParser: FinancialFileParser = {
         externalId,
         institution: detection.institution,
         sourceType: isCard ? "CREDIT_CARD" : "BANK_ACCOUNT",
+        sourceAccountId: accountId,
         transactionDate: date,
         postingDate: parseOfxDate(tag(block, "DTAVAIL")) || undefined,
         descriptionOriginal: description,
@@ -100,7 +114,7 @@ export const ofxParser: FinancialFileParser = {
         categorySuggestion: suggestCategoryName(description, direction),
         fingerprint,
         possibleInternalTransfer: isLikelyInternalTransfer(description),
-        metadata: { parser: "ofx" },
+        metadata: { parser: "ofx", fitId: rawFitId, accountId },
       });
     }
 
@@ -111,7 +125,14 @@ export const ofxParser: FinancialFileParser = {
       detection,
       transactions,
       warnings,
-      metadata: { fileName: context.fileName, fileHash: context.fileHash },
+      period: {
+        start: parseOfxDate(tag(text, "DTSTART")) || undefined,
+        end: parseOfxDate(tag(text, "DTEND")) || undefined,
+      },
+      totals: {
+        finalBalance: tag(text, "BALAMT") || undefined,
+      },
+      metadata: { fileName: context.fileName, fileHash: context.fileHash, accountId },
     };
   },
 };

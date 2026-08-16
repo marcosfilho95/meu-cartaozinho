@@ -44,7 +44,8 @@ type PaymentMethod = "pix" | "boleto" | "credit" | "debit" | "cash";
 
 interface DraftTx {
   id: string;
-  type: "income" | "expense";
+  type: "income" | "expense" | "transfer";
+  role: "income" | "expense" | "transfer" | "investment_in" | "investment_out" | "yield" | "refund" | "fee";
   amount: number;
   description: string;
   date: string;
@@ -52,8 +53,10 @@ interface DraftTx {
   category_hint: string | null;
   category_id: string;
   account_id: string;
+  counterpart_account_id: string;
   installments: number | null;
   confidence: number;
+  transfer_direction: "in" | "out" | null;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -74,7 +77,7 @@ const fileToDataUrl = (file: File): Promise<string> =>
 const guessAccount = (
   accounts: any[],
   method: PaymentMethod | null,
-  type: "income" | "expense",
+  type: "income" | "expense" | "transfer",
 ): string => {
   if (!accounts.length) return "";
   if (type === "income") {
@@ -87,6 +90,14 @@ const guessAccount = (
     return accounts.find((a) => a.type === "cash")?.id || accounts[0].id;
   }
   return accounts.find((a) => a.type === "checking")?.id || accounts[0].id;
+};
+
+const guessCounterpartAccount = (accounts: any[], sourceId: string, role: DraftTx["role"]) => {
+  const candidates = accounts.filter((account) => account.id !== sourceId);
+  if (role === "investment_in" || role === "investment_out") {
+    return candidates.find((account) => account.type === "investment" || /invest|cofrinho|caixinha/i.test(account.name))?.id || "";
+  }
+  return candidates[0]?.id || "";
 };
 
 export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) => {
@@ -190,9 +201,11 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
           type: t.type,
         });
         const account_id = guessAccount(accounts, t.payment_method, t.type);
+        const role = t.role || (t.type === "transfer" ? "transfer" : t.type);
         return {
           id: uid(),
           type: t.type,
+          role,
           amount: Number(t.amount),
           description: String(t.description),
           date: t.date,
@@ -200,8 +213,10 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
           category_hint: t.category_hint,
           category_id,
           account_id,
+          counterpart_account_id: t.type === "transfer" ? guessCounterpartAccount(accounts, account_id, role) : "",
           installments: t.installments,
           confidence: t.confidence ?? 0.7,
+          transfer_direction: t.transfer_direction || null,
         };
       });
       setDrafts(newDrafts);
@@ -232,11 +247,16 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
       toast.error("Selecione uma conta para cada transação.");
       return;
     }
+    const invalidTransfer = drafts.find((d) => d.type === "transfer" && (!d.counterpart_account_id || d.counterpart_account_id === d.account_id));
+    if (invalidTransfer) {
+      toast.error("Escolha contas de origem e destino diferentes para cada transferência.");
+      return;
+    }
     setSaving(true);
     try {
       const rows: any[] = [];
       drafts.forEach((d) => {
-        const count = getInstallmentCount(d.installments);
+        const count = d.type === "transfer" ? 1 : getInstallmentCount(d.installments);
         for (let i = 0; i < count; i += 1) {
           const due = new Date(`${d.date}T12:00:00`);
           due.setMonth(due.getMonth() + i);
@@ -247,6 +267,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
           rows.push({
             user_id: userId,
             account_id: d.account_id,
+            counterpart_account_id: d.type === "transfer" ? d.counterpart_account_id : null,
             category_id: d.category_id || null,
             type: d.type,
             amount: d.amount,
@@ -255,6 +276,12 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
             status: "pending",
             source: count > 1 ? `${d.description} (${i + 1}/${count})` : d.description,
             payment_method: d.payment_method,
+            transaction_role: d.role,
+            purchase_date: dueStr,
+            competence_month: dueStr.slice(0, 7),
+            source_origin: "smart_add",
+            is_reviewed: true,
+            metadata: { aiConfidence: d.confidence, transferDirection: d.transfer_direction },
             notes: null,
           });
         }
@@ -288,7 +315,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
   }, [tab, text, pasted, imageDataUrl, loading, optionsLoading]);
 
   const totalLaunches = useMemo(
-    () => drafts.reduce((total, draft) => total + getInstallmentCount(draft.installments), 0),
+    () => drafts.reduce((total, draft) => total + (draft.type === "transfer" ? 1 : getInstallmentCount(draft.installments)), 0),
     [drafts],
   );
 
@@ -427,28 +454,29 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                       <div className="flex items-center gap-2">
                         {d.type === "income" ? (
                           <ArrowUpCircle className="h-4 w-4 text-success" />
-                        ) : (
+                        ) : d.type === "expense" ? (
                           <ArrowDownCircle className="h-4 w-4 text-destructive" />
+                        ) : (
+                          <ArrowDownCircle className="h-4 w-4 rotate-90 text-primary" />
                         )}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const type = d.type === "income" ? "expense" : "income";
-                            updateDraft(d.id, {
-                              type,
-                              category_id: resolveSmartCategoryId({
-                                categories,
-                                description: d.description,
-                                hint: d.category_hint,
-                                type,
-                              }),
-                              account_id: guessAccount(accounts, d.payment_method, type),
-                            });
-                          }}
-                          className="text-[11px] text-muted-foreground underline decoration-dotted"
-                        >
-                          {d.type === "income" ? "Marcar como despesa" : "Marcar como receita"}
-                        </button>
+                        <Select value={d.type} onValueChange={(value) => {
+                          const type = value as DraftTx["type"];
+                          const accountId = guessAccount(accounts, d.payment_method, type);
+                          updateDraft(d.id, {
+                            type,
+                            role: type === "transfer" ? "transfer" : type,
+                            category_id: resolveSmartCategoryId({ categories, description: d.description, hint: d.category_hint, type }),
+                            account_id: accountId,
+                            counterpart_account_id: type === "transfer" ? guessCounterpartAccount(accounts, accountId, "transfer") : "",
+                          });
+                        }}>
+                          <SelectTrigger className="h-7 w-32 text-[11px]"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="expense">Despesa</SelectItem>
+                            <SelectItem value="income">Receita</SelectItem>
+                            <SelectItem value="transfer">Transferência</SelectItem>
+                          </SelectContent>
+                        </Select>
                         {d.confidence < 0.6 && (
                           <Badge variant="outline" className="text-[10px]">
                             Revisar sugestão
@@ -499,7 +527,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                         />
                       </div>
                       <div>
-                        <Label className="text-[10px] text-muted-foreground">Conta</Label>
+                        <Label className="text-[10px] text-muted-foreground">{d.type === "transfer" ? "Conta de origem" : "Conta"}</Label>
                         <Select
                           value={d.account_id || "none"}
                           onValueChange={(v) => updateDraft(d.id, { account_id: v === "none" ? "" : v })}
@@ -517,6 +545,23 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                           </SelectContent>
                         </Select>
                       </div>
+                      {d.type === "transfer" && (
+                        <div className="col-span-2">
+                          <Label className="text-[10px] text-muted-foreground">Conta de destino</Label>
+                          <Select value={d.counterpart_account_id || "none"} onValueChange={(value) => updateDraft(d.id, { counterpart_account_id: value === "none" ? "" : value })}>
+                            <SelectTrigger className="h-9"><SelectValue placeholder="Destino" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Selecione</SelectItem>
+                              {accounts.filter((account) => account.id !== d.account_id).map((account) => (
+                                <SelectItem key={account.id} value={account.id}>{account.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="mt-1 text-[10px] text-muted-foreground">
+                            Transferências, aplicações e resgates não alteram receitas nem despesas.
+                          </p>
+                        </div>
+                      )}
                       <div>
                         <Label className="text-[10px] text-muted-foreground">Categoria</Label>
                         <Select

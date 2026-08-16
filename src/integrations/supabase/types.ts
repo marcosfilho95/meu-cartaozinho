@@ -1026,9 +1026,11 @@ export type Database = {
           notes: string | null
           payee_id: string | null
           payment_method: string | null
+          paid_at: string | null
           possible_duplicate: boolean
           possible_internal_transfer: boolean
           purchase_date: string | null
+          posting_date: string | null
           recurrence_id: string | null
           source: string | null
           source_origin: string | null
@@ -1067,9 +1069,11 @@ export type Database = {
           notes?: string | null
           payee_id?: string | null
           payment_method?: string | null
+          paid_at?: string | null
           possible_duplicate?: boolean
           possible_internal_transfer?: boolean
           purchase_date?: string | null
+          posting_date?: string | null
           recurrence_id?: string | null
           source?: string | null
           source_origin?: string | null
@@ -1108,9 +1112,11 @@ export type Database = {
           notes?: string | null
           payee_id?: string | null
           payment_method?: string | null
+          paid_at?: string | null
           possible_duplicate?: boolean
           possible_internal_transfer?: boolean
           purchase_date?: string | null
+          posting_date?: string | null
           recurrence_id?: string | null
           source?: string | null
           source_origin?: string | null

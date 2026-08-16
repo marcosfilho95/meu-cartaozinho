@@ -7,7 +7,7 @@ const normalizeLabel = (value: string) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
-export type SmartTransactionType = "income" | "expense";
+export type SmartTransactionType = "income" | "expense" | "transfer";
 
 export interface SmartCategoryOption {
   id: string;
@@ -116,7 +116,7 @@ export const resolveSmartCategoryId = ({
 }) => {
   const pool = categories.filter((category) => category.kind === type);
   const hintedCategory = findCategoryByLabel(pool, hint);
-  const ruleName = suggestCategoryName(description, type === "income" ? "CREDIT" : "DEBIT");
+  const ruleName = type === "transfer" ? "Entre Contas" : suggestCategoryName(description, type === "income" ? "CREDIT" : "DEBIT");
   const isFallbackRule = FALLBACK_RULE_NAMES.has(normalizeLabel(ruleName));
   const ruleCategory = isFallbackRule ? undefined : findCategoryByLabel(pool, ruleName);
 

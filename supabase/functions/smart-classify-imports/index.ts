@@ -95,7 +95,9 @@ MAPEAMENTO POR SETOR (não exaustivo — use conhecimento geral para casos não 
 - PIX RECEBIDO / TED CRÉDITO / DOC CRÉDITO / DEP DINHEIRO → income "Recebimentos" (createIfMissing se não existir)
 - PIX ENVIADO / TED / DOC entre contas do próprio usuário (mesma titularidade) → transfer "Entre Contas"
 - PIX ENVIADO para terceiros sem contexto → expense "Pix Enviado" (createIfMissing)
-- RENDIMENTOS / JUROS / CDB / TESOURO / RESGATE / DIVIDENDOS → income "Rendimentos" ou "Dividendos"
+- RENDIMENTOS / JUROS RECEBIDOS / DIVIDENDOS → income "Rendimentos" ou "Dividendos"
+- APLICAÇÃO / INVESTIMENTO / CDB / TESOURO → transfer "Investimentos"; nunca despesa
+- RESGATE do principal → transfer "Investimentos"; somente o rendimento explicitamente separado é income. Se misturado, mantenha transfer e baixa confiança
 - PAGAMENTO DE FATURA / PGTO CARTÃO / BOLETO CARTÃO → transfer "Pagamento de Cartão" (createIfMissing)
 - IOF / TARIFA / ANUIDADE / JUROS DE ATRASO / MULTA → expense "Tarifas Bancárias" (createIfMissing)
 - SALÁRIO / PROVENTO / FOLHA / HOLERITE → income "Salário"
@@ -200,7 +202,12 @@ const inferFallbackCategory = (row: InRow, categories: Array<{ name: string; kin
     reason = "Movimentação entre contas/cartão.";
   } else if (row.direction === "CREDIT") {
     kind = "income";
-    if (/RENDIMENTO|JUROS|CDB|TESOURO|DIVIDENDO/.test(text)) {
+    if (/RESGATE|RETIRADA DE INVESTIMENTO|LIQUIDACAO CDB/.test(text)) {
+      kind = "transfer";
+      preferred = ["Investimentos", "Entre Contas", "Transferência"];
+      confidence = 0.55;
+      reason = "Resgate do principal é transferência; rendimento precisa estar separado.";
+    } else if (/RENDIMENTO|JUROS RECEBIDOS|DIVIDENDO|JCP/.test(text)) {
       preferred = ["Rendimentos", "Investimentos", "Outros (Receita)"];
       confidence = 0.9;
       reason = "Rendimento identificado no extrato.";

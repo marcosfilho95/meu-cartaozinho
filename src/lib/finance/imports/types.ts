@@ -1,8 +1,8 @@
-export type InstitutionCode = "NUBANK" | "MERCADO_PAGO" | "PICPAY" | "C6" | "UNKNOWN";
+export type InstitutionCode = "NUBANK" | "MERCADO_PAGO" | "PICPAY" | "C6" | "BRADESCARD" | "BRADESCO" | "UNKNOWN";
 
 export type FinancialDocumentType = "BANK_STATEMENT" | "CREDIT_CARD_STATEMENT" | "UNKNOWN";
 
-export type FinancialFileFormat = "CSV" | "OFX" | "XLSX" | "PDF_TEXT" | "TXT" | "UNKNOWN";
+export type FinancialFileFormat = "CSV" | "OFX" | "XLSX" | "PDF_TEXT" | "PDF_IMAGE" | "IMAGE" | "TXT" | "UNKNOWN";
 
 export type TransactionDirection = "CREDIT" | "DEBIT";
 
@@ -31,6 +31,9 @@ export type NormalizedTransaction = {
   sourceAccountId?: string;
   transactionDate: string;
   postingDate?: string;
+  dueDate?: string;
+  statementMonth?: string;
+  competenceMonth?: string;
   descriptionOriginal: string;
   descriptionNormalized: string;
   merchantName?: string;
@@ -41,6 +44,10 @@ export type NormalizedTransaction = {
   installmentTotal?: number;
   currency: "BRL";
   confidence: number;
+  pageNumber?: number;
+  classificationReason?: string;
+  classificationSource?: "rule" | "ai" | "parser";
+  needsReview?: boolean;
   categorySuggestion?: string;
   fingerprint: string;
   possibleDuplicate?: boolean;
@@ -57,6 +64,7 @@ export type ParsedFinancialDocument = {
     totalCredits?: string;
     totalDebits?: string;
     finalBalance?: string;
+    statementTotal?: string;
   };
   transactions: NormalizedTransaction[];
   warnings: string[];
@@ -78,4 +86,3 @@ export type ExistingTransactionMatch = {
   source?: string | null;
   type: "income" | "expense" | "transfer";
 };
-

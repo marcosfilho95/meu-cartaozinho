@@ -256,7 +256,7 @@ export const markDuplicates = (transactions: NormalizedTransaction[], existing: 
 
   return transactions.map((tx) => ({
     ...tx,
-    possibleDuplicate: Boolean((tx.externalId && externalIds.has(tx.externalId)) || fingerprints.has(tx.fingerprint)),
+    possibleDuplicate: Boolean(tx.possibleDuplicate || (tx.externalId && externalIds.has(tx.externalId)) || fingerprints.has(tx.fingerprint)),
   }));
 };
 

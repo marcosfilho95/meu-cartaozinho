@@ -13,6 +13,7 @@ const LINE_MONTH_ABBR = /^(\d{1,2})\s+(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|N
 const LINE_SLASH = /^(\d{2})\/(\d{2})\s+(.+?)\s+(-?\s*R?\$?\s*[\d.]*\d,\d{2})\s*$/;
 const CARD_END_PATTERN = /final(?:\s+do)?\s*cart[aã]o[:\s]+(\d{3,4})/i;
 const DUE_PATTERN = /vencimento[:\s]+(\d{2})[/-](\d{2})[/-](\d{4})/i;
+const TOTAL_PATTERN = /total\s+da\s+fatura[^\d-]*R?\$?\s*([\d.]+,\d{2})/i;
 
 const MONTH_MAP: Record<string, number> = {
   JAN: 1, FEV: 2, MAR: 3, ABR: 4, MAI: 5, JUN: 6,
@@ -22,8 +23,6 @@ const MONTH_MAP: Record<string, number> = {
 const isNoise = (description: string) => {
   const up = description.toUpperCase();
   return (
-    up.includes("PAGAMENTO RECEBIDO") ||
-    up.includes("PAGAMENTO EM ") ||
     up.includes("TOTAL DA FATURA") ||
     up.includes("SALDO EM ABERTO") ||
     up.startsWith("SUBTOTAL")
@@ -53,6 +52,9 @@ export const nubankPdfParser: FinancialFileParser = {
     const dueMatch = text.match(DUE_PATTERN);
     const dueMonth = dueMatch ? Number(dueMatch[2]) : new Date().getMonth() + 1;
     const dueYear = dueMatch ? Number(dueMatch[3]) : new Date().getFullYear();
+    const dueDate = dueMatch ? `${dueMatch[3]}-${dueMatch[2]}-${dueMatch[1]}` : undefined;
+    const statementMonth = dueDate?.slice(0, 7);
+    const totalMatch = text.match(TOTAL_PATTERN);
     // Meses > mês de vencimento pertencem ao ano anterior (fatura fecha antes).
     const yearFor = (month: number) => (month > dueMonth ? dueYear - 1 : dueYear);
 
@@ -134,6 +136,9 @@ export const nubankPdfParser: FinancialFileParser = {
         sourceType: "CREDIT_CARD",
         sourceAccountId: currentCardEnd,
         transactionDate,
+        dueDate,
+        statementMonth,
+        competenceMonth: transactionDate.slice(0, 7),
         descriptionOriginal: rawDesc.trim(),
         descriptionNormalized,
         merchantName,
@@ -157,11 +162,13 @@ export const nubankPdfParser: FinancialFileParser = {
     return {
       parserName: this.name,
       detection,
+      totals: totalMatch ? { statementTotal: parseBrazilianMoney(totalMatch[1]) } : undefined,
       transactions,
       warnings,
       metadata: {
         totalLines: lines.length,
         cardsSeen: currentCardEnd ? [currentCardEnd] : [],
+        dueDate,
       },
     };
   },

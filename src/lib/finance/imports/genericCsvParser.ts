@@ -218,7 +218,8 @@ export const genericCsvParser: FinancialFileParser = {
   async canHandle(context: ParserContext): Promise<ParserDetectionResult> {
     const lines = getNonEmptyLines(context.fileText);
     if (!lines.length) return { confidence: 0, institution: "UNKNOWN", documentType: "UNKNOWN", format: "CSV", reason: "vazio" };
-    const isCsvName = /\.csv$/i.test(context.fileName) || context.mimeType?.includes("csv");
+    const isSpreadsheet = /\.(xlsx|xls|xlsm)$/i.test(context.fileName);
+    const isCsvName = /\.csv$/i.test(context.fileName) || context.mimeType?.includes("csv") || isSpreadsheet;
     const headerInfo = findCsvHeader(lines);
     const document = detectDocument(lines, headerInfo);
     const score = headerInfo
@@ -229,7 +230,7 @@ export const genericCsvParser: FinancialFileParser = {
       confidence: Math.min(score, 0.85),
       institution: document.institution,
       documentType: headerInfo ? document.documentType : "UNKNOWN",
-      format: "CSV",
+      format: isSpreadsheet ? "XLSX" : "CSV",
       reason: headerInfo
         ? `${document.institution === "C6" ? "Fatura C6" : "CSV genérico"} com colunas reconhecíveis${headerInfo.index > 0 ? " após linhas introdutórias" : ""}.`
         : "CSV sem colunas padrão reconhecíveis.",

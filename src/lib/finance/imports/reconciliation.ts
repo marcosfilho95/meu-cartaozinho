@@ -76,8 +76,9 @@ export const reconcileDocument = (
     const classification = classifyFinancialRow(tx);
     if (tx.direction === "CREDIT") credits += amount;
     else debits += amount;
-    if (classification.role === "card_purchase") purchases += amount;
-    if (classification.role === "refund") purchases -= amount;
+    if (tx.sourceType === "CREDIT_CARD" && classification.type === "expense") {
+      purchases += classification.negativeAmount ? -amount : amount;
+    }
   }
 
   const lines: ReconciliationLine[] = [];

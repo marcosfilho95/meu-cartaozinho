@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { VisionBatchResult } from "./imports/vision";
 
 /**
  * Camada única de acesso à IA financeira.
@@ -33,8 +34,20 @@ export class FinanceAiError extends Error {
   }
 }
 
-const normalizeInvokeError = (error: unknown, data: unknown) => {
-  const raw =
+const normalizeInvokeError = async (error: unknown, data: unknown) => {
+  let responseDetail = "";
+  const context = typeof error === "object" && error && "context" in error
+    ? (error as { context?: unknown }).context
+    : null;
+  if (context instanceof Response) {
+    try {
+      const body = await context.clone().json() as { error?: unknown };
+      responseDetail = String(body?.error || "");
+    } catch {
+      try { responseDetail = await context.clone().text(); } catch { /* corpo indisponível */ }
+    }
+  }
+  const raw = responseDetail ||
     (typeof data === "object" && data && "error" in data ? String((data as { error?: unknown }).error ?? "") : "") ||
     (error instanceof Error ? error.message : "");
   if (/429|rate/i.test(raw)) return new FinanceAiError("Muitas requisições à IA. Tente novamente em instantes.");
@@ -50,7 +63,7 @@ export const classifyTransactionsWithAi = async (
   const { data, error } = await supabase.functions.invoke("smart-classify-imports", {
     body: { rows, categories: categories.map((c) => ({ name: c.name, kind: c.kind })) },
   });
-  if (error || (data as { error?: unknown } | null)?.error) throw normalizeInvokeError(error, data);
+  if (error || (data as { error?: unknown } | null)?.error) throw await normalizeInvokeError(error, data);
   return ((data as { results?: AiClassifyResult[] } | null)?.results || []) as AiClassifyResult[];
 };
 
@@ -63,6 +76,16 @@ export type SmartParsePayload = {
 
 export const parseSmartInputWithAi = async (payload: SmartParsePayload) => {
   const { data, error } = await supabase.functions.invoke("smart-parse", { body: payload });
-  if (error || (data as { error?: unknown } | null)?.error) throw normalizeInvokeError(error, data);
+  if (error || (data as { error?: unknown } | null)?.error) throw await normalizeInvokeError(error, data);
   return ((data as { transactions?: unknown[] } | null)?.transactions || []) as Array<Record<string, unknown>>;
+};
+
+export const extractFinancialDocumentWithVision = async (payload: {
+  images: Array<{ dataUrl: string; pageNumber: number }>;
+  fileName: string;
+  pageOffset?: number;
+}): Promise<VisionBatchResult> => {
+  const { data, error } = await supabase.functions.invoke("financial-document-vision", { body: payload });
+  if (error || (data as { error?: unknown } | null)?.error) throw await normalizeInvokeError(error, data);
+  return (data || {}) as VisionBatchResult;
 };

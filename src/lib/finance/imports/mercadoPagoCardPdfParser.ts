@@ -17,6 +17,7 @@ const MOVEMENTS_SECTION_PATTERN = /Movimenta[cç][õo]es\s+na\s+fatura/i;
 const CLOSING_PATTERN = /Fechamento\s+da\s+fatura\s+(\d{2})\/(\d{2})\/(\d{4})/i;
 const DUE_PATTERN = /Vence(?:r|\s+em|mento)?[:\s]+(\d{2})\/(\d{2})\/(\d{4})/i;
 const EMITTED_PATTERN = /Emitida\s+em[:\s]+(\d{2})\/(\d{2})\/(\d{4})/i;
+const TOTAL_PATTERN = /total\s+(?:da\s+)?fatura[^\d-]*R\$\s*([\d.]+,\d{2})/i;
 
 const NOISE_KEYWORDS = [
   "TOTAL",
@@ -91,7 +92,11 @@ export const mercadoPagoCardPdfParser: FinancialFileParser = {
     if (detection.confidence <= 0) throw new Error("Arquivo não parece ser fatura de cartão do Mercado Pago.");
 
     const text = context.fileText;
-    const closing = text.match(CLOSING_PATTERN) || text.match(DUE_PATTERN) || text.match(EMITTED_PATTERN);
+    const due = text.match(DUE_PATTERN);
+    const closing = text.match(CLOSING_PATTERN) || due || text.match(EMITTED_PATTERN);
+    const dueDate = due ? `${due[3]}-${due[2]}-${due[1]}` : undefined;
+    const statementMonth = dueDate?.slice(0, 7) || (closing ? `${closing[3]}-${closing[2]}` : undefined);
+    const totalMatch = text.match(TOTAL_PATTERN);
     const closingMonth = closing ? Number(closing[2]) : new Date().getMonth() + 1;
     const closingYear = closing ? Number(closing[3]) : new Date().getFullYear();
 
@@ -170,6 +175,9 @@ export const mercadoPagoCardPdfParser: FinancialFileParser = {
         institution: "MERCADO_PAGO",
         sourceType: "CREDIT_CARD",
         transactionDate: date,
+        dueDate,
+        statementMonth,
+        competenceMonth: date.slice(0, 7),
         descriptionOriginal: rawDesc,
         descriptionNormalized: normalized,
         merchantName: normalized,
@@ -198,12 +206,14 @@ export const mercadoPagoCardPdfParser: FinancialFileParser = {
       parserName: this.name,
       detection,
       period: closing ? { end: `${closing[3]}-${closing[2]}-${closing[1]}` } : undefined,
+      totals: totalMatch ? { statementTotal: parseBrazilianMoney(totalMatch[1]) } : undefined,
       transactions,
       warnings,
       metadata: {
         fileName: context.fileName,
         fileHash: context.fileHash,
         closingDate: closing?.[0],
+        dueDate,
       },
     };
   },

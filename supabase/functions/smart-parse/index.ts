@@ -8,7 +8,8 @@ const corsHeaders = {
 type Mode = "text" | "paste" | "image";
 
 interface ParsedTx {
-  type: "income" | "expense";
+  type: "income" | "expense" | "transfer";
+  role?: "income" | "expense" | "transfer" | "investment_in" | "investment_out" | "yield" | "refund" | "fee";
   amount: number;
   description: string;
   date: string; // YYYY-MM-DD
@@ -16,6 +17,7 @@ interface ParsedTx {
   category_hint?: string | null;
   installments?: number | null;
   confidence?: number;
+  transfer_direction?: "in" | "out" | null;
 }
 
 interface CategoryCatalogItem {
@@ -28,7 +30,12 @@ const SYSTEM_PROMPT = `Você é um extrator financeiro. Recebe texto livre, text
 
 Regras:
 - Sempre retorne JSON estrito no formato: {"transactions":[{...}]}
-- "type": "expense" para gastos/pagamentos/compras, "income" para receitas/salário/pix recebido.
+- "type": "expense" para gastos/compras, "income" para receitas reais e "transfer" para movimentações patrimoniais.
+- Pagamento de fatura, aplicação, aporte em cofrinho e resgate do principal são transfer; nunca receita/despesa.
+- Rendimento, juros recebidos e dividendos são income. Em resgate misto, só separe rendimento se o valor estiver explícito; caso contrário retorne transfer com confidence baixa.
+- PIX/TED sem destinatário/contexto suficiente deve ser transfer com confidence baixa para revisão.
+- "role": income, expense, transfer, investment_in, investment_out, yield, refund ou fee.
+- "transfer_direction": out para aplicação/PIX enviado e in para resgate/PIX recebido; null quando não souber.
 - "amount": número positivo em reais (float). Nunca negativo.
 - "description": curta e clara (ex.: "Mercado Extra", "Uber", "Salário").
 - "date": YYYY-MM-DD. Se não houver data explícita, use a data de hoje passada no contexto.
@@ -41,7 +48,7 @@ Regras:
 - "installments": número de parcelas se identificado (ex.: 3), senão null.
 - "confidence": 0..1.
 - Se for uma fatura com várias linhas, retorne cada transação como um item.
-- Ignore linhas de "pagamento de fatura" e totais.
+- Ignore somente cabeçalhos e totais sem transação. Preserve pagamento de fatura como transfer.
 - Nunca invente valores. Se o texto for ambíguo, retorne "transactions": [] e nada mais.
 
 Retorne APENAS o JSON, sem markdown.`;
@@ -110,7 +117,10 @@ async function callGateway(messages: any[]): Promise<ParsedTx[]> {
         ? Math.max(0, Math.min(1, t.confidence))
         : 0.7;
       return {
-        type: t.type === "income" ? "income" : "expense",
+        type: t.type === "income" ? "income" : t.type === "transfer" ? "transfer" : "expense",
+        role: ["income", "expense", "transfer", "investment_in", "investment_out", "yield", "refund", "fee"].includes(t.role)
+          ? t.role
+          : t.type === "transfer" ? "transfer" : t.type === "income" ? "income" : "expense",
         amount: Number(t.amount),
         description: String(t.description).slice(0, 200),
         date: typeof t.date === "string" ? t.date : new Date().toISOString().slice(0, 10),
@@ -118,6 +128,7 @@ async function callGateway(messages: any[]): Promise<ParsedTx[]> {
         category_hint: typeof t.category_hint === "string" ? t.category_hint.trim().slice(0, 80) || null : null,
         installments,
         confidence,
+        transfer_direction: t.transfer_direction === "in" || t.transfer_direction === "out" ? t.transfer_direction : null,
       };
     });
 }
