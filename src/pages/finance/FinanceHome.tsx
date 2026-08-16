@@ -2,10 +2,26 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
+  Bar,
+  CartesianGrid,
+  Cell,
+  ComposedChart,
+  Legend,
+  Line,
+  Pie,
+  PieChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
   ArrowDownCircle,
   ArrowUpCircle,
   BarChart3,
   CalendarRange,
+  CreditCard,
   Loader2,
   PiggyBank,
   Repeat,
@@ -15,7 +31,6 @@ import {
 
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
 import { DailyOrganizerPanel } from "@/components/finance/DailyOrganizerPanel";
-import { ExpenseDistributionBar } from "@/components/finance/ExpenseDistributionBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -28,15 +43,15 @@ import { ensureDefaultCategories } from "@/lib/financeCategoryDefaults";
 import {
   addMonthsToKey,
   fetchFinanceTransactions,
+  getLastMonthKeys,
   monthKey,
   type FinanceTx,
 } from "@/lib/financeShared";
-import { getExpensesByCategory } from "@/lib/financeSelectors";
+import { buildExpenseBreakdown, buildMonthlyEvolution } from "@/lib/financeAnalytics";
 import {
   calculateMonthlyResult,
   calculateNetWorth,
   calculateReserveMovement,
-  getTransactionReferenceMonth,
   type GoalMovement,
 } from "@/lib/financeOverview";
 import {
@@ -72,8 +87,6 @@ type GoalRow = { current_amount: number | null };
 
 const fullMonthLabel = (key: string) =>
   new Date(`${key}-15T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-
-const inMonth = (tx: FinanceTx, key: string) => getTransactionReferenceMonth(tx) === key;
 
 const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
   const navigate = useNavigate();
@@ -164,11 +177,6 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
     return () => window.removeEventListener("finance-sync-updated", onSync as EventListener);
   }, [load]);
 
-  const monthTransactions = useMemo(
-    () => transactions.filter((tx) => inMonth(tx, refMonth) && tx.status !== "canceled"),
-    [refMonth, transactions],
-  );
-
   const monthSummary = useMemo(
     () => calculateMonthlyResult(transactions, refMonth),
     [refMonth, transactions],
@@ -183,13 +191,40 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
   const pendingExpenses = monthSummary.pendingExpenses;
   const balance = monthSummary.result;
 
-  const distribution = useMemo(() => {
-    const items = getExpensesByCategory(monthTransactions).slice(0, 6);
-    return {
-      items: items.map((item) => ({ id: item.key, name: item.label, value: item.value, color: item.color })),
-      total: items.reduce((sum, item) => sum + item.value, 0),
-    };
-  }, [monthTransactions]);
+  const evolutionMonths = useMemo(
+    () => getLastMonthKeys(6, new Date(`${refMonth}-15T12:00:00`)),
+    [refMonth],
+  );
+  const evolutionData = useMemo(
+    () => buildMonthlyEvolution(transactions, evolutionMonths, goalMovements),
+    [evolutionMonths, goalMovements, transactions],
+  );
+  const hasEvolutionData = useMemo(
+    () => evolutionData.some((point) => point.receitas !== 0 || point.despesas !== 0),
+    [evolutionData],
+  );
+  const cardBreakdown = useMemo(() => {
+    const allCards = buildExpenseBreakdown(transactions, "card", { months: [refMonth], limit: 100 });
+    if (allCards.length <= 5) return allCards;
+
+    const visible = allCards.slice(0, 4);
+    const otherValue = allCards.slice(4).reduce((sum, item) => sum + item.value, 0);
+    const total = allCards.reduce((sum, item) => sum + item.value, 0);
+    return [
+      ...visible,
+      {
+        key: "outros-cartoes",
+        name: "Outros cartões",
+        value: otherValue,
+        color: "#94A3B8",
+        percentage: total > 0 ? (otherValue / total) * 100 : 0,
+      },
+    ];
+  }, [refMonth, transactions]);
+  const cardTotal = useMemo(
+    () => cardBreakdown.reduce((sum, item) => sum + item.value, 0),
+    [cardBreakdown],
+  );
 
   const fixedMonthlyTotal = useMemo(
     () =>
@@ -341,25 +376,58 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
           onViewTransactions={() => navigate("/financas/transacoes")}
         />
 
-        <section className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+        <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
           <Card className="border-0 shadow-card">
             <CardContent className="p-4">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <BarChart3 className="h-4 w-4 text-primary" />
-                  <h2 className="font-heading text-base font-bold">Para onde foi o dinheiro</h2>
+                  <div>
+                    <h2 className="font-heading text-base font-bold">Evolução financeira</h2>
+                    <p className="text-[11px] text-muted-foreground">Receitas, despesas e resultado · últimos 6 meses</p>
+                  </div>
                 </div>
                 <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => navigate("/financas/relatorios")}>
-                  Relatórios
+                  Ver relatório
                 </Button>
               </div>
-              <div className="mt-4">
-                {distribution.total > 0 ? (
-                  <ExpenseDistributionBar items={distribution.items} total={distribution.total} />
+              <div className="mt-4 h-72">
+                {hasEvolutionData ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={evolutionData} margin={{ top: 8, right: 4, left: -14, bottom: 0 }}>
+                      <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 10 }}
+                        tickFormatter={(value) => `${Math.round(Number(value) / 1000)}k`}
+                      />
+                      <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeOpacity={0.45} />
+                      <Tooltip
+                        formatter={(value: number, name: string) => [formatCurrency(Number(value)), name]}
+                        contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))" }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                      <Bar dataKey="receitas" name="Receitas" fill="hsl(var(--success))" fillOpacity={0.82} radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="despesas" name="Despesas" fill="hsl(var(--destructive))" fillOpacity={0.72} radius={[3, 3, 0, 0]} />
+                      <Line
+                        type="monotone"
+                        dataKey="saldo"
+                        name="Resultado"
+                        stroke="hsl(var(--primary))"
+                        strokeWidth={2.5}
+                        dot={{ r: 3, fill: "hsl(var(--background))", strokeWidth: 2 }}
+                        activeDot={{ r: 5 }}
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
                 ) : (
-                  <p className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
-                    Sem gastos registrados neste mês.
-                  </p>
+                  <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-border px-4 text-center">
+                    <BarChart3 className="mb-2 h-7 w-7 text-muted-foreground/50" />
+                    <p className="text-sm font-medium">Ainda não há histórico para comparar</p>
+                    <p className="mt-1 max-w-sm text-xs text-muted-foreground">Registre ou importe receitas e despesas para acompanhar sua evolução.</p>
+                  </div>
                 )}
               </div>
             </CardContent>
@@ -369,21 +437,101 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
             <CardContent className="p-4">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <Repeat className="h-4 w-4 text-primary" />
-                  <h2 className="font-heading text-base font-bold">Despesas fixas</h2>
+                  <CreditCard className="h-4 w-4 text-primary" />
+                  <div>
+                    <h2 className="font-heading text-base font-bold">Gastos por cartão</h2>
+                    <p className="text-[11px] capitalize text-muted-foreground">{fullMonthLabel(refMonth)}</p>
+                  </div>
                 </div>
-                <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => navigate("/financas/recorrencias")}>
-                  Gerenciar
+                <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => navigate("/financas/relatorios")}>
+                  Detalhes
                 </Button>
               </div>
-              <p className="mt-3 text-[11px] uppercase tracking-wide text-muted-foreground">Compromisso mensal</p>
-              <p className="font-heading text-2xl font-extrabold">{formatCurrency(fixedMonthlyTotal)}</p>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                {fixedOpen.length} em aberto neste mês · {formatCurrency(fixedOpenTotal)}
-              </p>
-              <div className="mt-3 space-y-1.5">
+              {cardTotal > 0 ? (
+                <>
+                  <div className="relative mt-2 h-56">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={cardBreakdown}
+                          dataKey="value"
+                          nameKey="name"
+                          innerRadius="58%"
+                          outerRadius="82%"
+                          paddingAngle={2}
+                          stroke="hsl(var(--card))"
+                          strokeWidth={2}
+                        >
+                          {cardBreakdown.map((item) => <Cell key={item.key} fill={item.color} />)}
+                        </Pie>
+                        <Tooltip
+                          formatter={(value: number) => formatCurrency(Number(value))}
+                          contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))" }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Total</span>
+                      <span className="font-heading text-lg font-bold tabular-nums">{formatCurrency(cardTotal)}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    {cardBreakdown.map((item) => (
+                      <div key={item.key} className="flex items-center gap-2 text-xs">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+                        <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                        <span className="text-muted-foreground">{item.percentage.toFixed(1)}%</span>
+                        <span className="font-semibold tabular-nums">{formatCurrency(item.value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="mt-4 flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-border px-4 text-center">
+                  <CreditCard className="mb-2 h-7 w-7 text-muted-foreground/50" />
+                  <p className="text-sm font-medium">Nenhum gasto em cartão neste mês</p>
+                  <p className="mt-1 max-w-xs text-xs text-muted-foreground">Cadastre um cartão ou importe uma fatura para ver a comparação.</p>
+                  <Button variant="outline" size="sm" className="mt-3 h-8 text-xs" onClick={() => navigate("/financas/importacoes")}>
+                    Importar fatura
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+
+        <Card className="border-0 shadow-card">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Repeat className="h-4 w-4 text-primary" />
+                <h2 className="font-heading text-base font-bold">Despesas fixas</h2>
+              </div>
+              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => navigate("/financas/recorrencias")}>
+                Gerenciar
+              </Button>
+            </div>
+            <div className="mt-3 grid gap-4 lg:grid-cols-[220px_1fr]">
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Compromisso mensal</p>
+                <p className="font-heading text-2xl font-extrabold">{formatCurrency(fixedMonthlyTotal)}</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  {fixedOpen.length} em aberto neste mês · {formatCurrency(fixedOpenTotal)}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3 h-8 text-xs"
+                  disabled={generating}
+                  onClick={() => void syncFixedBills()}
+                >
+                  {generating ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+                  Gerar contas do mês
+                </Button>
+              </div>
+              <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
                 {monthBills.length === 0 ? (
-                  <p className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">
+                  <p className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground sm:col-span-2 xl:col-span-3">
                     Cadastre suas contas fixas (aluguel, luz, assinaturas) para prever o mês.
                   </p>
                 ) : (
@@ -416,19 +564,9 @@ const FinanceHome: React.FC<FinanceHomeProps> = ({ userId }) => {
                   })
                 )}
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3 h-8 w-full text-xs"
-                disabled={generating}
-                onClick={() => void syncFixedBills()}
-              >
-                {generating ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
-                Gerar contas fixas do mês
-              </Button>
-            </CardContent>
-          </Card>
-        </section>
+            </div>
+          </CardContent>
+        </Card>
 
         <section className="grid gap-3 sm:grid-cols-2">
           <Button
