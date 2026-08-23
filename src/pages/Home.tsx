@@ -18,6 +18,7 @@ import {
 } from "@/lib/finance/cartaozinhoSync";
 import { ensureDefaultCategories } from "@/lib/financeCategoryDefaults";
 import { ensureDefaultAccounts } from "@/lib/financeDefaults";
+import { getMonthlySpendingGoal } from "@/lib/financeBudget";
 import { monthTitle, summarizeMonth, type MonthSummary } from "@/lib/financeInsights";
 import { calculateNetWorth, calculateReserveMovement, type GoalMovement } from "@/lib/financeOverview";
 import { fetchFinanceTransactions, getLastMonthKeys, monthKey, type FinanceTx } from "@/lib/financeShared";
@@ -66,7 +67,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
         supabase.from("accounts").select("type, current_balance, include_in_net_worth").eq("user_id", userId).eq("is_active", true),
         supabase.from("goals").select("current_amount").eq("user_id", userId),
         untypedSupabase.from("goal_transactions").select("amount, type, created_at").eq("user_id", userId).limit(1000),
-        supabase.from("budgets").select("limit_amount").eq("user_id", userId).eq("ref_month", selectedMonth),
+        supabase.from("budgets").select("category_id, limit_amount").eq("user_id", userId).eq("ref_month", selectedMonth),
         fetchFinanceTransactions(userId, 24),
         fetchCartaozinhoMonthTotals(userId, [selectedMonth]),
       ]);
@@ -83,7 +84,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
         reserved: Math.max(reserve.net, 0),
         netWorth: calculateNetWorth(accountsRes.data || [], goalsRes.data || []),
         card: cardTotals[selectedMonth] || emptyCardTotal(selectedMonth),
-        spendingGoal: (budgetsRes.data || []).reduce((total, budget) => total + Number(budget.limit_amount || 0), 0),
+        spendingGoal: getMonthlySpendingGoal(budgetsRes.data || []),
       });
     } catch (loadError) {
       console.error("Home load error", loadError);

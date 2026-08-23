@@ -27,6 +27,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/constants";
+import { getMonthlySpendingGoal } from "@/lib/financeBudget";
 import {
   fetchExpectedBillsForMonth,
   finalizeFixedBillsForMonth,
@@ -95,7 +96,7 @@ const MonthlyClosingPage: React.FC<MonthlyClosingPageProps> = ({ userId }) => {
         fetchExpectedBillsForMonth(userId, refMonth),
         supabase.from("goals").select("*").eq("user_id", userId).order("created_at"),
         untypedSupabase.from("goal_transactions").select("amount, type, created_at").eq("user_id", userId).limit(1000),
-        supabase.from("budgets").select("limit_amount").eq("user_id", userId).eq("ref_month", refMonth),
+        supabase.from("budgets").select("category_id, limit_amount").eq("user_id", userId).eq("ref_month", refMonth),
       ]);
       if (goalsRes.error) throw goalsRes.error;
       if (goalTxRes.error) throw goalTxRes.error;
@@ -106,7 +107,7 @@ const MonthlyClosingPage: React.FC<MonthlyClosingPageProps> = ({ userId }) => {
       setIncludedFixed(new Set(loadedBills.filter((bill) => !["ignored", "canceled"].includes(bill.status)).map((bill) => bill.id)));
       setGoals(((goalsRes.data || []) as unknown) as Goal[]);
       setGoalMovements((goalTxRes.data || []) as GoalMovement[]);
-      setSpendingGoal((budgetsRes.data || []).reduce((sum, budget) => sum + Number(budget.limit_amount || 0), 0));
+      setSpendingGoal(getMonthlySpendingGoal(budgetsRes.data || []));
     } catch (error) {
       toast.error(getErrorMessage(error, "Não foi possível preparar a revisão mensal."));
     } finally {

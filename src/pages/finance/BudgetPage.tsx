@@ -21,6 +21,7 @@ import {
   getCategoryCoverage,
   getCategoryDepth,
   getCategorySpent,
+  getMonthlySpendingGoal,
   hasBudgetHierarchyConflict,
   parseBudgetAmount,
 } from "@/lib/financeBudget";
@@ -115,10 +116,12 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
   const [editingBudget, setEditingBudget] = useState<BudgetRow | null>(null);
   const [formCategoryId, setFormCategoryId] = useState("");
   const [formAmount, setFormAmount] = useState("");
+  const [globalGoalInput, setGlobalGoalInput] = useState("");
+  const [savingGoal, setSavingGoal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const isMutating = saving || deletingId !== null;
+  const isMutating = savingGoal || saving || deletingId !== null;
 
   const navigateMonth = (dir: -1 | 1) => {
     if (isMutating) return;
@@ -163,7 +166,14 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
         requestedUserId !== userIdRef.current
       ) return;
 
-      setBudgets((budgetsRes.data as BudgetRow[]) || []);
+      const loadedBudgets = (budgetsRes.data as BudgetRow[]) || [];
+      setBudgets(loadedBudgets);
+      const loadedMainGoal = loadedBudgets.find((budget) => budget.category_id == null && Number(budget.limit_amount) > 0);
+      setGlobalGoalInput(
+        loadedMainGoal
+          ? Number(loadedMainGoal.limit_amount).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          : "",
+      );
       setCategories((catsRes.data as Category[]) || []);
 
       const expMap: Record<string, number> = {};
@@ -227,6 +237,11 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
       return true;
     });
   }, [budgets]);
+
+  const mainBudget = useMemo(
+    () => budgets.find((budget) => budget.category_id == null && Number(budget.limit_amount) > 0) || null,
+    [budgets],
+  );
 
   const categoryById = useMemo(
     () => new Map(categories.map((category) => [category.id, category])),
@@ -305,10 +320,11 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
   }, [activeBudgets, categories, categoryById, expenses]);
 
   // Summary
-  const totalPlanned = useMemo(
+  const categoryTotalPlanned = useMemo(
     () => activeBudgets.reduce((sum, budget) => sum + Number(budget.limit_amount), 0),
     [activeBudgets],
   );
+  const totalPlanned = useMemo(() => getMonthlySpendingGoal(budgets), [budgets]);
   const totalSpent = useMemo(
     () => Object.values(expenses).reduce((sum, amount) => sum + Number(amount), 0),
     [expenses],
@@ -317,6 +333,37 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
   const overallPct = totalPlanned > 0 ? (totalSpent / totalPlanned) * 100 : 0;
   const projectedBalance = incomeTotal - totalPlanned;
   const realBalance = incomeTotal - totalSpent;
+
+  const handleSaveGlobalGoal = async () => {
+    const amount = parseBudgetAmount(globalGoalInput);
+    if (!amount || amount <= 0) {
+      toast.error("Informe quanto você quer gastar no máximo neste mês.");
+      return;
+    }
+
+    setSavingGoal(true);
+    try {
+      const result = mainBudget
+        ? await supabase
+            .from("budgets")
+            .update({ limit_amount: amount })
+            .eq("id", mainBudget.id)
+            .eq("user_id", userId)
+        : await supabase.from("budgets").insert({
+            user_id: userId,
+            category_id: null,
+            ref_month: refMonth,
+            limit_amount: amount,
+          });
+      if (result.error) throw result.error;
+      toast.success(mainBudget ? "Meta mensal atualizada!" : "Meta mensal criada!");
+      await loadData();
+    } catch (error: any) {
+      toast.error(error?.message || "Não foi possível salvar a meta mensal.");
+    } finally {
+      setSavingGoal(false);
+    }
+  };
 
   // Categories not yet budgeted
   const unbudgetedCategories = useMemo(
@@ -607,13 +654,78 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
         </button>
       </div>
 
+      <Card className="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/5 via-card to-card shadow-card">
+        <CardContent className="grid gap-5 p-5 lg:grid-cols-[1fr_0.9fr] lg:items-end">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-primary">
+              <Target className="h-5 w-5" />
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em]">Meta mensal de gastos</p>
+            </div>
+            <h2 className="font-heading text-2xl font-extrabold">Quanto você quer gastar no máximo?</h2>
+            <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+              Este é o limite de todas as suas despesas somadas em {getMonthLabel(refMonth)}.
+            </p>
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <div className="relative flex-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">R$</span>
+                <Input
+                  value={globalGoalInput}
+                  onChange={(event) => setGlobalGoalInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") void handleSaveGlobalGoal();
+                  }}
+                  inputMode="decimal"
+                  aria-label="Limite total de gastos do mês"
+                  placeholder="7.000,00"
+                  className="h-11 pl-10 text-base font-bold"
+                  disabled={savingGoal}
+                />
+              </div>
+              <Button className="h-11 px-6" onClick={handleSaveGlobalGoal} disabled={savingGoal}>
+                {savingGoal ? <Loader2 className="h-4 w-4 animate-spin" /> : mainBudget ? "Atualizar meta" : "Criar meta"}
+              </Button>
+            </div>
+            {!mainBudget && categoryTotalPlanned > 0 && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Até você criar a meta total, o sistema continua usando a soma dos limites por categoria ({formatCurrency(categoryTotalPlanned)}).
+              </p>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-border/70 bg-background/75 p-4">
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Você já gastou</p>
+                <p className={cn("mt-1 font-heading text-2xl font-extrabold", statusStyles[overallStatus])}>{formatCurrency(totalSpent)}</p>
+              </div>
+              <Badge variant="outline" className={cn(statusStyles[overallStatus])}>
+                {hasPlannedBudget ? `${overallPct.toFixed(0)}% da meta` : "Defina sua meta"}
+              </Badge>
+            </div>
+            <div className="mt-3 h-3 overflow-hidden rounded-full bg-muted">
+              <div
+                className={cn("h-full rounded-full transition-all duration-500", barBg[overallStatus])}
+                style={{ width: `${hasPlannedBudget ? Math.min(overallPct, 100) : 0}%` }}
+              />
+            </div>
+            <p className={cn("mt-3 text-sm font-semibold", totalRemaining >= 0 ? "text-success" : "text-destructive")}>
+              {!hasPlannedBudget
+                ? "Crie a meta para acompanhar seu progresso."
+                : totalRemaining >= 0
+                  ? `Você ainda pode gastar ${formatCurrency(totalRemaining)}.`
+                  : `Você ultrapassou a meta em ${formatCurrency(Math.abs(totalRemaining))}.`}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card className="border-0 shadow-card">
           <CardContent className="p-4">
             <div className="flex items-center gap-1.5 mb-1">
               <Target className="h-3.5 w-3.5 text-primary" />
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Planejado</p>
+               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Meta do mês</p>
             </div>
             <p className="font-heading text-xl font-extrabold text-foreground">{formatCurrency(totalPlanned)}</p>
           </CardContent>
@@ -628,7 +740,7 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
               {formatCurrency(totalSpent)}
             </p>
             <p className="text-[10px] text-muted-foreground">
-              {hasPlannedBudget ? `${overallPct.toFixed(0)}% do planejado` : "Sem valor planejado"}
+               {hasPlannedBudget ? `${overallPct.toFixed(0)}% da meta` : "Sem meta definida"}
             </p>
           </CardContent>
         </Card>
@@ -665,7 +777,7 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
       <Card className="border-0 shadow-card">
         <CardContent className="p-4 space-y-2">
           <div className="flex items-center justify-between">
-            <h2 className="font-heading text-sm font-bold">Consumo geral do orçamento</h2>
+             <h2 className="font-heading text-sm font-bold">Progresso da meta mensal</h2>
             <Badge
               className={cn(
                 "text-[10px] font-bold",
@@ -690,10 +802,15 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
           </div>
           <div className="flex justify-between text-[11px] text-muted-foreground">
             <span>Gasto: {formatCurrency(totalSpent)}</span>
-            <span>Planejado: {formatCurrency(totalPlanned)}</span>
+             <span>Meta: {formatCurrency(totalPlanned)}</span>
           </div>
         </CardContent>
       </Card>
+
+      <div className="pt-2">
+        <h2 className="font-heading text-lg font-extrabold">Limites por categoria <span className="text-sm font-normal text-muted-foreground">(opcional)</span></h2>
+        <p className="text-xs text-muted-foreground">Use apenas se quiser dividir sua meta entre alimentação, moradia, lazer e outras categorias.</p>
+      </div>
 
       {/* Actions */}
       <div className="flex flex-wrap gap-2">

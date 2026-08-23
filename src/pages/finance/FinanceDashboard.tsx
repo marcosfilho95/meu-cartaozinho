@@ -25,6 +25,7 @@ import {
 } from "recharts";
 import { toast } from "sonner";
 import { shouldIncludeInRealizedCalculations } from "@/lib/financeRealization";
+import { getMonthlySpendingGoal } from "@/lib/financeBudget";
 
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
 import { SmartAddDialog } from "@/components/finance/SmartAddDialog";
@@ -109,7 +110,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       const [goalsRes, goalTxRes, budgetsRes, loadedTransactions] = await Promise.all([
         supabase.from("goals").select("*").eq("user_id", userId).order("created_at"),
         untypedSupabase.from("goal_transactions").select("amount, type, created_at").eq("user_id", userId).limit(1000),
-        supabase.from("budgets").select("limit_amount").eq("user_id", userId).eq("ref_month", referenceMonth),
+        supabase.from("budgets").select("category_id, limit_amount").eq("user_id", userId).eq("ref_month", referenceMonth),
         fetchAllFinanceTransactions(userId),
       ]);
       if (goalsRes.error) throw goalsRes.error;
@@ -119,7 +120,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       setGoals((goalsRes.data || []) as DashboardGoal[]);
       setGoalMovements((goalTxRes.data || []) as GoalMovement[]);
       setTransactions(loadedTransactions);
-      setSpendingGoal((budgetsRes.data || []).reduce((sum, budget) => sum + Number(budget.limit_amount || 0), 0));
+      setSpendingGoal(getMonthlySpendingGoal(budgetsRes.data || []));
     } catch (error) {
       toast.error(getErrorMessage(error, "Não foi possível carregar sua análise financeira."));
     } finally {
@@ -210,6 +211,8 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     { label: "Resultado", value: summary.result, icon: CircleDollarSign, tone: summary.result >= 0 ? "text-success" : "text-destructive", helper: "Receitas menos despesas" },
     { label: "Reservado", value: reservedForPlans, icon: PiggyBank, tone: "text-primary", helper: "Para seus planos" },
   ];
+  const spendingGoalUsage = spendingGoal > 0 ? (summary.expenses / spendingGoal) * 100 : 0;
+  const spendingGoalRemaining = spendingGoal - summary.expenses;
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 px-4 pb-10">
@@ -243,10 +246,24 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Sparkles className="h-4 w-4" /></div>
             <div><h2 className="font-heading font-bold">Leitura de {monthTitle(referenceMonth)}</h2><p className="mt-0.5 text-xs text-muted-foreground">Insights atualizados automaticamente quando você troca o mês.</p></div>
           </div>
-          <div className="mt-4 grid gap-2 md:grid-cols-2">
-            {insights.slice(0, 4).map((insight) => <div key={insight.id} className={cn("rounded-xl border p-3 text-sm leading-relaxed", insightToneStyles[insight.tone])}>{insight.text}</div>)}
-          </div>
-        </CardContent>
+           <div className="mt-4 grid gap-2 md:grid-cols-2">
+             {insights.slice(0, 4).map((insight) => <div key={insight.id} className={cn("rounded-xl border p-3 text-sm leading-relaxed", insightToneStyles[insight.tone])}>{insight.text}</div>)}
+           </div>
+           {spendingGoal > 0 && (
+             <button type="button" onClick={() => navigate("/financas/orcamento")} className="mt-4 w-full rounded-xl border border-border/70 bg-background/75 p-4 text-left transition-colors hover:bg-muted/40">
+               <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                 <span className="font-semibold">Meta: gastar no máximo {formatCurrency(spendingGoal)}</span>
+                 <strong className={spendingGoalRemaining >= 0 ? "text-success" : "text-destructive"}>
+                   {spendingGoalRemaining >= 0
+                     ? `${formatCurrency(spendingGoalRemaining)} disponíveis`
+                     : `${formatCurrency(Math.abs(spendingGoalRemaining))} acima da meta`}
+                 </strong>
+               </div>
+               <Progress value={Math.min(spendingGoalUsage, 100)} className="mt-3 h-2.5" />
+               <p className="mt-2 text-xs text-muted-foreground">{formatCurrency(summary.expenses)} gastos · {spendingGoalUsage.toFixed(0)}% utilizado</p>
+             </button>
+           )}
+         </CardContent>
       </Card>}
 
       <section className="space-y-3">

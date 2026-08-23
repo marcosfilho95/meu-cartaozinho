@@ -3,6 +3,29 @@ export type BudgetCategoryNode = {
   parent_id: string | null;
 };
 
+export type MonthlyBudgetRow = {
+  category_id?: string | null;
+  limit_amount?: number | string | null;
+};
+
+/**
+ * A row without category is the main monthly spending cap. Category budgets are
+ * kept as optional detail and only act as a legacy fallback when no main cap
+ * has been defined yet.
+ */
+export const getMonthlySpendingGoal = (budgets: MonthlyBudgetRow[]) => {
+  const mainGoal = budgets.find(
+    (budget) => budget.category_id == null && Number(budget.limit_amount || 0) > 0,
+  );
+
+  if (mainGoal) return Number(mainGoal.limit_amount || 0);
+
+  return budgets.reduce((total, budget) => {
+    if (!budget.category_id) return total;
+    return total + Math.max(0, Number(budget.limit_amount || 0));
+  }, 0);
+};
+
 export const parseBudgetAmount = (value: string) => {
   let normalized = value.trim().replace(/R\$/gi, "").replace(/\s+/g, "");
   if (!normalized) return null;
