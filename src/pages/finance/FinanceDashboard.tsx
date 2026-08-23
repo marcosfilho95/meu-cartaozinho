@@ -18,7 +18,6 @@ import {
   CartesianGrid,
   Cell,
   ComposedChart,
-  Legend,
   Line,
   Pie,
   PieChart,
@@ -246,56 +245,65 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
         </section>
       )}
 
-      <Card className="border-border/70 shadow-card">
-        <CardContent className="p-5">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-            <div><h2 className="font-heading font-bold">Comparado ao mês anterior</h2><p className="text-xs text-muted-foreground">Quanto entrou, saiu e sobrou a mais ou a menos.</p></div>
-            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{monthTitle(addMonthsToKey(referenceMonth, -1))}</span>
-          </div>
-          {previousSummary.hasData ? (
-            <div className="mt-4 grid gap-2 sm:grid-cols-3">
-              {[
-                { label: "Gastos", value: comparison.expensesDelta, positive: comparison.expensesDelta <= 0 },
-                { label: "Receitas", value: comparison.incomeDelta, positive: comparison.incomeDelta >= 0 },
-                { label: "Sobra", value: comparison.resultDelta, positive: comparison.resultDelta >= 0 },
-              ].map((item) => (
-                <div key={item.label} className="rounded-xl bg-muted/40 p-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{item.label}</p>
-                  <p className={cn("mt-1 text-lg font-bold", item.value === 0 ? "text-foreground" : item.positive ? "text-success" : "text-destructive")}>{item.value > 0 ? "+" : item.value < 0 ? "−" : ""}{formatCurrency(Math.abs(item.value))}</p>
-                  <p className="text-[10px] text-muted-foreground">{item.value === 0 ? "igual ao mês anterior" : `${item.label === "Gastos" && comparison.expensesDeltaPct !== 0 ? `${Math.abs(comparison.expensesDeltaPct).toFixed(0)}% · ` : ""}${item.value > 0 ? "a mais" : "a menos"}`}</p>
-                </div>
-              ))}
+      <section className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="border-border/70 shadow-card">
+          <CardContent className="flex h-full min-h-64 flex-col p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div><h2 className="font-heading font-bold">Comparado ao mês anterior</h2><p className="mt-0.5 text-[11px] text-muted-foreground">{monthTitle(addMonthsToKey(referenceMonth, -1))}</p></div>
+              <TrendingUp className="h-4 w-4 shrink-0 text-primary" />
             </div>
-          ) : <p className="mt-4 rounded-xl border border-dashed p-4 text-sm text-muted-foreground">Feche também o mês anterior para visualizar esta comparação.</p>}
-        </CardContent>
-      </Card>
+            {previousSummary.hasData ? (
+              <div className="mt-4 divide-y divide-border/60">
+                {[
+                  { label: "Gastos", value: comparison.expensesDelta, positive: comparison.expensesDelta <= 0 },
+                  { label: "Receitas", value: comparison.incomeDelta, positive: comparison.incomeDelta >= 0 },
+                  { label: "Sobra", value: comparison.resultDelta, positive: comparison.resultDelta >= 0 },
+                ].map((item) => (
+                  <div key={item.label} className="flex items-center justify-between gap-2 py-2.5">
+                    <span className="text-xs text-muted-foreground">{item.label}</span>
+                    <span className={cn("text-sm font-bold tabular-nums", item.value === 0 ? "text-foreground" : item.positive ? "text-success" : "text-destructive")}>
+                      {item.value > 0 ? "+" : item.value < 0 ? "−" : ""}{formatCurrency(Math.abs(item.value))}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="my-auto rounded-xl border border-dashed p-3 text-center text-xs text-muted-foreground">Feche o mês anterior para comparar.</p>}
+          </CardContent>
+        </Card>
 
-      <Card className="border-border/70 shadow-card">
-        <CardContent className="p-5">
-          <div><h2 className="font-heading font-bold">Evolução financeira</h2><p className="text-xs text-muted-foreground">Entradas acima de zero, saídas abaixo de zero e o resultado dos últimos seis meses.</p></div>
-          <div className="mt-4 h-72"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={evolution} margin={{ left: -18, right: 4 }}><CartesianGrid vertical={false} stroke="hsl(var(--border))" /><XAxis dataKey="month" axisLine={false} tickLine={false} fontSize={11} /><YAxis axisLine={false} tickLine={false} fontSize={10} tickFormatter={(value) => `${Math.round(value / 1000)}k`} /><Tooltip formatter={(value: number, name: string) => [formatCurrency(Math.abs(value)), name]} contentStyle={chartTooltipStyle} /><Legend wrapperStyle={{ fontSize: 11 }} /><Bar dataKey="receitas" name="Receitas" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} /><Bar dataKey="despesas" name="Despesas" fill="hsl(var(--destructive))" fillOpacity={0.72} radius={[0, 0, 4, 4]} /><Line dataKey="resultado" name="Resultado" stroke="hsl(var(--primary))" strokeWidth={2.5} /></ComposedChart></ResponsiveContainer></div>
-        </CardContent>
-      </Card>
+        <Card className="border-border/70 shadow-card">
+          <CardContent className="h-full min-h-64 p-4">
+            <div className="flex items-start justify-between gap-2"><div><h2 className="font-heading font-bold">Evolução financeira</h2><p className="mt-0.5 text-[11px] text-muted-foreground">Últimos seis meses</p></div><BarChart3 className="h-4 w-4 shrink-0 text-primary" /></div>
+            <div className="mt-3 h-44"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={evolution} margin={{ top: 6, left: -30, right: 0, bottom: 0 }}><CartesianGrid vertical={false} stroke="hsl(var(--border))" /><XAxis dataKey="month" axisLine={false} tickLine={false} fontSize={9} /><YAxis axisLine={false} tickLine={false} fontSize={8} tickFormatter={(value) => `${Math.round(value / 1000)}k`} /><Tooltip formatter={(value: number, name: string) => [formatCurrency(Math.abs(value)), name]} contentStyle={chartTooltipStyle} /><Bar dataKey="receitas" name="Receitas" fill="hsl(var(--success))" radius={[3, 3, 0, 0]} /><Bar dataKey="despesas" name="Despesas" fill="hsl(var(--destructive))" fillOpacity={0.72} radius={[0, 0, 3, 3]} /><Line dataKey="resultado" name="Resultado" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} /></ComposedChart></ResponsiveContainer></div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/70 shadow-card">
+          <CardContent className="flex h-full min-h-64 flex-col p-4">
+            <div className="flex items-start justify-between gap-2"><div><h2 className="font-heading font-bold">Planejamento e orientações</h2><p className="mt-0.5 text-[11px] text-muted-foreground">Meta e próximo passo</p></div><BrainCircuit className="h-4 w-4 shrink-0 text-primary" /></div>
+            {spendingGoal > 0 ? <div className="mt-4"><div className="flex items-end justify-between gap-2"><div><p className="text-2xl font-bold tabular-nums">{Math.min(spendingProgress, 999).toFixed(0)}%</p><p className="text-[10px] text-muted-foreground">da meta utilizada</p></div><strong className="text-xs tabular-nums">{formatCurrency(remainingBudget)} livres</strong></div><Progress value={Math.min(spendingProgress, 100)} className="mt-3 h-2" /></div> : <div className="mt-4 rounded-xl border border-dashed p-3"><p className="text-xs font-medium">Nenhuma meta definida</p><p className="mt-1 text-[10px] text-muted-foreground">Defina um limite mensal para acompanhar seus gastos.</p></div>}
+            <p className={cn("mt-3 line-clamp-3 rounded-xl border p-2.5 text-xs leading-relaxed", insights[0] ? insightStyle[insights[0].tone] : insightStyle.neutral)}>{insights[0]?.text || "Continue registrando seus meses para receber orientações."}</p>
+            <Button variant="link" size="sm" className="mt-auto h-auto justify-start px-0 pt-3 text-xs" onClick={() => navigate("/financas/orcamento")}>{spendingGoal > 0 ? "Ajustar planejamento" : "Criar meta"} <ArrowRight className="ml-1 h-3.5 w-3.5" /></Button>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/70 shadow-card">
+          <CardContent className="flex h-full min-h-64 flex-col p-4">
+            <div className="flex items-start justify-between gap-2"><div><h2 className="font-heading font-bold">Detalhe dos gastos</h2><p className="mt-0.5 text-[11px] text-muted-foreground">Por cartão</p></div><CreditCard className="h-4 w-4 shrink-0 text-primary" /></div>
+            {cardSpending.length ? <div className="mt-3 space-y-3">{cardSpending.slice(0, 3).map((item) => { const share = cardSpendingTotal > 0 ? item.value / cardSpendingTotal * 100 : 0; return <div key={item.name}><div className="flex items-center justify-between gap-2 text-xs"><span className="truncate font-medium">{item.name}</span><strong className="tabular-nums">{formatCurrency(item.value)}</strong></div><div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: item.color }} /></div></div>; })}</div> : <div className="my-auto text-center"><CreditCard className="mx-auto h-6 w-6 text-muted-foreground" /><p className="mt-2 text-xs text-muted-foreground">Nenhum gasto associado a cartão neste mês.</p></div>}
+            <div className="mt-auto flex items-end justify-between gap-2 pt-3"><div><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Total nos cartões</p><p className="mt-0.5 font-bold tabular-nums">{formatCurrency(cardSpendingTotal)}</p></div><Button variant="link" size="sm" className="h-auto px-0 text-xs" onClick={() => navigate("/financas/transacoes")}>Ver todos <ArrowRight className="ml-1 h-3.5 w-3.5" /></Button></div>
+          </CardContent>
+        </Card>
+      </section>
 
       <section>
         <div className="mb-2 px-1"><h2 className="font-heading text-lg font-bold">Ver mais detalhes</h2><p className="text-xs text-muted-foreground">Abra somente o que quiser analisar agora.</p></div>
         <Accordion type="multiple" className="space-y-3">
-          <AccordionItem value="spending" className="rounded-2xl border border-border/70 bg-card px-5 shadow-card">
-            <AccordionTrigger className="py-4 text-left hover:no-underline"><span><span className="block font-heading font-bold">Planejamento e orientações</span><span className="mt-0.5 block text-xs font-normal text-muted-foreground">Meta de gastos e leitura inteligente do mês.</span></span></AccordionTrigger>
-            <AccordionContent className="border-t pt-4">
-              <div className="grid gap-4 lg:grid-cols-[0.75fr_1.25fr]">
-                <div className="rounded-xl border border-border/70 p-4"><h3 className="font-heading font-bold">Meta de gastos</h3>{spendingGoal > 0 ? <div className="mt-4"><div className="flex items-end justify-between"><div><p className="text-3xl font-bold">{Math.min(spendingProgress, 999).toFixed(0)}%</p><p className="text-xs text-muted-foreground">da meta utilizada</p></div><Target className={cn("h-8 w-8", spendingProgress > 100 ? "text-destructive" : "text-primary")} /></div><Progress value={Math.min(spendingProgress, 100)} className="mt-4 h-2.5" /><div className="mt-4 space-y-2 text-xs"><div className="flex justify-between"><span className="text-muted-foreground">Meta</span><strong>{formatCurrency(spendingGoal)}</strong></div><div className="flex justify-between"><span className="text-muted-foreground">Gasto</span><strong>{formatCurrency(summary.expenses)}</strong></div><div className="flex justify-between"><span className="text-muted-foreground">Disponível</span><strong>{formatCurrency(remainingBudget)}</strong></div></div></div> : <div className="mt-4 rounded-xl border border-dashed p-4 text-center"><Target className="mx-auto h-6 w-6 text-muted-foreground" /><p className="mt-2 text-sm font-medium">Nenhuma meta definida</p><Button variant="outline" size="sm" className="mt-3" onClick={() => navigate("/financas/orcamento")}>Criar meta</Button></div>}</div>
-                <div className="rounded-xl border border-primary/20 bg-primary/5 p-4"><div className="flex items-center gap-2"><BrainCircuit className="h-5 w-5 text-primary" /><h3 className="font-heading font-bold">Leitura do seu mês</h3></div><div className="mt-3 grid gap-2">{insights.map((insight) => <div key={insight.id} className={cn("rounded-xl border p-3 text-sm leading-relaxed", insightStyle[insight.tone])}>{insight.text}</div>)}</div></div>
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-
           <AccordionItem value="breakdown" className="rounded-2xl border border-border/70 bg-card px-5 shadow-card">
-            <AccordionTrigger className="py-4 text-left hover:no-underline"><span><span className="block font-heading font-bold">Detalhes dos gastos</span><span className="mt-0.5 block text-xs font-normal text-muted-foreground">Categorias, cartões e divisão entre fixos e variáveis.</span></span></AccordionTrigger>
+            <AccordionTrigger className="py-4 text-left hover:no-underline"><span><span className="block font-heading font-bold">Análises complementares</span><span className="mt-0.5 block text-xs font-normal text-muted-foreground">Categorias e divisão entre gastos fixos e variáveis.</span></span></AccordionTrigger>
             <AccordionContent className="border-t pt-4">
-              <div className="grid gap-4 lg:grid-cols-3">
+              <div className="grid gap-4 lg:grid-cols-2">
                 <div className="rounded-xl border border-border/70 p-4"><h3 className="font-heading font-bold">Por categoria</h3>{categoryDistribution.length ? <><div className="h-44"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={categoryDistribution} dataKey="value" nameKey="name" innerRadius="48%" outerRadius="75%" paddingAngle={2}>{categoryDistribution.map((item) => <Cell key={item.name} fill={item.color} />)}</Pie><Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={chartTooltipStyle} /></PieChart></ResponsiveContainer></div><div className="space-y-1.5">{categoryDistribution.slice(0, 5).map((item) => <div key={item.name} className="flex items-center justify-between gap-2 text-xs"><span className="truncate">{item.name}</span><strong>{formatCurrency(item.value)}</strong></div>)}</div></> : <p className="py-12 text-center text-sm text-muted-foreground">Sem despesas classificadas.</p>}</div>
-                <div className="rounded-xl border border-border/70 p-4"><h3 className="font-heading font-bold">Por cartão</h3>{cardSpending.length ? <div className="mt-5 space-y-4">{cardSpending.map((item) => { const share = cardSpendingTotal > 0 ? item.value / cardSpendingTotal * 100 : 0; return <div key={item.name}><div className="flex items-center justify-between gap-3 text-sm"><span className="truncate font-medium">{item.name}</span><strong>{formatCurrency(item.value)}</strong></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: item.color }} /></div></div>; })}</div> : <div className="py-12 text-center"><CreditCard className="mx-auto h-6 w-6 text-muted-foreground" /><p className="mt-2 text-sm text-muted-foreground">Nenhum gasto no cartão.</p></div>}</div>
                 <div className="rounded-xl border border-border/70 p-4"><h3 className="font-heading font-bold">Fixos x variáveis</h3>{fixedVariable.length ? <><div className="h-44"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={fixedVariable} dataKey="value" nameKey="name" innerRadius="50%" outerRadius="76%" paddingAngle={3}>{fixedVariable.map((item) => <Cell key={item.name} fill={item.color} />)}</Pie><Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={chartTooltipStyle} /></PieChart></ResponsiveContainer></div><div className="grid grid-cols-2 gap-2">{fixedVariable.map((item) => <div key={item.name} className="rounded-xl bg-muted/50 p-3"><p className="text-[10px] uppercase text-muted-foreground">{item.name}</p><p className="mt-1 font-bold">{formatCurrency(item.value)}</p></div>)}</div></> : <p className="py-12 text-center text-sm text-muted-foreground">Sem comparação disponível.</p>}</div>
               </div>
             </AccordionContent>
