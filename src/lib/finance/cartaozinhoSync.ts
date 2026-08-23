@@ -21,16 +21,52 @@ export type CartaozinhoMonthTotal = {
   people: number;
 };
 
+export type CartaozinhoInstallmentRow = {
+  amount: number | string | null;
+  ref_month: string;
+  purchases?: { person?: string | null } | null;
+};
+
+/**
+ * Agrega linhas de parcelas sem acessar o banco. Mantê-la pura torna a regra
+ * de soma, contagem e deduplicação de pessoas fácil de testar.
+ */
+export const aggregateCartaozinhoRows = (
+  refMonths: string[],
+  rows: CartaozinhoInstallmentRow[],
+): Record<string, CartaozinhoMonthTotal> => {
+  const totals: Record<string, CartaozinhoMonthTotal> = {};
+  const peopleByMonth = new Map<string, Set<string>>();
+
+  refMonths.forEach((month) => {
+    totals[month] = { refMonth: month, total: 0, installments: 0, people: 0 };
+  });
+
+  rows.forEach((row) => {
+    const entry = totals[row.ref_month];
+    if (!entry) return;
+    entry.total = Math.round((entry.total + (Number(row.amount) || 0)) * 100) / 100;
+    entry.installments += 1;
+    const person = String(row.purchases?.person || "").trim().toLocaleLowerCase("pt-BR");
+    if (!person) return;
+    const people = peopleByMonth.get(row.ref_month) || new Set<string>();
+    people.add(person);
+    peopleByMonth.set(row.ref_month, people);
+  });
+
+  Object.values(totals).forEach((entry) => {
+    entry.people = peopleByMonth.get(entry.refMonth)?.size ?? 0;
+  });
+
+  return totals;
+};
+
 /** Soma as parcelas a receber do Cartãozinho em cada mês informado. */
 export const fetchCartaozinhoMonthTotals = async (
   userId: string,
   refMonths: string[],
 ): Promise<Record<string, CartaozinhoMonthTotal>> => {
-  const base: Record<string, CartaozinhoMonthTotal> = {};
-  refMonths.forEach((month) => {
-    base[month] = { refMonth: month, total: 0, installments: 0, people: 0 };
-  });
-  if (refMonths.length === 0) return base;
+  if (refMonths.length === 0) return {};
 
   const { data, error } = await supabase
     .from("installments")
@@ -40,26 +76,7 @@ export const fetchCartaozinhoMonthTotals = async (
 
   if (error) throw error;
 
-  const peopleByMonth = new Map<string, Set<string>>();
-  (data || []).forEach((row: any) => {
-    const month = row.ref_month as string;
-    const entry = base[month];
-    if (!entry) return;
-    entry.total = Math.round((entry.total + (Number(row.amount) || 0)) * 100) / 100;
-    entry.installments += 1;
-    const person = (row.purchases?.person || "").trim();
-    if (person) {
-      const set = peopleByMonth.get(month) || new Set<string>();
-      set.add(person.toLowerCase());
-      peopleByMonth.set(month, set);
-    }
-  });
-
-  Object.values(base).forEach((entry) => {
-    entry.people = peopleByMonth.get(entry.refMonth)?.size ?? 0;
-  });
-
-  return base;
+  return aggregateCartaozinhoRows(refMonths, (data || []) as CartaozinhoInstallmentRow[]);
 };
 
 const resolveCategoryId = async (userId: string) => {

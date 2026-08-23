@@ -7,6 +7,9 @@ export type FixedBillPreview = {
   dueDate: string;
   status: string;
   recurrenceId: string | null;
+  accountId: string | null;
+  categoryId: string | null;
+  transactionId: string | null;
 };
 
 const pad = (value: number) => String(value).padStart(2, "0");
@@ -94,7 +97,7 @@ export const generateExpectedBillsForMonth = async (userId: string, monthKey: st
 export const fetchExpectedBillsForMonth = async (userId: string, monthKey: string) => {
   const { data, error } = await supabase
     .from("expected_bills")
-    .select("id, name, amount, due_date, status, recurrence_id")
+    .select("id, name, amount, due_date, status, recurrence_id, account_id, category_id, transaction_id")
     .eq("user_id", userId)
     .gte("due_date", `${monthKey}-01`)
     .lte("due_date", `${monthKey}-${pad(daysInMonth(monthKey))}`)
@@ -107,5 +110,119 @@ export const fetchExpectedBillsForMonth = async (userId: string, monthKey: strin
     dueDate: String(row.due_date),
     status: String(row.status),
     recurrenceId: (row.recurrence_id as string | null) ?? null,
+    accountId: (row.account_id as string | null) ?? null,
+    categoryId: (row.category_id as string | null) ?? null,
+    transactionId: (row.transaction_id as string | null) ?? null,
   })) as FixedBillPreview[];
+};
+
+export type FinalizeFixedBillsResult = {
+  created: number;
+  ignored: number;
+  skipped: number;
+};
+
+/**
+ * Leva as contas fixas escolhidas para o fechamento mensal. Cada previsão
+ * recebe um external_id estável, portanto reabrir o fechamento não duplica
+ * lançamentos. As não selecionadas ficam ignoradas somente naquele mês.
+ */
+export const finalizeFixedBillsForMonth = async (
+  userId: string,
+  monthKey: string,
+  includedIds: string[],
+): Promise<FinalizeFixedBillsResult> => {
+  await generateExpectedBillsForMonth(userId, monthKey);
+  const bills = await fetchExpectedBillsForMonth(userId, monthKey);
+  const included = new Set(includedIds);
+  const result: FinalizeFixedBillsResult = { created: 0, ignored: 0, skipped: 0 };
+
+  const { data: accounts, error: accountsError } = await supabase
+    .from("accounts")
+    .select("id, type")
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .order("created_at", { ascending: true });
+  if (accountsError) throw accountsError;
+  const fallbackAccount =
+    (accounts || []).find((account) => account.type === "checking") ||
+    (accounts || []).find((account) => account.type === "cash") ||
+    (accounts || []).find((account) => account.type !== "credit_card") ||
+    accounts?.[0];
+
+  for (const bill of bills) {
+    if (!included.has(bill.id)) {
+      if (bill.status !== "ignored") {
+        const { error } = await supabase
+          .from("expected_bills")
+          .update({ status: "ignored" })
+          .eq("id", bill.id)
+          .eq("user_id", userId);
+        if (error) throw error;
+        result.ignored += 1;
+      }
+      continue;
+    }
+
+    if (bill.transactionId) {
+      result.skipped += 1;
+      continue;
+    }
+
+    const accountId = bill.accountId || fallbackAccount?.id || null;
+    if (!accountId || bill.amount <= 0) {
+      result.skipped += 1;
+      continue;
+    }
+
+    const externalId = `fixed_bill:${bill.id}`;
+    const { data: existingRows, error: existingError } = await supabase
+      .from("transactions")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("external_id", externalId)
+      .is("deleted_at", null)
+      .limit(1);
+    if (existingError) throw existingError;
+
+    let transactionId = existingRows?.[0]?.id;
+    if (!transactionId) {
+      const { data: created, error } = await supabase
+        .from("transactions")
+        .insert({
+          user_id: userId,
+          account_id: accountId,
+          category_id: bill.categoryId,
+          type: "expense",
+          amount: bill.amount,
+          status: "pending",
+          transaction_date: bill.dueDate,
+          due_date: bill.dueDate,
+          competence_month: monthKey,
+          recurrence_id: bill.recurrenceId,
+          external_id: externalId,
+          source: bill.name,
+          source_origin: "monthly_closing",
+          description_original: bill.name,
+          notes: "Incluída pelo fechamento mensal",
+          metadata: { expectedBillId: bill.id, refMonth: monthKey, nature: "fixed" },
+        })
+        .select("id")
+        .single();
+      if (error) throw error;
+      transactionId = created.id;
+      result.created += 1;
+    } else {
+      result.skipped += 1;
+    }
+
+    const { error: updateError } = await supabase
+      .from("expected_bills")
+      .update({ status: "pending", transaction_id: transactionId })
+      .eq("id", bill.id)
+      .eq("user_id", userId);
+    if (updateError) throw updateError;
+  }
+
+  return result;
 };

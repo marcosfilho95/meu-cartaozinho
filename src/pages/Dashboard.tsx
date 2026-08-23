@@ -1,49 +1,41 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Pie, PieChart, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import { supabase } from "@/integrations/supabase/client";
-import { MonthNavigator } from "@/components/MonthNavigator";
-import { CardSummary } from "@/components/CardSummary";
-import { AddCardDialog } from "@/components/AddCardDialog";
-import { AppHeader } from "@/components/AppHeader";
-import { AppFooter } from "@/components/AppFooter";
-import { PurchaseNotificationsPopover } from "@/components/PurchaseNotificationsPopover";
-import {
-  getCurrentMonth,
-  formatCurrency,
-  isInstallmentOpen,
-  MonthPaymentStatus,
-  getCycleMonthForDueDay,
-  isRefMonthInCycleOrCarry,
-  addMonths,
-} from "@/lib/installments";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { CreditCard, Plus, ShoppingCart } from "lucide-react";
-import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
-import { getStoredProfile, setStoredProfile } from "@/lib/profileCache";
-import { getDashboardCache, setDashboardCache } from "@/lib/dashboardCache";
-import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
+import { ArrowRight, CreditCard, Layers3, Plus, ShoppingCart, WalletCards } from "lucide-react";
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
-interface Card {
+import { AddCardDialog } from "@/components/AddCardDialog";
+import { AppFooter } from "@/components/AppFooter";
+import { AppHeader } from "@/components/AppHeader";
+import { BankLogo } from "@/components/BankLogo";
+import { MonthNavigator } from "@/components/MonthNavigator";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { supabase } from "@/integrations/supabase/client";
+import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
+import { getDashboardCache, setDashboardCache } from "@/lib/dashboardCache";
+import {
+  addMonths,
+  formatCurrency,
+  getCurrentMonth,
+  getCycleMonthForDueDay,
+  isInstallmentOpen,
+  isRefMonthInCycleOrCarry,
+} from "@/lib/installments";
+import { cn } from "@/lib/utils";
+
+interface CardItem {
   id: string;
   name: string;
   brand: string | null;
   default_due_day: number | null;
 }
 
-interface Profile {
-  name: string;
-  avatar_id: string | null;
-}
-
-interface MonthInstallmentStatus {
-  ref_month: string | null;
-  status: string | null;
-}
+type CardTotal = { total: number; count: number; active: number };
 
 const BANK_CHART_COLORS: Record<string, string> = {
   nubank: "#8A05BE",
+  amazonprime: "#FF6500",
   bradesco: "#CC092F",
   bb: "#F7C400",
   c6: "#1A1A1A",
@@ -54,22 +46,8 @@ const BANK_CHART_COLORS: Record<string, string> = {
   picpay: "#21C25E",
   mercadopago: "#009EE3",
 };
-const FALLBACK_CHART_COLORS = ["#FF3D81", "#3A86FF", "#FF9F1C", "#06D6A0", "#8338EC"];
-const PROFILE_AVATAR_COLUMN_MISSING_KEY = "profiles:avatar_id_missing";
-const isMissingAvatarColumnError = (error: { code?: string; message?: string } | null) => {
-  if (!error) return false;
-  const message = String(error.message || "");
-  return error.code === "42703" || error.code === "PGRST204" || message.includes("avatar_id");
-};
 
-const inferMonthStatusFromTotals = (totals: Record<string, { total: number; count: number; active: number }>): MonthPaymentStatus => {
-  const values = Object.values(totals);
-  if (values.length === 0) return "empty";
-  const total = values.reduce((sum, item) => sum + item.total, 0);
-  if (total <= 0) return "empty";
-  const active = values.reduce((sum, item) => sum + item.active, 0);
-  return active > 0 ? "open" : "paid";
-};
+const FALLBACK_CHART_COLORS = ["#0F766E", "#2563EB", "#D97706", "#DB2777", "#7C3AED"];
 
 interface DashboardProps {
   initialUserId?: string;
@@ -78,16 +56,10 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
   const navigate = useNavigate();
   const [userId, setUserId] = useState<string | null>(initialUserId || null);
-  const [cards, setCards] = useState<Card[]>([]);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [cards, setCards] = useState<CardItem[]>([]);
   const [month, setMonth] = useState(getCurrentMonth());
-  const [totals, setTotals] = useState<Record<string, { total: number; count: number; active: number }>>({});
+  const [totals, setTotals] = useState<Record<string, CardTotal>>({});
   const [loading, setLoading] = useState(true);
-  const [chartVisible, setChartVisible] = useState(false);
-  const [chartAnimKey, setChartAnimKey] = useState(0);
-  const [chartIntroActive, setChartIntroActive] = useState(false);
-  const [monthPaymentStatus, setMonthPaymentStatus] = useState<MonthPaymentStatus>("empty");
-  const [overdueOpenCount, setOverdueOpenCount] = useState(0);
   const headerProfile = useUserHeaderProfile(userId);
 
   useEffect(() => {
@@ -95,372 +67,222 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
       setUserId(initialUserId);
       return;
     }
-    supabase.auth.getSession().then(({ data }) => {
-      setUserId(data.session?.user.id || null);
-    });
+    void supabase.auth.getSession().then(({ data }) => setUserId(data.session?.user.id || null));
   }, [initialUserId]);
 
   useEffect(() => {
     if (!userId) return;
-    const cached = getStoredProfile(userId);
-    if (cached) setProfile(cached);
-  }, [userId]);
-
-  useEffect(() => {
-    if (!userId) return;
-    const cachedDashboard = getDashboardCache(userId, month);
-    if (!cachedDashboard) return;
-    setCards(cachedDashboard.cards);
-    setTotals(cachedDashboard.totals);
-    setMonthPaymentStatus(cachedDashboard.monthPaymentStatus || inferMonthStatusFromTotals(cachedDashboard.totals));
-    setOverdueOpenCount(cachedDashboard.overdueOpenCount || 0);
+    const cached = getDashboardCache(userId, month);
+    if (!cached) return;
+    setCards(cached.cards);
+    setTotals(cached.totals);
     setLoading(false);
-  }, [userId, month]);
+  }, [month, userId]);
 
   const fetchData = useCallback(async () => {
     if (!userId) return;
-    const hasVisualData = Boolean(getDashboardCache(userId, month));
-    if (!hasVisualData) setLoading(true);
-
-    const skipAvatarColumn = localStorage.getItem(PROFILE_AVATAR_COLUMN_MISSING_KEY) === "1";
-    const profilePromise = skipAvatarColumn
-      ? supabase.from("profiles").select("name").eq("user_id", userId).maybeSingle()
-      : supabase.from("profiles").select("name, avatar_id").eq("user_id", userId).maybeSingle();
+    if (!getDashboardCache(userId, month)) setLoading(true);
 
     const nextMonth = addMonths(month, 1);
-    const [{ data: cardsData }, { data: installments }, profileResult] = await Promise.all([
+    const [{ data: cardsData, error: cardsError }, { data: installments, error: installmentsError }] = await Promise.all([
       supabase.from("cards").select("id, name, brand, default_due_day").eq("user_id", userId).order("created_at"),
       supabase
         .from("installments")
         .select("card_id, amount, status, ref_month")
         .eq("user_id", userId)
         .lte("ref_month", nextMonth),
-      profilePromise,
     ]);
 
-    const resolvedCards = (cardsData as Card[]) || [];
-    const rawInstallmentRows = (installments as (MonthInstallmentStatus & { card_id: string; amount: number; status: string })[]) || [];
-    const cycleMonthByCardId = new Map<string, string>();
-    resolvedCards.forEach((card) => {
-      cycleMonthByCardId.set(
-        card.id,
-        getCycleMonthForDueDay({
-          baseMonth: month,
-          dueDay: card.default_due_day,
-          onlyShiftCurrentMonth: true,
-        }),
-      );
-    });
-
-    const installmentRows = rawInstallmentRows.filter((inst) => {
-      const cycleMonth = cycleMonthByCardId.get(inst.card_id) || month;
-      return isRefMonthInCycleOrCarry(inst.ref_month, cycleMonth, inst.status);
-    });
-    const resolvedMonthPaymentStatus: MonthPaymentStatus =
-      installmentRows.length === 0 ? "empty" : installmentRows.some((inst) => isInstallmentOpen(inst.status)) ? "open" : "paid";
-    const overdueCount = installmentRows.filter((inst) => {
-      const cycleMonth = cycleMonthByCardId.get(inst.card_id) || month;
-      return !!inst.ref_month && inst.ref_month < cycleMonth && isInstallmentOpen(inst.status);
-    }).length;
-    setMonthPaymentStatus(resolvedMonthPaymentStatus);
-    setOverdueOpenCount(overdueCount);
-
-    setCards(resolvedCards);
-    const localAvatar = getStoredAvatarId(userId);
-    let profileData: any = profileResult.data;
-    if (profileResult.error) {
-      if (isMissingAvatarColumnError(profileResult.error)) {
-        localStorage.setItem(PROFILE_AVATAR_COLUMN_MISSING_KEY, "1");
-        const fallbackProfile = await supabase.from("profiles").select("name").eq("user_id", userId).maybeSingle();
-        profileData = fallbackProfile.data ? { ...fallbackProfile.data, avatar_id: localAvatar } : null;
-      }
-    }
-    const resolvedProfile = (profileData as Profile | null) || null;
-    const resolvedAvatar = resolvedProfile?.avatar_id || localAvatar || null;
-    if (resolvedAvatar) setStoredAvatarId(userId, resolvedAvatar);
-    const mergedProfile = resolvedProfile ? { ...resolvedProfile, avatar_id: resolvedAvatar } : null;
-    if (mergedProfile) setStoredProfile(userId, mergedProfile);
-    setProfile(mergedProfile);
-
-    const t: Record<string, { total: number; count: number; active: number }> = {};
-    installmentRows.forEach((inst) => {
-      if (!t[inst.card_id]) t[inst.card_id] = { total: 0, count: 0, active: 0 };
-      t[inst.card_id].total += Number(inst.amount);
-      t[inst.card_id].count += 1;
-      if (isInstallmentOpen(inst.status)) t[inst.card_id].active += 1;
-    });
-    setDashboardCache(userId, month, {
-      cards: resolvedCards.map((card) => ({
-        id: card.id,
-        name: card.name,
-        brand: card.brand,
-        default_due_day: card.default_due_day,
-      })),
-      totals: t,
-      monthPaymentStatus: resolvedMonthPaymentStatus,
-      overdueOpenCount: overdueCount,
-    });
-    setTotals(t);
-    setLoading(false);
-  }, [userId, month]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const grandTotal = useMemo(() => Object.values(totals).reduce((sum, t) => sum + t.total, 0), [totals]);
-  const activeInstallments = useMemo(() => Object.values(totals).reduce((sum, t) => sum + t.active, 0), [totals]);
-
-  const chartData = useMemo(
-    () =>
-      cards
-        .map((card) => ({
-          id: card.id,
-          name: card.name,
-          brand: card.brand,
-          value: totals[card.id]?.total || 0,
-        }))
-        .filter((item) => item.value > 0),
-    [cards, totals],
-  );
-  const chartTotal = useMemo(() => chartData.reduce((sum, item) => sum + item.value, 0), [chartData]);
-  const monthStatusUI = useMemo(() => {
-    if (loading) {
-      return { label: "Carregando...", className: "border-border bg-secondary text-secondary-foreground" };
-    }
-    if (monthPaymentStatus === "paid") {
-      return { label: "Pago", className: "border-success/30 bg-success/10 text-success" };
-    }
-    if (monthPaymentStatus === "open") {
-      return { label: "Em aberto", className: "border-warning/35 bg-warning/15 text-[hsl(var(--warning-foreground))]" };
-    }
-    return { label: "Sem lancamentos", className: "border-border bg-secondary text-secondary-foreground" };
-  }, [loading, monthPaymentStatus]);
-
-  const monthHighlightMessage = useMemo(() => {
-    if (loading) return null;
-    if (overdueOpenCount > 0) {
-      return {
-        text: "Você tem parcelas atrasadas. Evite juros e pague o quanto antes.",
-        className: "border-destructive/40 bg-destructive/10 text-destructive",
-      };
-    }
-    if (monthPaymentStatus === "open") {
-      return {
-        text: "Cuidado para não atrasar as parcelas!!!",
-        className: "border-warning/35 bg-warning/15 text-[hsl(var(--warning-foreground))]",
-      };
-    }
-    if (monthPaymentStatus === "paid") {
-      return {
-        text: "Todas as suas contas foram pagas, muito bem! :)",
-        className: "border-success/30 bg-success/10 text-success",
-      };
-    }
-    return null;
-  }, [loading, monthPaymentStatus, overdueOpenCount]);
-
-  useEffect(() => {
-    if (loading) {
-      setChartVisible(false);
-      setChartIntroActive(false);
+    if (cardsError || installmentsError) {
+      console.error("Card dashboard load error", cardsError || installmentsError);
+      setLoading(false);
       return;
     }
-    setChartVisible(false);
-    setChartAnimKey((prev) => prev + 1);
-    setChartIntroActive(true);
-    const timer = window.setTimeout(() => setChartVisible(true), 70);
-    const introTimer = window.setTimeout(() => setChartIntroActive(false), 1150);
-    return () => {
-      window.clearTimeout(timer);
-      window.clearTimeout(introTimer);
-    };
-  }, [month, chartData.length, loading]);
+
+    const resolvedCards = (cardsData || []) as CardItem[];
+    const cycleMonthByCardId = new Map<string, string>();
+    resolvedCards.forEach((card) => {
+      cycleMonthByCardId.set(card.id, getCycleMonthForDueDay({
+        baseMonth: month,
+        dueDay: card.default_due_day,
+        onlyShiftCurrentMonth: true,
+      }));
+    });
+
+    const scopedInstallments = (installments || []).filter((installment) => {
+      const cycleMonth = cycleMonthByCardId.get(installment.card_id) || month;
+      return isRefMonthInCycleOrCarry(installment.ref_month, cycleMonth, installment.status);
+    });
+
+    const nextTotals: Record<string, CardTotal> = {};
+    scopedInstallments.forEach((installment) => {
+      if (!nextTotals[installment.card_id]) nextTotals[installment.card_id] = { total: 0, count: 0, active: 0 };
+      nextTotals[installment.card_id].total += Number(installment.amount || 0);
+      nextTotals[installment.card_id].count += 1;
+      if (isInstallmentOpen(installment.status)) nextTotals[installment.card_id].active += 1;
+    });
+
+    setCards(resolvedCards);
+    setTotals(nextTotals);
+    setDashboardCache(userId, month, { cards: resolvedCards, totals: nextTotals });
+    setLoading(false);
+  }, [month, userId]);
+
+  useEffect(() => { void fetchData(); }, [fetchData]);
+
+  const chartData = useMemo(() => cards
+    .map((card, index) => ({
+      ...card,
+      value: totals[card.id]?.total || 0,
+      count: totals[card.id]?.count || 0,
+      color: BANK_CHART_COLORS[card.brand || ""] || FALLBACK_CHART_COLORS[index % FALLBACK_CHART_COLORS.length],
+    }))
+    .filter((item) => item.value > 0)
+    .sort((a, b) => b.value - a.value), [cards, totals]);
+
+  const grandTotal = chartData.reduce((sum, item) => sum + item.value, 0);
+  const totalInstallments = chartData.reduce((sum, item) => sum + item.count, 0);
+  const averagePerCard = chartData.length ? grandTotal / chartData.length : 0;
+  const leadingCard = chartData[0] || null;
+  const leadingShare = leadingCard && grandTotal > 0 ? (leadingCard.value / grandTotal) * 100 : 0;
 
   if (!userId) return null;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="flex min-h-screen flex-col bg-background">
       <AppHeader
         containerClassName="max-w-6xl"
-        title="Minhas Faturas"
+        title="Meu Cartãozinho"
         greeting={headerProfile.greeting}
         userName={headerProfile.firstName}
         avatarId={headerProfile.avatarId}
         avatarUrl={headerProfile.avatarUrl}
         showBack
         backTo="/"
-        topActions={<PurchaseNotificationsPopover userId={userId} />}
       />
 
-      <div className="container -mt-4 flex-1 space-y-6 pb-4">
-        <section data-tour="month-summary" className="overflow-hidden rounded-3xl border border-border/60 bg-card p-5 shadow-elevated animate-fade-in">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <MonthNavigator currentMonth={month} onMonthChange={setMonth} />
-            <Badge variant="outline" className={monthStatusUI.className}>
-              {monthStatusUI.label}
-            </Badge>
+      <main className="mx-auto w-full max-w-6xl flex-1 space-y-5 px-4 pb-8 pt-6 sm:px-6">
+        <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">Cartões e valores a receber</p>
+            <h1 className="mt-1 font-heading text-2xl font-bold sm:text-3xl">Uma visão clara de cada cartão.</h1>
+            <p className="mt-1 max-w-xl text-sm text-muted-foreground">Veja o total do mês, a participação de cada cartão e abra os detalhes quando precisar.</p>
           </div>
-          <div className="mt-4 grid gap-4 md:grid-cols-[1.4fr_1fr]">
-            <div className="rounded-2xl bg-gradient-to-br from-primary/12 via-primary/6 to-transparent p-4">
-              <p className="text-sm text-muted-foreground">Total do mês</p>
-              <p className="font-heading text-4xl font-extrabold text-foreground">{formatCurrency(grandTotal)}</p>
-              <p className="mt-2 text-sm text-muted-foreground">{activeInstallments} parcela(s) ativa(s) neste mês</p>
-              {monthHighlightMessage && (
-                <p className={`mt-2 inline-flex rounded-md border px-2.5 py-1 text-xs font-semibold ${monthHighlightMessage.className}`}>
-                  {monthHighlightMessage.text}
-                </p>
-              )}
-              {!loading && grandTotal === 0 && <p className="mt-2 font-semibold text-muted-foreground">Nenhuma conta para este mês</p>}
-            </div>
-            <div className={`rounded-2xl border border-border/70 bg-background/60 p-4 transition-all duration-500 ${chartVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1"}`}>
-              {loading ? (
-                <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">Carregando distribuição...</div>
-              ) : chartData.length === 0 ? (
-                <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">Sem distribuição no mês</div>
-              ) : (
-                <div className="grid items-center gap-4 lg:grid-cols-[1.2fr_1.05fr]">
-                  <div className="h-64 rounded-xl border border-border/60 bg-card/50 p-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <MonthNavigator currentMonth={month} onMonthChange={setMonth} />
+            <AddCardDialog
+              userId={userId}
+              onCardAdded={fetchData}
+              trigger={<Button className="gap-2"><Plus className="h-4 w-4" /> Novo cartão</Button>}
+            />
+            <Button variant="outline" className="gap-2" onClick={() => navigate("/compras")}>
+              <ShoppingCart className="h-4 w-4" /> Compras
+            </Button>
+          </div>
+        </header>
+
+        {loading ? (
+          <div className="grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
+            <Skeleton className="h-72 rounded-3xl" />
+            <Skeleton className="h-72 rounded-3xl" />
+          </div>
+        ) : chartData.length === 0 ? (
+          <Card className="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/10 via-card to-card shadow-elevated">
+            <CardContent className="flex min-h-64 flex-col items-start justify-center p-7">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary"><CreditCard className="h-6 w-6" /></div>
+              <h2 className="mt-5 font-heading text-2xl font-bold">Nenhum valor neste mês</h2>
+              <p className="mt-2 max-w-xl text-sm text-muted-foreground">Cadastre cartões — incluindo Amazon Prime — e registre as compras para acompanhar os totais mensais.</p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <AddCardDialog userId={userId} onCardAdded={fetchData} trigger={<Button><Plus className="mr-2 h-4 w-4" /> Cadastrar cartão</Button>} />
+                <Button variant="outline" onClick={() => navigate("/compras")}>Ver compras</Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <section className="grid gap-4 lg:grid-cols-[0.82fr_1.18fr]">
+            <Card className="overflow-hidden border-0 bg-primary text-primary-foreground shadow-elevated">
+              <CardContent className="flex h-full min-h-72 flex-col p-6 sm:p-7">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary-foreground/65">Total do mês</p>
+                  <WalletCards className="h-5 w-5 text-primary-foreground/65" />
+                </div>
+                <p className="mt-5 font-heading text-4xl font-bold tracking-tight sm:text-5xl">{formatCurrency(grandTotal)}</p>
+                <p className="mt-2 text-sm text-primary-foreground/70">{totalInstallments} {totalInstallments === 1 ? "parcela" : "parcelas"} em {chartData.length} {chartData.length === 1 ? "cartão" : "cartões"}</p>
+                <div className="mt-auto grid grid-cols-2 gap-3 border-t border-primary-foreground/15 pt-5">
+                  <div><p className="text-[10px] uppercase tracking-wide text-primary-foreground/55">Média por cartão</p><p className="mt-1 font-semibold">{formatCurrency(averagePerCard)}</p></div>
+                  <div><p className="text-[10px] uppercase tracking-wide text-primary-foreground/55">Maior participação</p><p className="mt-1 truncate font-semibold">{leadingCard?.name} · {leadingShare.toFixed(0)}%</p></div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/70 shadow-card">
+              <CardContent className="p-5 sm:p-6">
+                <div><h2 className="font-heading text-lg font-bold">Distribuição por cartão</h2><p className="mt-1 text-xs text-muted-foreground">Quanto cada cartão representa no total do mês.</p></div>
+                <div className="mt-3 grid items-center gap-3 sm:grid-cols-[0.8fr_1.2fr]">
+                  <div className="relative h-52">
                     <ResponsiveContainer width="100%" height="100%">
-                      <PieChart key={chartAnimKey}>
-                        <Pie
-                          data={chartData}
-                          dataKey="value"
-                          nameKey="name"
-                          className={chartIntroActive ? "chart-intro-spin" : ""}
-                          innerRadius="52%"
-                          outerRadius="82%"
-                          paddingAngle={3}
-                          isAnimationActive
-                          animationBegin={120}
-                          animationDuration={1550}
-                          animationEasing="ease-out"
-                        >
-                          {chartData.map((item, index) => (
-                            <Cell
-                              key={item.id}
-                              fill={BANK_CHART_COLORS[item.brand || ""] || FALLBACK_CHART_COLORS[index % FALLBACK_CHART_COLORS.length]}
-                            />
-                          ))}
+                      <PieChart>
+                        <Pie data={chartData} dataKey="value" nameKey="name" innerRadius="60%" outerRadius="84%" paddingAngle={3} strokeWidth={0}>
+                          {chartData.map((item) => <Cell key={item.id} fill={item.color} />)}
                         </Pie>
-                        <Tooltip
-                          formatter={(value: number) => formatCurrency(value)}
-                          contentStyle={{
-                            borderRadius: "14px",
-                            border: "1px solid hsl(var(--border))",
-                            background: "hsl(var(--card))",
-                            boxShadow: "0 8px 24px -12px rgba(0,0,0,0.25)",
-                            padding: "8px 10px",
-                            fontSize: "12px",
-                          }}
-                          itemStyle={{ fontSize: "12px", padding: 0 }}
-                          labelStyle={{ fontSize: "11px", marginBottom: "2px", color: "hsl(var(--muted-foreground))" }}
-                        />
+                        <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} />
                       </PieChart>
                     </ResponsiveContainer>
+                    <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"><span className="text-[10px] uppercase tracking-wide text-muted-foreground">Total</span><strong className="mt-1 text-sm">{formatCurrency(grandTotal)}</strong></div>
                   </div>
                   <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Legenda</p>
-                    {chartData.map((item, index) => {
-                      const color = BANK_CHART_COLORS[item.brand || ""] || FALLBACK_CHART_COLORS[index % FALLBACK_CHART_COLORS.length];
-                      const pct = chartTotal > 0 ? (item.value / chartTotal) * 100 : 0;
+                    {chartData.map((item) => {
+                      const percentage = grandTotal > 0 ? (item.value / grandTotal) * 100 : 0;
                       return (
-                        <div key={item.id} className="flex items-center justify-between rounded-lg border border-border/60 bg-card/60 px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
-                            <span className="text-sm font-medium text-foreground whitespace-nowrap">{item.name}</span>
-                          </div>
-                          <p className="text-sm font-semibold text-muted-foreground">{pct.toFixed(1)}%</p>
+                        <div key={item.id} className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5">
+                          <div className="flex items-center justify-between gap-3 text-xs"><span className="flex min-w-0 items-center gap-2 font-medium"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} /><span className="truncate">{item.name}</span></span><strong>{formatCurrency(item.value)}</strong></div>
+                          <div className="mt-2 flex items-center gap-2"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full" style={{ width: `${percentage}%`, backgroundColor: item.color }} /></div><span className="w-10 text-right text-[10px] font-semibold text-muted-foreground">{percentage.toFixed(0)}%</span></div>
                         </div>
                       );
                     })}
                   </div>
                 </div>
-              )}
-            </div>
-          </div>
-        </section>
-
-        <div className="flex flex-wrap gap-3">
-          <AddCardDialog
-            userId={userId}
-            onCardAdded={fetchData}
-            trigger={
-              <Button data-tour="new-card-button" className="gap-2 gradient-primary text-primary-foreground">
-                <Plus className="h-4 w-4" />
-                Novo cartão
-              </Button>
-            }
-          />
-          <Button variant="outline" className="gap-2" data-tour="purchases-button" onClick={() => navigate("/compras")}>
-            <ShoppingCart className="h-4 w-4" />
-            Compras / ordens
-          </Button>
-        </div>
-
-        {loading ? (
-          <div className="space-y-3">
-            {[1, 2].map((i) => (
-              <div key={i} className="h-24 animate-pulse rounded-xl bg-muted" />
-            ))}
-          </div>
-        ) : cards.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-14 text-center animate-fade-in">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-accent">
-              <CreditCard className="h-8 w-8 text-primary" />
-            </div>
-            <h2 className="font-heading text-lg font-semibold text-foreground">Sem cartões cadastrados</h2>
-            <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-              Comece criando seu primeiro cartão para organizar as parcelas mês a mês.
-            </p>
-            <AddCardDialog
-              userId={userId}
-              onCardAdded={fetchData}
-              trigger={
-                <Button className="mt-4 gap-2 gradient-primary text-primary-foreground">
-                  <Plus className="h-4 w-4" />
-                  Cadastrar primeiro cartão
-                </Button>
-              }
-            />
-          </div>
-        ) : (
-          <section className="space-y-3">
-            <h2 className="font-heading text-xl font-bold text-foreground">Seus cartões</h2>
-            {cards.map((card) => (
-              <CardSummary
-                key={card.id}
-                card={card}
-                total={totals[card.id]?.total || 0}
-                count={totals[card.id]?.count || 0}
-                avatarId={profile?.avatar_id}
-                userName={profile?.name}
-                onClick={() =>
-                  navigate(
-                    `/cartao/${card.id}?mes=${getCycleMonthForDueDay({
-                      baseMonth: month,
-                      dueDay: card.default_due_day,
-                      onlyShiftCurrentMonth: true,
-                    })}`,
-                    {
-                    state: {
-                      initialUserId: userId,
-                      initialCard: card,
-                      initialCards: cards,
-                      initialProfile: profile,
-                    },
-                    },
-                  )
-                }
-              />
-            ))}
+              </CardContent>
+            </Card>
           </section>
         )}
-      </div>
-      <AppFooter plain className="pt-0 pb-1" />
+
+        {!loading && cards.length > 0 && (
+          <section className="space-y-3">
+            <div className="flex items-end justify-between gap-3"><div><h2 className="font-heading text-xl font-bold">Seus cartões</h2><p className="text-xs text-muted-foreground">Abra um cartão para ver pessoas, parcelas e compras.</p></div><span className="text-xs text-muted-foreground">{cards.length} cadastrados</span></div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {cards.map((card, index) => {
+                const total = totals[card.id]?.total || 0;
+                const count = totals[card.id]?.count || 0;
+                const percentage = grandTotal > 0 ? (total / grandTotal) * 100 : 0;
+                const color = BANK_CHART_COLORS[card.brand || ""] || FALLBACK_CHART_COLORS[index % FALLBACK_CHART_COLORS.length];
+                return (
+                  <button
+                    key={card.id}
+                    type="button"
+                    onClick={() => navigate(`/cartao/${card.id}?mes=${getCycleMonthForDueDay({ baseMonth: month, dueDay: card.default_due_day, onlyShiftCurrentMonth: true })}`, { state: { initialUserId: userId, initialCard: card, initialCards: cards } })}
+                    className="group rounded-2xl border border-border/70 bg-card p-4 text-left shadow-card transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-elevated"
+                  >
+                    <div className="flex items-center gap-3"><BankLogo brand={card.brand} size={48} /><div className="min-w-0 flex-1"><h3 className="truncate font-heading text-lg font-bold">{card.name}</h3><p className="text-xs text-muted-foreground">{count > 0 ? `${count} ${count === 1 ? "parcela" : "parcelas"} no mês` : "Sem valores no mês"}</p></div><ArrowRight className="h-4 w-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-primary" /></div>
+                    <div className="mt-4 flex items-end justify-between gap-3"><div><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Total</p><p className={cn("mt-1 text-xl font-bold", total > 0 ? "text-foreground" : "text-muted-foreground")}>{formatCurrency(total)}</p></div><span className="text-xs font-semibold" style={{ color }}>{percentage.toFixed(0)}% do mês</span></div>
+                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full transition-all" style={{ width: `${percentage}%`, backgroundColor: color }} /></div>
+                  </button>
+                );
+              })}
+              <AddCardDialog
+                userId={userId}
+                onCardAdded={fetchData}
+                trigger={<button type="button" className="flex min-h-40 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/15 p-5 text-center transition hover:border-primary/40 hover:bg-primary/5"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><Plus className="h-5 w-5" /></div><p className="mt-3 text-sm font-semibold">Adicionar outro cartão</p><p className="mt-1 text-xs text-muted-foreground">Nubank, Amazon Prime, Mercado Pago e outros</p></button>}
+              />
+            </div>
+          </section>
+        )}
+
+        <Card className="border-border/60 bg-muted/20 shadow-none"><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary"><Layers3 className="h-4 w-4" /></div><div><p className="text-sm font-semibold">Visão mensal, sem complicação</p><p className="text-xs text-muted-foreground">Os totais daqui entram automaticamente como receita prevista no Organizador.</p></div></div><Button variant="ghost" size="sm" onClick={() => navigate("/financas")}>Ver Organizador <ArrowRight className="ml-1 h-4 w-4" /></Button></CardContent></Card>
+      </main>
+      <AppFooter plain className="pb-1 pt-0" />
     </div>
   );
 };
 
 export default Dashboard;
-

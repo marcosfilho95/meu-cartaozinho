@@ -1,12 +1,12 @@
 import React from "react";
-import { ArrowLeftRight, LayoutDashboard, Upload, Wallet } from "lucide-react";
+import { ArrowLeftRight, LayoutDashboard, ListChecks, PiggyBank } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 
 const NAV_ITEMS = [
   { to: "/financas", icon: LayoutDashboard, label: "Início" },
+  { to: "/financas/fechamento", icon: ListChecks, label: "Fechamento", primary: true },
   { to: "/financas/transacoes", icon: ArrowLeftRight, label: "Lançamentos" },
-  { to: "/financas/importacoes", icon: Upload, label: "Importar", primary: true },
-  { to: "/financas/contas", icon: Wallet, label: "Contas" },
+  { to: "/financas/cofrinhos", icon: PiggyBank, label: "Planos" },
 ];
 
 export const FinanceBottomNav: React.FC = () => {

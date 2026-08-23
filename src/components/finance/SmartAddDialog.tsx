@@ -54,17 +54,11 @@ interface DraftTx {
   category_id: string;
   account_id: string;
   counterpart_account_id: string;
-  installments: number | null;
   confidence: number;
   transfer_direction: "in" | "out" | null;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
-
-const getInstallmentCount = (installments: number | null) => {
-  if (!Number.isInteger(installments) || Number(installments) <= 1) return 1;
-  return Math.min(Number(installments), 120);
-};
 
 const fileToDataUrl = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
@@ -214,7 +208,6 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
           category_id,
           account_id,
           counterpart_account_id: t.type === "transfer" ? guessCounterpartAccount(accounts, account_id, role) : "",
-          installments: t.installments,
           confidence: t.confidence ?? 0.7,
           transfer_direction: t.transfer_direction || null,
         };
@@ -256,35 +249,26 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     try {
       const rows: any[] = [];
       drafts.forEach((d) => {
-        const count = d.type === "transfer" ? 1 : getInstallmentCount(d.installments);
-        for (let i = 0; i < count; i += 1) {
-          const due = new Date(`${d.date}T12:00:00`);
-          due.setMonth(due.getMonth() + i);
-          const y = due.getFullYear();
-          const m = String(due.getMonth() + 1).padStart(2, "0");
-          const dd = String(due.getDate()).padStart(2, "0");
-          const dueStr = `${y}-${m}-${dd}`;
-          rows.push({
-            user_id: userId,
-            account_id: d.account_id,
-            counterpart_account_id: d.type === "transfer" ? d.counterpart_account_id : null,
-            category_id: d.category_id || null,
-            type: d.type,
-            amount: d.amount,
-            transaction_date: dueStr,
-            due_date: dueStr,
-            status: "pending",
-            source: count > 1 ? `${d.description} (${i + 1}/${count})` : d.description,
-            payment_method: d.payment_method,
-            transaction_role: d.role,
-            purchase_date: dueStr,
-            competence_month: dueStr.slice(0, 7),
-            source_origin: "smart_add",
-            is_reviewed: true,
-            metadata: { aiConfidence: d.confidence, transferDirection: d.transfer_direction },
-            notes: null,
-          });
-        }
+        rows.push({
+          user_id: userId,
+          account_id: d.account_id,
+          counterpart_account_id: d.type === "transfer" ? d.counterpart_account_id : null,
+          category_id: d.category_id || null,
+          type: d.type,
+          amount: d.amount,
+          transaction_date: d.date,
+          due_date: d.date,
+          status: "pending",
+          source: d.description,
+          payment_method: d.payment_method,
+          transaction_role: d.role,
+          purchase_date: d.date,
+          competence_month: d.date.slice(0, 7),
+          source_origin: "smart_add",
+          is_reviewed: true,
+          metadata: { aiConfidence: d.confidence, transferDirection: d.transfer_direction },
+          notes: null,
+        });
       });
 
       const { error } = await supabase.from("transactions").insert(rows);
@@ -314,10 +298,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     return !!imageDataUrl;
   }, [tab, text, pasted, imageDataUrl, loading, optionsLoading]);
 
-  const totalLaunches = useMemo(
-    () => drafts.reduce((total, draft) => total + (draft.type === "transfer" ? 1 : getInstallmentCount(draft.installments)), 0),
-    [drafts],
-  );
+  const totalLaunches = drafts.length;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -325,10 +306,10 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         <DialogHeader className="border-b bg-gradient-to-br from-primary/5 to-transparent px-5 py-4">
           <DialogTitle className="flex items-center gap-2 font-heading text-lg">
             <Sparkles className="h-5 w-5 text-primary" />
-            Adicionar com IA
+            Adicionar por texto ou imagem
           </DialogTitle>
           <p className="text-xs text-muted-foreground">
-            Descreva, cole ou fotografe — a IA organiza os lançamentos para você.
+            Informe o essencial. O sistema sugere os campos e você confirma antes de salvar.
           </p>
         </DialogHeader>
 
@@ -349,7 +330,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
 
               <TabsContent value="text" className="mt-4 space-y-2">
                 <Label className="text-xs text-muted-foreground">
-                  Escreva naturalmente. Ex: "gastei 45 no uber ontem", "salário 3200 caiu hoje", "netflix 39,90 no crédito parcelado em 12x"
+                  Ex.: “Nubank, fatura de agosto, R$ 5.000” ou “Recebi R$ 7.000 em agosto”.
                 </Label>
                 <Textarea
                   placeholder="Digite uma ou várias transações..."
@@ -363,7 +344,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
 
               <TabsContent value="paste" className="mt-4 space-y-2">
                 <Label className="text-xs text-muted-foreground">
-                  Cole um extrato, fatura ou lista de transações. A IA identifica tudo.
+                  Cole uma descrição, uma fatura resumida ou uma pequena lista. Revise todos os valores antes de salvar.
                 </Label>
                 <Textarea
                   placeholder="Cole o texto aqui..."
@@ -376,7 +357,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
 
               <TabsContent value="image" className="mt-4 space-y-3">
                 <Label className="text-xs text-muted-foreground">
-                  Envie uma foto de comprovante, uma captura de tela de PIX ou um cupom fiscal.
+                  Envie um print com instituição, total e mês visíveis. Nenhum dado será salvo sem sua revisão.
                 </Label>
                 <input
                   ref={fileInputRef}
@@ -588,11 +569,6 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                           </p>
                         )}
                       </div>
-                      {d.installments && d.installments > 1 && (
-                        <div className="col-span-2 rounded-lg bg-primary/5 px-2 py-1 text-[11px] text-primary">
-                          Parcelado em {d.installments}x de {formatCurrency(d.amount)}
-                        </div>
-                      )}
                     </div>
                   </div>
                 ))}

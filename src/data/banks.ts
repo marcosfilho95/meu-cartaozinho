@@ -1,3 +1,4 @@
+import amazonPrimeLogo from "@/assets/banks/amazon-prime.png";
 import bbLogo from "@/assets/banks/bb.webp";
 import bradescoLogo from "@/assets/banks/bradesco.png";
 import c6Logo from "@/assets/banks/c6.jpg";
@@ -11,6 +12,7 @@ import santanderLogo from "@/assets/banks/santander.png";
 
 export const BANK_BRANDS = [
   "nubank",
+  "amazonprime",
   "bradesco",
   "bb",
   "c6",
@@ -33,6 +35,7 @@ export interface BankInfo {
 
 export const BANK_OPTIONS: BankInfo[] = [
   { value: "nubank", label: "Nubank", logo: nubankLogo, accent: "from-[#8A05BE] to-[#B65AD8]" },
+  { value: "amazonprime", label: "Amazon Prime", logo: amazonPrimeLogo, accent: "from-[#FF5A00] to-[#FF9900]" },
   { value: "bradesco", label: "Bradesco", logo: bradescoLogo, accent: "from-[#CC092F] to-[#E25171]" },
   { value: "bb", label: "Banco do Brasil", logo: bbLogo, accent: "from-[#F7C400] to-[#FFE05A]" },
   { value: "c6", label: "C6", logo: c6Logo, accent: "from-[#131313] to-[#3C3C3C]" },

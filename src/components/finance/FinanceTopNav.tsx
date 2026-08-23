@@ -3,6 +3,8 @@ import {
   ArrowLeftRight,
   FolderOpen,
   LayoutDashboard,
+  ListChecks,
+  PiggyBank,
   Repeat,
   Upload,
   Wallet,
@@ -21,14 +23,16 @@ import { cn } from "@/lib/utils";
 
 const PRIMARY_ITEMS = [
   { to: "/financas", icon: LayoutDashboard, label: "Início", end: true },
+  { to: "/financas/fechamento", icon: ListChecks, label: "Fechamento" },
   { to: "/financas/transacoes", icon: ArrowLeftRight, label: "Lançamentos" },
-  { to: "/financas/contas", icon: Wallet, label: "Contas" },
+  { to: "/financas/cofrinhos", icon: PiggyBank, label: "Planos" },
 ];
 
 const MORE_ITEMS = [
-  { to: "/financas/importacoes", icon: Upload, label: "Importar" },
   { to: "/financas/recorrencias", icon: Repeat, label: "Despesas fixas" },
+  { to: "/financas/contas", icon: Wallet, label: "Contas" },
   { to: "/financas/categorias", icon: FolderOpen, label: "Categorias" },
+  { to: "/financas/importacoes", icon: Upload, label: "Importação avançada" },
 ];
 
 export const FinanceTopNav: React.FC = () => {

@@ -1,0 +1,225 @@
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  CheckCircle2,
+  CircleDollarSign,
+  Loader2,
+  PiggyBank,
+  Plus,
+  ReceiptText,
+  Sparkles,
+  Target,
+} from "lucide-react";
+import { toast } from "sonner";
+
+import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
+import { SmartAddDialog } from "@/components/finance/SmartAddDialog";
+import { MonthNavigator } from "@/components/MonthNavigator";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import { supabase } from "@/integrations/supabase/client";
+import { formatCurrency } from "@/lib/constants";
+import {
+  fetchExpectedBillsForMonth,
+  finalizeFixedBillsForMonth,
+  generateExpectedBillsForMonth,
+  type FixedBillPreview,
+} from "@/lib/finance/fixedBills";
+import { syncCartaozinhoMonth } from "@/lib/finance/cartaozinhoSync";
+import { ensureDefaultCategories } from "@/lib/financeCategoryDefaults";
+import { ensureDefaultAccounts } from "@/lib/financeDefaults";
+import { buildCategoryTrends, buildInsights, compareMonths, monthTitle, summarizeMonth } from "@/lib/financeInsights";
+import { calculateReserveMovement, type GoalMovement } from "@/lib/financeOverview";
+import { fetchFinanceTransactions, monthKey, type FinanceTx } from "@/lib/financeShared";
+import { getErrorMessage, untypedSupabase } from "@/lib/supabaseUntyped";
+import { cn } from "@/lib/utils";
+
+interface MonthlyClosingPageProps {
+  userId: string;
+}
+
+type Goal = {
+  id: string;
+  name: string;
+  target_amount: number;
+  current_amount: number;
+  monthly_target?: number | null;
+};
+
+const STEPS = [
+  { title: "Receitas", subtitle: "Quanto entrou", icon: CircleDollarSign },
+  { title: "Gastos", subtitle: "Faturas e despesas", icon: ReceiptText },
+  { title: "Planos", subtitle: "Quanto guardar", icon: PiggyBank },
+  { title: "Resultado", subtitle: "Entenda o mês", icon: Target },
+];
+
+const isValidMonth = (value: string | null): value is string => Boolean(value && /^\d{4}-(0[1-9]|1[0-2])$/.test(value));
+
+const transactionLabel = (transaction: FinanceTx) => transaction.source || transaction.categories?.name || "Valor sem descrição";
+
+const MonthlyClosingPage: React.FC<MonthlyClosingPageProps> = ({ userId }) => {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialMonth = isValidMonth(searchParams.get("mes")) ? searchParams.get("mes")! : monthKey(new Date());
+  const [refMonth, setRefMonth] = useState(initialMonth);
+  const [step, setStep] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [finishing, setFinishing] = useState(false);
+  const [transactions, setTransactions] = useState<FinanceTx[]>([]);
+  const [fixedBills, setFixedBills] = useState<FixedBillPreview[]>([]);
+  const [includedFixed, setIncludedFixed] = useState<Set<string>>(new Set());
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [goalMovements, setGoalMovements] = useState<GoalMovement[]>([]);
+  const [spendingGoal, setSpendingGoal] = useState(0);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [smartOpen, setSmartOpen] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      await Promise.allSettled([ensureDefaultAccounts(userId), ensureDefaultCategories(userId)]);
+      await Promise.all([syncCartaozinhoMonth(userId, refMonth), generateExpectedBillsForMonth(userId, refMonth)]);
+      const [loadedTransactions, loadedBills, goalsRes, goalTxRes, budgetsRes] = await Promise.all([
+        fetchFinanceTransactions(userId, 24),
+        fetchExpectedBillsForMonth(userId, refMonth),
+        supabase.from("goals").select("*").eq("user_id", userId).order("created_at"),
+        untypedSupabase.from("goal_transactions").select("amount, type, ref_month, created_at").eq("user_id", userId).limit(1000),
+        supabase.from("budgets").select("limit_amount").eq("user_id", userId).eq("ref_month", refMonth),
+      ]);
+      if (goalsRes.error) throw goalsRes.error;
+      if (goalTxRes.error) throw goalTxRes.error;
+      if (budgetsRes.error) throw budgetsRes.error;
+
+      setTransactions(loadedTransactions);
+      setFixedBills(loadedBills);
+      setIncludedFixed(new Set(loadedBills.filter((bill) => !["ignored", "canceled"].includes(bill.status)).map((bill) => bill.id)));
+      setGoals(((goalsRes.data || []) as unknown) as Goal[]);
+      setGoalMovements((goalTxRes.data || []) as GoalMovement[]);
+      setSpendingGoal((budgetsRes.data || []).reduce((sum, budget) => sum + Number(budget.limit_amount || 0), 0));
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Não foi possível preparar o fechamento mensal."));
+    } finally {
+      setLoading(false);
+    }
+  }, [refMonth, userId]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    setSearchParams({ mes: refMonth }, { replace: true });
+    setStep(0);
+  }, [refMonth, setSearchParams]);
+
+  useEffect(() => {
+    const onFinanceUpdate = () => void load();
+    window.addEventListener("finance-sync-updated", onFinanceUpdate);
+    return () => window.removeEventListener("finance-sync-updated", onFinanceUpdate);
+  }, [load]);
+
+  const monthTransactions = useMemo(() => transactions.filter((transaction) =>
+    (transaction.competence_month || transaction.transaction_date.slice(0, 7)) === refMonth && transaction.status !== "canceled",
+  ), [refMonth, transactions]);
+  const incomes = monthTransactions.filter((transaction) => transaction.type === "income");
+  const expenses = monthTransactions.filter((transaction) => transaction.type === "expense");
+  const baseSummary = useMemo(() => summarizeMonth(transactions, refMonth), [refMonth, transactions]);
+  const fixedToCreate = fixedBills.filter((bill) => includedFixed.has(bill.id) && !bill.transactionId);
+  const fixedExtra = fixedToCreate.reduce((sum, bill) => sum + Number(bill.amount || 0), 0);
+  const closingSummary = useMemo(() => ({
+    ...baseSummary,
+    expenses: baseSummary.expenses + fixedExtra,
+    result: baseSummary.result - fixedExtra,
+    fixedExpenses: baseSummary.fixedExpenses + fixedExtra,
+    committedRate: baseSummary.income > 0 ? ((baseSummary.expenses + fixedExtra) / baseSummary.income) * 100 : 0,
+    savingsRate: baseSummary.income > 0 ? ((baseSummary.result - fixedExtra) / baseSummary.income) * 100 : 0,
+    hasData: baseSummary.hasData || fixedExtra > 0,
+  }), [baseSummary, fixedExtra]);
+
+  const reserve = useMemo(() => calculateReserveMovement(goalMovements, refMonth), [goalMovements, refMonth]);
+  const reservedForPlans = Math.max(reserve.net, 0);
+  const insights = useMemo(() => buildInsights({
+    refMonth,
+    summary: closingSummary,
+    comparison: compareMonths(transactions, refMonth),
+    categoryTrends: buildCategoryTrends(transactions, refMonth),
+    spendingGoal: spendingGoal || null,
+    reservedForPlans,
+  }), [closingSummary, refMonth, reservedForPlans, spendingGoal, transactions]);
+
+  const toggleFixed = (billId: string) => {
+    setIncludedFixed((current) => {
+      const next = new Set(current);
+      if (next.has(billId)) next.delete(billId);
+      else next.add(billId);
+      return next;
+    });
+  };
+
+  const finish = async () => {
+    setFinishing(true);
+    try {
+      await finalizeFixedBillsForMonth(userId, refMonth, [...includedFixed]);
+      await syncCartaozinhoMonth(userId, refMonth);
+      window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId } }));
+      toast.success(`Fechamento de ${monthTitle(refMonth)} atualizado.`);
+      navigate("/financas");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Não foi possível concluir o fechamento."));
+    } finally {
+      setFinishing(false);
+    }
+  };
+
+  const renderTransactions = (items: FinanceTx[], emptyText: string) => items.length === 0 ? (
+    <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">{emptyText}</div>
+  ) : (
+    <div className="space-y-2">{items.map((transaction) => (
+      <div key={transaction.id} className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-card px-3 py-2.5">
+        <div className="min-w-0"><p className="truncate text-sm font-medium">{transactionLabel(transaction)}</p><p className="truncate text-[11px] text-muted-foreground">{transaction.categories?.name || "Sem categoria"}{transaction.external_id?.startsWith("meu_cartaozinho:") ? " · integração automática" : ""}</p></div>
+        <p className={cn("shrink-0 font-semibold tabular-nums", transaction.type === "income" ? "text-success" : "text-foreground")}>{formatCurrency(transaction.amount)}</p>
+      </div>
+    ))}</div>
+  );
+
+  if (loading) {
+    return <div className="mx-auto max-w-5xl space-y-4 px-4"><Skeleton className="h-24 rounded-2xl" /><Skeleton className="h-96 rounded-2xl" /></div>;
+  }
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-5 px-4 pb-10">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">Fechamento mensal</p><h1 className="mt-1 font-heading text-2xl font-bold">Organize o mês em poucos passos.</h1><p className="mt-1 text-sm text-muted-foreground">Revise o que entrou, o que saiu e o que será reservado.</p></div>
+        <MonthNavigator currentMonth={refMonth} onMonthChange={setRefMonth} />
+      </header>
+
+      <Card className="border-border/70 shadow-card"><CardContent className="p-3 sm:p-4"><div className="grid grid-cols-4 gap-1">{STEPS.map((item, index) => { const Icon = item.icon; const active = index === step; const done = index < step; return <button key={item.title} type="button" onClick={() => setStep(index)} className={cn("rounded-xl p-2 text-left transition sm:p-3", active ? "bg-primary text-primary-foreground" : done ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted")}><div className="flex items-center gap-2">{done ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}<span className="hidden text-xs font-semibold sm:inline">{item.title}</span></div><p className={cn("mt-1 hidden text-[10px] sm:block", active ? "text-primary-foreground/70" : "text-muted-foreground")}>{item.subtitle}</p></button>; })}</div><Progress value={((step + 1) / STEPS.length) * 100} className="mt-3 h-1" /></CardContent></Card>
+
+      {step === 0 && <Card className="border-border/70 shadow-card"><CardContent className="space-y-4 p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-heading text-lg font-bold">Quanto entrou em {monthTitle(refMonth)}</h2><p className="text-xs text-muted-foreground">O Cartãozinho aparece automaticamente como valor a receber.</p></div><Button size="sm" onClick={() => setManualOpen(true)}><Plus className="mr-1.5 h-4 w-4" /> Adicionar receita</Button></div>{renderTransactions(incomes, "Nenhuma receita registrada neste mês.")}<div className="flex items-center justify-between rounded-xl bg-success/10 p-3"><span className="text-sm font-medium text-success">Total de receitas</span><strong className="text-success">{formatCurrency(baseSummary.income)}</strong></div></CardContent></Card>}
+
+      {step === 1 && <div className="space-y-4"><Card className="border-border/70 shadow-card"><CardContent className="space-y-4 p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-heading text-lg font-bold">Faturas e outros gastos</h2><p className="text-xs text-muted-foreground">Adicione somente os totais que fazem sentido para sua organização.</p></div><div className="flex gap-2"><Button variant="outline" size="sm" onClick={() => setSmartOpen(true)}><Sparkles className="mr-1.5 h-4 w-4" /> Texto ou print</Button><Button size="sm" onClick={() => setManualOpen(true)}><Plus className="mr-1.5 h-4 w-4" /> Adicionar gasto</Button></div></div>{renderTransactions(expenses, "Nenhuma despesa variável registrada neste mês.")}</CardContent></Card>
+        <Card className="border-border/70 shadow-card"><CardContent className="space-y-4 p-5"><div><h2 className="font-heading font-bold">Despesas fixas</h2><p className="text-xs text-muted-foreground">Marque o que deve entrar neste mês. Desmarcar ignora apenas este fechamento.</p></div>{fixedBills.length === 0 ? <div className="rounded-xl border border-dashed p-6 text-center"><p className="text-sm text-muted-foreground">Nenhuma despesa fixa cadastrada.</p><Button variant="outline" size="sm" className="mt-3" onClick={() => navigate("/financas/recorrencias")}>Criar despesa fixa</Button></div> : <div className="space-y-2">{fixedBills.map((bill) => <label key={bill.id} className="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 p-3 transition hover:bg-muted/40"><Checkbox checked={includedFixed.has(bill.id)} onCheckedChange={() => toggleFixed(bill.id)} disabled={Boolean(bill.transactionId)} /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{bill.name}</p><p className="text-[11px] text-muted-foreground">Dia {bill.dueDate.slice(8, 10)}{bill.transactionId ? " · já incluída" : ""}</p></div><strong className="text-sm">{formatCurrency(bill.amount)}</strong></label>)}</div>}<div className="flex justify-between rounded-xl bg-muted/60 p-3 text-sm"><span>Fixos selecionados</span><strong>{formatCurrency(fixedBills.filter((bill) => includedFixed.has(bill.id)).reduce((sum, bill) => sum + bill.amount, 0))}</strong></div></CardContent></Card></div>}
+
+      {step === 2 && <Card className="border-border/70 shadow-card"><CardContent className="space-y-4 p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-heading text-lg font-bold">Seus planos</h2><p className="text-xs text-muted-foreground">Veja quanto já foi reservado e ajuste seus cofrinhos quando quiser.</p></div><Button onClick={() => navigate("/financas/cofrinhos")}><PiggyBank className="mr-1.5 h-4 w-4" /> Gerenciar planos</Button></div><div className="grid gap-3 sm:grid-cols-2"><div className="rounded-2xl bg-primary p-4 text-primary-foreground"><p className="text-[10px] uppercase tracking-[0.14em] text-primary-foreground/65">Reservado no mês</p><p className="mt-2 text-2xl font-bold">{formatCurrency(reservedForPlans)}</p><p className="mt-1 text-xs text-primary-foreground/70">Transferências para seus objetivos não contam como despesa.</p></div><div className="rounded-2xl border border-border/70 p-4"><p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Sobra antes dos planos</p><p className={cn("mt-2 text-2xl font-bold", closingSummary.result >= 0 ? "text-success" : "text-destructive")}>{formatCurrency(closingSummary.result)}</p><p className="mt-1 text-xs text-muted-foreground">Use esse valor como referência, sem obrigação de guardar tudo.</p></div></div>{goals.length === 0 ? <div className="rounded-xl border border-dashed p-6 text-center"><p className="text-sm text-muted-foreground">Você ainda não criou nenhum plano.</p><Button variant="outline" size="sm" className="mt-3" onClick={() => navigate("/financas/cofrinhos")}>Criar primeiro plano</Button></div> : <div className="space-y-2">{goals.slice(0, 4).map((goal) => { const progress = Number(goal.target_amount) > 0 ? Math.min((Number(goal.current_amount) / Number(goal.target_amount)) * 100, 100) : 0; return <div key={goal.id} className="rounded-xl border border-border/70 p-3"><div className="flex justify-between gap-3 text-sm"><span className="font-medium">{goal.name}</span><strong>{progress.toFixed(0)}%</strong></div><Progress value={progress} className="mt-2 h-2" /><p className="mt-2 text-[11px] text-muted-foreground">{formatCurrency(goal.current_amount)} de {formatCurrency(goal.target_amount)}</p></div>; })}</div>}</CardContent></Card>}
+
+      {step === 3 && <div className="space-y-4"><section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[
+        ["Receitas", closingSummary.income, "text-success"],
+        ["Despesas", closingSummary.expenses, "text-foreground"],
+        ["Resultado", closingSummary.result, closingSummary.result >= 0 ? "text-success" : "text-destructive"],
+        ["Para planos", reservedForPlans, "text-primary"],
+      ].map(([label, value, tone]) => <Card key={String(label)} className="border-border/70 shadow-card"><CardContent className="p-4"><p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p><p className={cn("mt-2 text-xl font-bold", String(tone))}>{formatCurrency(Number(value))}</p></CardContent></Card>)}</section><Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-card to-card shadow-card"><CardContent className="space-y-3 p-5"><div className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-primary" /><h2 className="font-heading font-bold">O que este mês mostra</h2></div>{insights.map((insight) => <div key={insight.id} className="rounded-xl border border-border/70 bg-card p-3 text-sm leading-relaxed">{insight.text}</div>)}<div className="grid gap-2 pt-2 text-xs sm:grid-cols-3"><div className="rounded-xl bg-muted/60 p-3"><span className="text-muted-foreground">Renda comprometida</span><p className="mt-1 font-bold">{closingSummary.committedRate.toFixed(0)}%</p></div><div className="rounded-xl bg-muted/60 p-3"><span className="text-muted-foreground">Taxa de economia</span><p className="mt-1 font-bold">{closingSummary.savingsRate.toFixed(0)}%</p></div><div className="rounded-xl bg-muted/60 p-3"><span className="text-muted-foreground">Meta de gastos</span><p className="mt-1 font-bold">{spendingGoal > 0 ? formatCurrency(spendingGoal) : "Não definida"}</p></div></div></CardContent></Card><Card className="border-success/20 bg-success/5"><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-6 w-6 text-success" /><div><h2 className="font-heading font-bold">Tudo pronto para concluir</h2><p className="text-sm text-muted-foreground">As contas fixas selecionadas serão incluídas sem duplicar valores existentes.</p></div></div><Button size="lg" onClick={finish} disabled={finishing}>{finishing ? <Loader2 className="h-5 w-5 animate-spin" /> : <>Concluir fechamento <Check className="ml-2 h-4 w-4" /></>}</Button></CardContent></Card></div>}
+
+      <div className="flex items-center justify-between gap-3"><Button variant="ghost" onClick={() => step === 0 ? navigate("/financas") : setStep((current) => current - 1)}><ArrowLeft className="mr-2 h-4 w-4" /> {step === 0 ? "Voltar" : "Etapa anterior"}</Button>{step < STEPS.length - 1 && <Button onClick={() => setStep((current) => current + 1)}>Continuar <ArrowRight className="ml-2 h-4 w-4" /></Button>}</div>
+
+      <AddTransactionDialog open={manualOpen} onOpenChange={setManualOpen} userId={userId} defaultType={step === 0 ? "income" : "expense"} defaultDate={`${refMonth}-01`} onSaved={load} />
+      <SmartAddDialog open={smartOpen} onOpenChange={setSmartOpen} userId={userId} />
+    </div>
+  );
+};
+
+export default MonthlyClosingPage;

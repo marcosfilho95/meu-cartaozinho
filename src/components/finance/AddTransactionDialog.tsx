@@ -26,19 +26,17 @@ import {
   Receipt,
   Wallet,
   Repeat,
-  Layers,
   Minus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
-import { formatCurrency } from "@/lib/constants";
 import { normalizeLabel } from "@/lib/financeShared";
 import type { FinanceTx } from "@/lib/financeShared";
 import { calculateAccountBalanceEffect } from "@/lib/financeOverview";
 
 type TxType = "income" | "expense";
 type PaymentMethod = "pix" | "boleto" | "credit" | "debit" | "cash";
-type TxMode = "single" | "installment" | "recurrence";
+type TxMode = "single" | "recurrence";
 type RecurrenceFreq = "weekly" | "monthly" | "yearly";
 
 interface AddTransactionDialogProps {
@@ -46,7 +44,10 @@ interface AddTransactionDialogProps {
   onOpenChange: (open: boolean) => void;
   userId: string;
   defaultType?: TxType;
+  defaultMode?: TxMode;
+  defaultDate?: string;
   editingTransaction?: FinanceTx | null;
+  onSaved?: () => void;
 }
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string; icon: React.ReactNode }[] = [
@@ -58,9 +59,8 @@ const PAYMENT_METHODS: { value: PaymentMethod; label: string; icon: React.ReactN
 ];
 
 const MODE_OPTIONS: { value: TxMode; label: string; icon: React.ReactNode }[] = [
-  { value: "single", label: "Única", icon: <Minus className="h-4 w-4" /> },
-  { value: "installment", label: "Parcelada", icon: <Layers className="h-4 w-4" /> },
-  { value: "recurrence", label: "Recorrente", icon: <Repeat className="h-4 w-4" /> },
+  { value: "single", label: "Variável", icon: <Minus className="h-4 w-4" /> },
+  { value: "recurrence", label: "Fixa", icon: <Repeat className="h-4 w-4" /> },
 ];
 
 const LAST_PAYMENT_KEY = "finance_last_payment_method";
@@ -101,7 +101,10 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
   onOpenChange,
   userId,
   defaultType = "expense",
+  defaultMode = "single",
+  defaultDate,
   editingTransaction = null,
+  onSaved,
 }) => {
   const queryClient = useQueryClient();
 
@@ -112,19 +115,25 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
   const [accountId, setAccountId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [mode, setMode] = useState<TxMode>("single");
-  const [installments, setInstallments] = useState("1");
   const [recurrenceFreq, setRecurrenceFreq] = useState<RecurrenceFreq>("monthly");
   const [recurrenceDuration, setRecurrenceDuration] = useState("0");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
-  const [transactionDate, setTransactionDate] = useState(() => toDateInput(new Date()));
-  const [status, setStatus] = useState<"pending" | "paid">("pending");
+  const [transactionDate, setTransactionDate] = useState(() => defaultDate || toDateInput(new Date()));
+  const [status, setStatus] = useState<"pending" | "paid">("paid");
   const [saving, setSaving] = useState(false);
 
   const [accounts, setAccounts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
 
   const isEditing = Boolean(editingTransaction);
+
+  useEffect(() => {
+    if (!open || editingTransaction) return;
+    setType(defaultType);
+    setMode(defaultMode);
+    setTransactionDate(defaultDate || toDateInput(new Date()));
+  }, [defaultDate, defaultMode, defaultType, editingTransaction, open]);
 
   useEffect(() => {
     if (!open || !editingTransaction) return;
@@ -173,12 +182,6 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
     });
   }, [categories, type]);
 
-  useEffect(() => {
-    if (type === "income" && mode === "installment") {
-      setMode("single");
-    }
-  }, [type, mode]);
-
   const filteredCategories = useMemo(
     () => categories.filter((c: any) => c.kind === type && !isGenericCardCategory(c.name)),
     [categories, type],
@@ -222,9 +225,13 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
   }, [accountId, accounts, paymentMethod]);
 
   const numAmount = parseFloat(amount.replace(",", ".")) || 0;
-  const installmentCount = Math.max(1, parseInt(installments, 10) || 1);
-  const perInstallment = mode === "installment" && numAmount > 0 ? numAmount : 0;
-  const projectedTotal = mode === "installment" && numAmount > 0 ? numAmount * installmentCount : 0;
+  const recurrenceEndDate = useMemo(() => {
+    const duration = Math.max(0, Number.parseInt(recurrenceDuration, 10) || 0);
+    if (!duration) return null;
+    const end = new Date(`${transactionDate}T12:00:00`);
+    end.setMonth(end.getMonth() + duration - 1);
+    return toDateInput(end);
+  }, [recurrenceDuration, transactionDate]);
 
   const handleSave = async () => {
     if (!numAmount || numAmount <= 0) {
@@ -264,6 +271,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
           type,
           amount: numAmount,
           transaction_date: transactionDate,
+          competence_month: transactionDate.slice(0, 7),
           due_date: transactionDate,
           status,
           source: description.trim(),
@@ -352,55 +360,35 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
             }
           }
         }
-      } else if (mode === "installment" && type === "expense") {
-        const rows = [];
-        for (let i = 0; i < installmentCount; i += 1) {
-          const amountForRow = Math.round(numAmount * 100) / 100;
-
-          const due = new Date(`${transactionDate}T12:00:00`);
-          due.setMonth(due.getMonth() + i);
-          const dueStr = toDateInput(due);
-
-          rows.push({
-            user_id: userId,
-            account_id: accountId,
-            category_id: resolvedCategoryId,
-            type,
-            amount: amountForRow,
-            transaction_date: dueStr,
-            due_date: dueStr,
-            status: i === 0 ? status : "pending",
-            source: `${description.trim()} (${i + 1}/${installmentCount})`,
-            payment_method: paymentMethod,
-            notes: null,
-          });
-        }
-        const { error } = await supabase.from("transactions").insert(rows);
-        if (error) throw error;
       } else if (mode === "recurrence") {
-        const { error: recError } = await supabase.from("recurrences").insert({
-          user_id: userId,
-          frequency: recurrenceFreq,
-          auto_create: true,
-          is_active: true,
-          next_date: transactionDate,
-          name: description.trim(),
-          amount: numAmount,
-          kind: type,
-          account_id: accountId,
-          category_id: resolvedCategoryId,
-          day_of_month: Number(transactionDate.slice(8, 10)) || null,
-          start_date: transactionDate,
-          template_payload: {
+        const { data: recurrence, error: recError } = await supabase
+          .from("recurrences")
+          .insert({
+            user_id: userId,
+            frequency: recurrenceFreq,
+            auto_create: true,
+            is_active: true,
+            next_date: transactionDate,
+            name: description.trim(),
+            amount: numAmount,
+            kind: type,
             account_id: accountId,
             category_id: resolvedCategoryId,
-            type,
-            amount: numAmount,
-            source: description.trim(),
-            payment_method: paymentMethod,
-            due_date: transactionDate,
-          },
-        });
+            day_of_month: Number(transactionDate.slice(8, 10)) || null,
+            start_date: transactionDate,
+            end_date: recurrenceEndDate,
+            template_payload: {
+              account_id: accountId,
+              category_id: resolvedCategoryId,
+              type,
+              amount: numAmount,
+              source: description.trim(),
+              payment_method: paymentMethod,
+              due_date: transactionDate,
+            },
+          })
+          .select("id")
+          .single();
         if (recError) throw recError;
 
         const { error: txError } = await supabase.from("transactions").insert({
@@ -410,8 +398,10 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
           type,
           amount: numAmount,
           transaction_date: transactionDate,
+          competence_month: transactionDate.slice(0, 7),
           due_date: transactionDate,
           status,
+          recurrence_id: recurrence.id,
           source: description.trim(),
           payment_method: paymentMethod,
           notes: null,
@@ -425,6 +415,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
           type,
           amount: numAmount,
           transaction_date: transactionDate,
+          competence_month: transactionDate.slice(0, 7),
           due_date: transactionDate,
           status,
           source: description.trim(),
@@ -435,7 +426,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
       }
 
       const account = accounts.find((a: any) => a.id === accountId);
-      if (account && status === "paid") {
+      if (!editingTransaction && account && status === "paid") {
         const balanceChange = type === "income" ? numAmount : -numAmount;
         await supabase
           .from("accounts")
@@ -446,8 +437,6 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
       toast.success(
         editingTransaction
           ? "Transação atualizada!"
-          : mode === "installment"
-          ? `${installmentCount} parcelas registradas!`
           : mode === "recurrence"
             ? "Transação recorrente criada!"
             : "Transação registrada!",
@@ -461,6 +450,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
       } catch {
         // ignore browser event failures
       }
+      onSaved?.();
       onOpenChange(false);
       resetForm();
     } catch (err: any) {
@@ -476,17 +466,16 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
     setCategoryId("");
     setAccountId("");
     setMode("single");
-    setInstallments("1");
     setRecurrenceDuration("0");
-    setStatus("pending");
-    setTransactionDate(toDateInput(new Date()));
+    setStatus("paid");
+    setTransactionDate(defaultDate || toDateInput(new Date()));
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg overflow-hidden rounded-2xl p-0">
         <DialogHeader className="px-5 pb-2 pt-5">
-          <DialogTitle className="font-heading text-lg">{isEditing ? "Editar transação" : "Nova transação"}</DialogTitle>
+          <DialogTitle className="font-heading text-lg">{isEditing ? "Editar valor" : "Adicionar valor"}</DialogTitle>
         </DialogHeader>
 
         <div className="max-h-[75vh] space-y-4 overflow-y-auto px-5 pb-5">
@@ -605,10 +594,8 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
             <Label className="mb-2 block text-xs text-muted-foreground">
               {type === "income" ? "Tipo de receita" : "Tipo de gasto"}
             </Label>
-            <div className={cn("grid gap-1.5", type === "income" ? "grid-cols-2" : "grid-cols-3")}>
-              {MODE_OPTIONS
-                .filter((m) => type === "expense" || m.value !== "installment")
-                .map((m) => (
+            <div className="grid grid-cols-2 gap-1.5">
+              {MODE_OPTIONS.map((m) => (
                   <button
                     key={m.value}
                     type="button"
@@ -621,43 +608,11 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
                     )}
                   >
                     {m.icon}
-                    {m.value === "single" && type === "income"
-                      ? "Variável"
-                      : m.value === "recurrence" && type === "income"
-                        ? "Fixo/Recorrente"
-                        : m.label}
+                    {m.value === "recurrence" && type === "income" ? "Fixa" : m.label}
                   </button>
                 ))}
             </div>
           </div>}
-
-          {mode === "installment" && type === "expense" && (
-            <div className="space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
-              <div>
-                <Label className="text-xs text-muted-foreground">Número de parcelas</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  max="48"
-                  value={installments}
-                  onChange={(e) => setInstallments(e.target.value)}
-                  className="mt-1 h-10"
-                />
-              </div>
-              {numAmount > 0 && (
-                <div className="space-y-1 rounded-lg bg-background/80 px-3 py-2 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">{installmentCount}x de</span>
-                    <span className="font-bold text-primary">{formatCurrency(perInstallment)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Total projetado</span>
-                    <span className="font-semibold text-foreground">{formatCurrency(projectedTotal)}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
 
           {mode === "recurrence" && (
             <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-3">
@@ -694,14 +649,14 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs text-muted-foreground">{isEditing ? "Data do lançamento" : "Vencimento"}</Label>
+              <Label className="text-xs text-muted-foreground">Data de referência</Label>
               <Input
                 type="date"
                 value={transactionDate}
                 onChange={(e) => setTransactionDate(e.target.value)}
                 className="mt-1"
               />
-              <p className="mt-1 text-[10px] text-muted-foreground">Use a data de vencimento da conta/fatura.</p>
+              <p className="mt-1 text-[10px] text-muted-foreground">Use uma data dentro do mês que está organizando.</p>
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">Situação</Label>
@@ -710,11 +665,11 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pending">Só lançar (pendente)</SelectItem>
-                  <SelectItem value="paid">Já pagou</SelectItem>
+                  <SelectItem value="paid">Realizado</SelectItem>
+                  <SelectItem value="pending">Previsto</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="mt-1 text-[10px] text-muted-foreground">Se ainda não foi pago, deixe como pendente.</p>
+              <p className="mt-1 text-[10px] text-muted-foreground">“Previsto” entra apenas no saldo projetado.</p>
             </div>
           </div>
 
@@ -727,10 +682,8 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
               <Loader2 className="h-5 w-5 animate-spin" />
             ) : isEditing ? (
               "Salvar alterações"
-            ) : mode === "installment" ? (
-              `Salvar ${installmentCount} parcelas`
             ) : mode === "recurrence" ? (
-              "Criar recorrência"
+              "Salvar como valor fixo"
             ) : (
               "Salvar"
             )}

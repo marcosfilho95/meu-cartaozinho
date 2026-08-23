@@ -2,7 +2,7 @@
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { BrowserRouter, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { applyAccentTheme, getStoredAccentTheme } from "@/lib/accentTheme";
@@ -26,6 +26,7 @@ import RecurrencesPage from "./pages/finance/RecurrencesPage";
 import MembersPage from "./pages/finance/MembersPage";
 import ReportsPage from "./pages/finance/ReportsPage";
 import CofrinhosPage from "./pages/finance/CofrinhosPage";
+import MonthlyClosingPage from "./pages/finance/MonthlyClosingPage";
 import { FinanceLayout } from "./components/finance/FinanceLayout";
 
 const queryClient = new QueryClient();
@@ -115,7 +116,7 @@ const AppRoutes = () => {
         <Route path="/perfil" element={<Profile />} />
         <Route path="/financas" element={<FinanceLayout userId={session?.user?.id} />}>
           <Route index element={<FinanceDashboard userId={session?.user?.id} />} />
-          <Route path="fechamento" element={<Navigate to="/financas" replace />} />
+          <Route path="fechamento" element={<MonthlyClosingPage userId={session?.user?.id} />} />
           <Route path="contas" element={<AccountsPage userId={session?.user?.id} />} />
           <Route path="categorias" element={<CategoriesPage userId={session?.user?.id} />} />
           <Route path="transacoes" element={<TransactionsPage userId={session?.user?.id} />} />

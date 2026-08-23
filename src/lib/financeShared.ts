@@ -6,6 +6,7 @@ export type FinanceTx = {
   type: "income" | "expense" | "transfer";
   status: "pending" | "paid" | "overdue" | "canceled";
   transaction_date: string;
+  competence_month?: string | null;
   due_date?: string | null;
   account_id: string;
   category_id: string | null;
@@ -20,6 +21,8 @@ export type FinanceTx = {
 
 export const BANK_COLORS: Record<string, string> = {
   nubank: "#8A05BE",
+  amazonprime: "#FF6500",
+  "amazon prime": "#FF6500",
   "mercado pago": "#009EE3",
   mercadopago: "#009EE3",
   picpay: "#21C25E",
@@ -199,7 +202,7 @@ export const getFinanceTransactionsWindowStart = (monthsBack: number) => {
 };
 
 const FINANCE_TRANSACTION_SELECT =
-  "id, amount, type, status, source, external_id, recurrence_id, notes, payment_method, transaction_date, due_date, account_id, category_id, categories(id, name, color, parent_id), accounts:accounts!transactions_account_id_fkey(id, name, type, due_day, current_balance)";
+  "id, amount, type, status, source, external_id, recurrence_id, notes, payment_method, transaction_date, competence_month, due_date, account_id, category_id, categories(id, name, color, parent_id), accounts:accounts!transactions_account_id_fkey(id, name, type, due_day, current_balance)";
 
 const removeDisconnectedCardTransactions = (transactions: FinanceTx[]) =>
   transactions.filter((tx) => !String(tx.notes || "").startsWith("mc_sync_installment:"));

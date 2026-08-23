@@ -54,7 +54,7 @@ export const calculateAccountBalanceEffect = (transaction: Pick<FinanceTx, "amou
 };
 
 export const getTransactionReferenceMonth = (transaction: FinanceTx) =>
-  transaction.transaction_date.slice(0, 7);
+  transaction.competence_month || transaction.transaction_date.slice(0, 7);
 
 export const calculateNetWorth = (
   accounts: NetWorthAccount[],
