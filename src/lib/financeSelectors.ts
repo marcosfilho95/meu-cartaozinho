@@ -4,19 +4,22 @@ import {
   getMonthLabel,
   resolveBankCategoryColor,
 } from "@/lib/financeShared";
+import { getTransactionCompetenceMonth, shouldIncludeInRealizedCalculations } from "@/lib/financeRealization";
 
 export type MonthTrend = "up" | "down" | "stable";
 
 export const trendFromDelta = (delta: number): MonthTrend => (delta > 0.001 ? "up" : delta < -0.001 ? "down" : "stable");
 
+const isCountable = (tx: FinanceTx) => tx.status !== "canceled" && shouldIncludeInRealizedCalculations(tx);
+
 export const getMonthlyIncome = (transactions: FinanceTx[]) =>
   transactions
-    .filter((tx) => tx.type === "income" && tx.status !== "canceled")
+    .filter((tx) => tx.type === "income" && isCountable(tx))
     .reduce((sum, tx) => sum + Number(tx.amount), 0);
 
 export const getMonthlyExpenses = (transactions: FinanceTx[]) =>
   transactions
-    .filter((tx) => tx.type === "expense" && tx.status !== "canceled")
+    .filter((tx) => tx.type === "expense" && isCountable(tx))
     .reduce((sum, tx) => sum + Number(tx.amount), 0);
 
 export const getPendingTransactions = (transactions: FinanceTx[]) =>
@@ -25,7 +28,7 @@ export const getPendingTransactions = (transactions: FinanceTx[]) =>
     .sort((a, b) => a.transaction_date.localeCompare(b.transaction_date));
 
 export const getDashboardSummary = (transactions: FinanceTx[]) => {
-  const monthTx = transactions.filter((tx) => tx.status !== "canceled");
+  const monthTx = transactions.filter(isCountable);
   const totalIncome = monthTx.filter((tx) => tx.type === "income").reduce((s, tx) => s + Number(tx.amount), 0);
   const totalExpense = monthTx.filter((tx) => tx.type === "expense").reduce((s, tx) => s + Number(tx.amount), 0);
   const paidExpense = monthTx.filter((tx) => tx.type === "expense" && tx.status === "paid").reduce((s, tx) => s + Number(tx.amount), 0);
@@ -46,7 +49,7 @@ export const getExpensesByCategory = (transactions: FinanceTx[]) => {
   let total = 0;
 
   transactions
-    .filter((tx) => tx.type === "expense" && tx.status !== "canceled")
+    .filter((tx) => tx.type === "expense" && isCountable(tx))
     .forEach((tx, index) => {
       const id = tx.category_id || "uncategorized";
       const label = tx.categories?.name || "Sem categoria";
@@ -75,8 +78,8 @@ export const getExpenseHistory = (transactions: FinanceTx[], evolutionKeys: stri
   });
 
   transactions.forEach((tx, index) => {
-    if (tx.type !== "expense" || tx.status === "canceled") return;
-    const key = tx.transaction_date.slice(0, 7);
+    if (tx.type !== "expense" || !isCountable(tx)) return;
+    const key = getTransactionCompetenceMonth(tx);
     if (!monthMap[key]) return;
 
     const categoryId = tx.category_id || "uncategorized";
@@ -106,4 +109,3 @@ export const getExpenseHistory = (transactions: FinanceTx[], evolutionKeys: stri
 
   return { categories: orderedCategories, stacked };
 };
-

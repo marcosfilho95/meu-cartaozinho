@@ -27,6 +27,7 @@ import {
   YAxis,
 } from "recharts";
 import { toast } from "sonner";
+import { shouldIncludeInRealizedCalculations } from "@/lib/financeRealization";
 
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
 import { GoalsSection } from "@/components/finance/GoalsSection";
@@ -168,7 +169,11 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const cardSpending = useMemo(() => {
     const grouped = new Map<string, { name: string; value: number; color: string }>();
     transactions.forEach((transaction) => {
-      if (transaction.type !== "expense" || transaction.status === "canceled") return;
+      if (
+        transaction.type !== "expense" ||
+        transaction.status === "canceled" ||
+        !shouldIncludeInRealizedCalculations(transaction)
+      ) return;
       if (getTransactionReferenceMonth(transaction) !== referenceMonth) return;
       const categoryName = transaction.categories?.name || "";
       const isCardAccount = transaction.accounts?.type === "credit_card" || transaction.payment_method === "credit";

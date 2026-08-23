@@ -1,5 +1,6 @@
 import type { FinanceTx } from "@/lib/financeShared";
 import { addMonthsToKey, monthKey } from "@/lib/financeShared";
+import { getTransactionCompetenceMonth, shouldIncludeInRealizedCalculations } from "@/lib/financeRealization";
 
 export type PlanningGoal = {
   id?: string;
@@ -50,7 +51,10 @@ const normalize = (value: string) =>
 export const getLastClosedMonthKey = (today = new Date()) => addMonthsToKey(monthKey(today), -1);
 
 export const getTransactionsForMonth = (transactions: FinanceTx[], refMonth: string) =>
-  transactions.filter((transaction) => transaction.transaction_date.slice(0, 7) === refMonth);
+  transactions.filter((transaction) =>
+    getTransactionCompetenceMonth(transaction) === refMonth &&
+    shouldIncludeInRealizedCalculations(transaction),
+  );
 
 export const getSavingsRate = (income: number, expenses: number) =>
   income > 0 ? ((income - expenses) / income) * 100 : 0;
@@ -115,7 +119,11 @@ export const buildCategoryMovements = (
   const grouped = new Map<string, Omit<CategoryMovement, "delta" | "percentChange" | "share">>();
 
   const add = (transaction: FinanceTx, field: "current" | "previous") => {
-    if (transaction.type !== "expense" || transaction.status === "canceled") return;
+    if (
+      transaction.type !== "expense" ||
+      transaction.status === "canceled" ||
+      !shouldIncludeInRealizedCalculations(transaction)
+    ) return;
     const id = transaction.category_id || "uncategorized";
     const existing = grouped.get(id) || {
       id,

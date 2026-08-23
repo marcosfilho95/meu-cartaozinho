@@ -1,6 +1,7 @@
 import type { FinanceTx } from "@/lib/financeShared";
 import { BANK_COLORS, CATEGORY_COLORS, getMonthLabel, normalizeLabel } from "@/lib/financeShared";
 import { calculateReserveMovement, getTransactionReferenceMonth, type GoalMovement } from "@/lib/financeOverview";
+import { shouldIncludeInRealizedCalculations } from "@/lib/financeRealization";
 
 export type MonthPoint = {
   key: string;
@@ -32,7 +33,7 @@ export type SavingsTrend = {
 };
 
 const isCountable = (tx: FinanceTx) =>
-  tx.status !== "canceled" && tx.type !== "transfer";
+  tx.status !== "canceled" && tx.type !== "transfer" && shouldIncludeInRealizedCalculations(tx);
 
 export const resolveAccountColor = (name: string, index: number) => {
   const normalized = normalizeLabel(name);

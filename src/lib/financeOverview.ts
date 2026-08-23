@@ -1,4 +1,5 @@
 import type { FinanceTx } from "@/lib/financeShared";
+import { getTransactionCompetenceMonth, shouldIncludeInRealizedCalculations } from "@/lib/financeRealization";
 
 export type NetWorthAccount = {
   type: string;
@@ -46,15 +47,19 @@ const LIABILITY_TYPES = new Set(["credit_card", "loan"]);
 const amount = (value: number | null | undefined) => Number(value) || 0;
 
 /** Efeito de um lançamento no saldo real da conta. Pendências e transferências não alteram o saldo aqui. */
-export const calculateAccountBalanceEffect = (transaction: Pick<FinanceTx, "amount" | "type" | "status">) => {
+export const calculateAccountBalanceEffect = (
+  transaction: Pick<FinanceTx, "amount" | "type" | "status"> &
+    Partial<Pick<FinanceTx, "recurrence_id" | "competence_month" | "transaction_date">>,
+) => {
   if (transaction.status !== "paid") return 0;
+  if (!shouldIncludeInRealizedCalculations(transaction)) return 0;
   if (transaction.type === "income") return amount(transaction.amount);
   if (transaction.type === "expense") return -amount(transaction.amount);
   return 0;
 };
 
 export const getTransactionReferenceMonth = (transaction: FinanceTx) =>
-  transaction.competence_month || transaction.transaction_date.slice(0, 7);
+  getTransactionCompetenceMonth(transaction);
 
 export const calculateNetWorth = (
   accounts: NetWorthAccount[],
@@ -92,6 +97,7 @@ export const calculateMonthlyResult = (
     (transaction) =>
       transaction.status !== "canceled" &&
       transaction.type !== "transfer" &&
+      shouldIncludeInRealizedCalculations(transaction) &&
       getTransactionReferenceMonth(transaction) === refMonth,
   );
 

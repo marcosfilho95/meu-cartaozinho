@@ -119,23 +119,19 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
         .eq("id", tx.id);
       if (error) throw error;
 
-      // Update account balance
+      // Update account balance (recorrências futuras realizadas ainda não produzem efeito).
       if (tx.accounts) {
         const currentBalance = Number(tx.accounts.current_balance || 0);
-        const amount = Number(tx.amount);
-        let balanceChange = 0;
+        const previousEffect = calculateAccountBalanceEffect(tx);
+        const nextEffect = calculateAccountBalanceEffect({ ...tx, status: newStatus });
+        const balanceChange = nextEffect - previousEffect;
         
-        if (newStatus === "paid") {
-          balanceChange = tx.type === "income" ? amount : -amount;
-        } else {
-          // Reverting: undo the balance change
-          balanceChange = tx.type === "income" ? -amount : amount;
+        if (Math.abs(balanceChange) > 0.001) {
+          await supabase
+            .from("accounts")
+            .update({ current_balance: currentBalance + balanceChange })
+            .eq("id", tx.account_id);
         }
-        
-        await supabase
-          .from("accounts")
-          .update({ current_balance: currentBalance + balanceChange })
-          .eq("id", tx.account_id);
       }
 
       toast.success(newStatus === "paid" ? "✅ Marcado como pago!" : "Marcado como pendente");

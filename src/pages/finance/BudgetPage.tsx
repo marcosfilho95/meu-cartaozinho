@@ -15,6 +15,7 @@ import {
   isGenericCardCategory,
 } from "@/lib/financeShared";
 import { ensureDefaultCategories } from "@/lib/financeCategoryDefaults";
+import { shouldIncludeInRealizedCalculations } from "@/lib/financeRealization";
 import {
   getBudgetCoverage,
   getCategoryCoverage,
@@ -168,7 +169,7 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
       const expMap: Record<string, number> = {};
       let income = 0;
       txsAll.forEach((tx) => {
-        if (tx.status === "canceled") return;
+        if (tx.status === "canceled" || !shouldIncludeInRealizedCalculations(tx)) return;
         if (tx.type === "income") {
           income += Number(tx.amount);
           return;

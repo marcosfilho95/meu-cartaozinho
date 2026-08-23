@@ -261,7 +261,14 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
       if (editingTransaction) {
         const oldAmount = Number(editingTransaction.amount);
         const oldEffect = calculateAccountBalanceEffect(editingTransaction);
-        const newEffect = calculateAccountBalanceEffect({ amount: numAmount, type, status });
+        const newEffect = calculateAccountBalanceEffect({
+          amount: numAmount,
+          type,
+          status,
+          transaction_date: transactionDate,
+          competence_month: transactionDate.slice(0, 7),
+          recurrence_id: editingTransaction.recurrence_id,
+        });
         const oldAccount = accounts.find((account: any) => account.id === editingTransaction.account_id);
         const newAccount = accounts.find((account: any) => account.id === accountId);
 
@@ -427,11 +434,20 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
 
       const account = accounts.find((a: any) => a.id === accountId);
       if (!editingTransaction && account && status === "paid") {
-        const balanceChange = type === "income" ? numAmount : -numAmount;
-        await supabase
-          .from("accounts")
-          .update({ current_balance: (account.current_balance || 0) + balanceChange })
-          .eq("id", accountId);
+        const balanceChange = calculateAccountBalanceEffect({
+          amount: numAmount,
+          type,
+          status,
+          transaction_date: transactionDate,
+          competence_month: transactionDate.slice(0, 7),
+          recurrence_id: mode === "recurrence" ? "new-recurrence" : null,
+        });
+        if (Math.abs(balanceChange) > 0.001) {
+          await supabase
+            .from("accounts")
+            .update({ current_balance: (account.current_balance || 0) + balanceChange })
+            .eq("id", accountId);
+        }
       }
 
       toast.success(

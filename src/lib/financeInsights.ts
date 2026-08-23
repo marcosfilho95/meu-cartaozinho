@@ -8,6 +8,7 @@
 import type { FinanceTx } from "@/lib/financeShared";
 import { addMonthsToKey, getMonthLabel } from "@/lib/financeShared";
 import { getTransactionReferenceMonth } from "@/lib/financeOverview";
+import { shouldIncludeInRealizedCalculations } from "@/lib/financeRealization";
 
 export const toCents = (value: number | string | null | undefined) =>
   Math.round((Number(value) || 0) * 100);
@@ -38,7 +39,8 @@ export const isFixedExpense = (tx: FinanceTx) => {
   return FIXED_CATEGORY_HINTS.some((hint) => category.includes(hint));
 };
 
-const countable = (tx: FinanceTx) => tx.status !== "canceled" && tx.type !== "transfer";
+const countable = (tx: FinanceTx) =>
+  tx.status !== "canceled" && tx.type !== "transfer" && shouldIncludeInRealizedCalculations(tx);
 
 export type MonthSummary = {
   month: string;

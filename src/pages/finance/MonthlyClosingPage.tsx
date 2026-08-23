@@ -39,6 +39,7 @@ import { buildCategoryTrends, buildInsights, compareMonths, monthTitle, summariz
 import { calculateReserveMovement, type GoalMovement } from "@/lib/financeOverview";
 import { fetchFinanceTransactions, monthKey, type FinanceTx } from "@/lib/financeShared";
 import { getErrorMessage, untypedSupabase } from "@/lib/supabaseUntyped";
+import { getTransactionCompetenceMonth, shouldIncludeInRealizedCalculations } from "@/lib/financeRealization";
 import { cn } from "@/lib/utils";
 
 interface MonthlyClosingPageProps {
@@ -124,7 +125,9 @@ const MonthlyClosingPage: React.FC<MonthlyClosingPageProps> = ({ userId }) => {
   }, [load]);
 
   const monthTransactions = useMemo(() => transactions.filter((transaction) =>
-    (transaction.competence_month || transaction.transaction_date.slice(0, 7)) === refMonth && transaction.status !== "canceled",
+    getTransactionCompetenceMonth(transaction) === refMonth &&
+    transaction.status !== "canceled" &&
+    shouldIncludeInRealizedCalculations(transaction),
   ), [refMonth, transactions]);
   const incomes = monthTransactions.filter((transaction) => transaction.type === "income");
   const expenses = monthTransactions.filter((transaction) => transaction.type === "expense");

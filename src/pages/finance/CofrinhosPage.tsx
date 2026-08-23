@@ -8,6 +8,7 @@ import { GoalsSection } from "@/components/finance/GoalsSection";
 import { fetchFinanceTransactions, monthKey } from "@/lib/financeShared";
 import { getSavingsPlan, getTransactionsForMonth, type PlanningGoal } from "@/lib/financePlanning";
 import { calculateReserveMovement, type GoalMovement } from "@/lib/financeOverview";
+import { shouldIncludeInRealizedCalculations } from "@/lib/financeRealization";
 
 interface CofrinhosPageProps {
   userId: string;
@@ -53,10 +54,10 @@ const CofrinhosPage: React.FC<CofrinhosPageProps> = ({ userId }) => {
 
       const monthTransactions = getTransactionsForMonth(transactions, refMonth);
       const income = monthTransactions
-        .filter((tx) => tx.type === "income" && tx.status !== "canceled")
+        .filter((tx) => tx.type === "income" && tx.status !== "canceled" && shouldIncludeInRealizedCalculations(tx))
         .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
       const expenses = monthTransactions
-        .filter((tx) => tx.type === "expense" && tx.status !== "canceled")
+        .filter((tx) => tx.type === "expense" && tx.status !== "canceled" && shouldIncludeInRealizedCalculations(tx))
         .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
       const plan = getSavingsPlan({ income, expenses, goals: loadedGoals, refMonth });
       setSurplus(plan.positiveSurplus);
