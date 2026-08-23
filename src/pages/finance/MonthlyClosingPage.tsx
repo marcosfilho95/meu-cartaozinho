@@ -12,6 +12,7 @@ import {
   ReceiptText,
   Sparkles,
   Target,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -36,7 +37,7 @@ import { syncCartaozinhoIncomeMonth } from "@/lib/finance/cartaozinhoSync";
 import { ensureDefaultCategories } from "@/lib/financeCategoryDefaults";
 import { ensureDefaultAccounts } from "@/lib/financeDefaults";
 import { buildCategoryTrends, buildInsights, compareMonths, monthTitle, summarizeMonth } from "@/lib/financeInsights";
-import { calculateReserveMovement, type GoalMovement } from "@/lib/financeOverview";
+import { calculateAccountBalanceEffect, calculateReserveMovement, type GoalMovement } from "@/lib/financeOverview";
 import { fetchFinanceTransactions, monthKey, type FinanceTx } from "@/lib/financeShared";
 import { getErrorMessage, untypedSupabase } from "@/lib/supabaseUntyped";
 import { getTransactionCompetenceMonth, shouldIncludeInRealizedCalculations } from "@/lib/financeRealization";
@@ -81,6 +82,7 @@ const MonthlyClosingPage: React.FC<MonthlyClosingPageProps> = ({ userId }) => {
   const [spendingGoal, setSpendingGoal] = useState(0);
   const [manualOpen, setManualOpen] = useState(false);
   const [smartOpen, setSmartOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -164,6 +166,59 @@ const MonthlyClosingPage: React.FC<MonthlyClosingPageProps> = ({ userId }) => {
     });
   };
 
+  const removeTransaction = async (transaction: FinanceTx) => {
+    if (transaction.external_id?.startsWith("meu_cartaozinho:")) {
+      toast.info("Essa receita é atualizada automaticamente pelo Meu Cartãozinho.");
+      return;
+    }
+    if (!window.confirm(`Excluir “${transactionLabel(transaction)}” de ${monthTitle(refMonth)}?`)) return;
+
+    setDeletingId(transaction.id);
+    try {
+      const balanceEffect = calculateAccountBalanceEffect(transaction);
+      let account: { id: string; current_balance: number | null } | null = null;
+      if (Math.abs(balanceEffect) > 0.001 && transaction.account_id) {
+        const { data, error } = await supabase
+          .from("accounts")
+          .select("id, current_balance")
+          .eq("id", transaction.account_id)
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (error) throw error;
+        if (!data) throw new Error("Conta do lançamento não encontrada.");
+        account = data;
+      }
+
+      const deletedAt = new Date().toISOString();
+      const { error: deleteError } = await supabase
+        .from("transactions")
+        .update({ deleted_at: deletedAt })
+        .eq("id", transaction.id)
+        .eq("user_id", userId);
+      if (deleteError) throw deleteError;
+
+      if (account && Math.abs(balanceEffect) > 0.001) {
+        const { error: balanceError } = await supabase
+          .from("accounts")
+          .update({ current_balance: Number(account.current_balance || 0) - balanceEffect })
+          .eq("id", account.id)
+          .eq("user_id", userId);
+        if (balanceError) {
+          await supabase.from("transactions").update({ deleted_at: null }).eq("id", transaction.id).eq("user_id", userId);
+          throw balanceError;
+        }
+      }
+
+      setTransactions((current) => current.filter((item) => item.id !== transaction.id));
+      window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId } }));
+      toast.success("Lançamento removido.");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Não foi possível remover o lançamento."));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const finish = async () => {
     setFinishing(true);
     try {
@@ -185,7 +240,23 @@ const MonthlyClosingPage: React.FC<MonthlyClosingPageProps> = ({ userId }) => {
     <div className="space-y-2">{items.map((transaction) => (
       <div key={transaction.id} className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-card px-3 py-2.5">
         <div className="min-w-0"><p className="truncate text-sm font-medium">{transactionLabel(transaction)}</p><p className="truncate text-[11px] text-muted-foreground">{transaction.categories?.name || "Sem categoria"}{transaction.external_id?.startsWith("meu_cartaozinho:") ? " · integração automática" : ""}</p></div>
-        <p className={cn("shrink-0 font-semibold tabular-nums", transaction.type === "income" ? "text-success" : "text-foreground")}>{formatCurrency(transaction.amount)}</p>
+        <div className="flex shrink-0 items-center gap-2">
+          <p className={cn("font-semibold tabular-nums", transaction.type === "income" ? "text-success" : "text-foreground")}>{formatCurrency(transaction.amount)}</p>
+          {!transaction.external_id?.startsWith("meu_cartaozinho:") && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              title={`Excluir ${transactionLabel(transaction)}`}
+              aria-label={`Excluir ${transactionLabel(transaction)}`}
+              disabled={deletingId === transaction.id}
+              onClick={() => void removeTransaction(transaction)}
+            >
+              {deletingId === transaction.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+            </Button>
+          )}
+        </div>
       </div>
     ))}</div>
   );
