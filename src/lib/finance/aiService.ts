@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { VisionBatchResult } from "./imports/vision";
+import type { SmartParsedTransaction } from "./smartInputParser";
 
 /**
  * Camada única de acesso à IA financeira.
@@ -32,8 +33,14 @@ export type AiClassifyResult = {
   accountName?: string | null;
 };
 
+export type FinanceAiErrorCode = "rate_limit" | "credits" | "network" | "empty_response" | "service";
+
 export class FinanceAiError extends Error {
-  constructor(message: string, readonly retryable = true) {
+  constructor(
+    message: string,
+    readonly retryable = true,
+    readonly code: FinanceAiErrorCode = "service",
+  ) {
     super(message);
     this.name = "FinanceAiError";
   }
@@ -55,9 +62,10 @@ const normalizeInvokeError = async (error: unknown, data: unknown) => {
   const raw = responseDetail ||
     (typeof data === "object" && data && "error" in data ? String((data as { error?: unknown }).error ?? "") : "") ||
     (error instanceof Error ? error.message : "");
-  if (/429|rate/i.test(raw)) return new FinanceAiError("Muitas requisições à IA. Tente novamente em instantes.");
-  if (/402|credit|saldo/i.test(raw)) return new FinanceAiError("Créditos de IA esgotados no workspace.", false);
-  return new FinanceAiError(raw || "Serviço de IA indisponível no momento.");
+  if (/429|rate/i.test(raw)) return new FinanceAiError("Muitas requisições à IA. Tente novamente em instantes.", true, "rate_limit");
+  if (/402|credit|saldo/i.test(raw)) return new FinanceAiError("Créditos de IA esgotados no workspace.", false, "credits");
+  if (/fetch|network|rede|load failed/i.test(raw)) return new FinanceAiError("Não foi possível acessar o serviço de IA.", true, "network");
+  return new FinanceAiError(raw || "Serviço de IA indisponível no momento.", true, "service");
 };
 
 export const classifyTransactionsWithAi = async (
@@ -84,10 +92,10 @@ export type SmartParsePayload = {
   [key: string]: unknown;
 };
 
-export const parseSmartInputWithAi = async (payload: SmartParsePayload) => {
+export const parseSmartInputWithAi = async (payload: SmartParsePayload): Promise<SmartParsedTransaction[]> => {
   const { data, error } = await supabase.functions.invoke("smart-parse", { body: payload });
   if (error || (data as { error?: unknown } | null)?.error) throw await normalizeInvokeError(error, data);
-  return ((data as { transactions?: unknown[] } | null)?.transactions || []) as Array<Record<string, unknown>>;
+  return ((data as { transactions?: SmartParsedTransaction[] } | null)?.transactions || []);
 };
 
 export const extractFinancialDocumentWithVision = async (payload: {

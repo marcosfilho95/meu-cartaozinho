@@ -33,6 +33,13 @@ import {
   type SmartCategoryOption,
 } from "@/lib/financeSmartClassification";
 import { parseSmartInputWithAi } from "@/lib/finance/aiService";
+import {
+  matchAccountByInstitution,
+  mergeAiWithDeterministicResult,
+  parseBrazilianCurrency,
+  parseDeterministicTransaction,
+  type SmartParsedTransaction,
+} from "@/lib/finance/smartInputParser";
 
 interface Props {
   open: boolean;
@@ -56,6 +63,7 @@ interface DraftTx {
   counterpart_account_id: string;
   confidence: number;
   transfer_direction: "in" | "out" | null;
+  institution: string | null;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -72,8 +80,10 @@ const guessAccount = (
   accounts: any[],
   method: PaymentMethod | null,
   type: "income" | "expense" | "transfer",
+  institution?: string | null,
 ): string => {
   if (!accounts.length) return "";
+  if (institution) return matchAccountByInstitution(accounts, institution);
   if (type === "income") {
     return accounts.find((a) => a.type === "checking")?.id || accounts[0].id;
   }
@@ -181,7 +191,28 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         return;
       }
 
-      const parsed = (await parseSmartInputWithAi(payload)) as any[];
+      const local = tab === "text"
+        ? parseDeterministicTransaction(String(payload.text), new Date())
+        : null;
+      let aiParsed: SmartParsedTransaction[] = [];
+      let aiFailure: unknown = null;
+      try {
+        aiParsed = await parseSmartInputWithAi(payload);
+      } catch (error) {
+        aiFailure = error;
+      }
+
+      let parsed: SmartParsedTransaction[] = aiParsed;
+      if (local && aiParsed.length <= 1) {
+        parsed = [mergeAiWithDeterministicResult(aiParsed[0], local)];
+      }
+      if (aiFailure && local) {
+        console.warn("[SmartAdd] IA indisponível; usando parser local.", aiFailure);
+      } else if (local && aiParsed.length === 0) {
+        console.warn("[SmartAdd] IA retornou vazio após o retry; usando parser local.");
+      } else if (aiFailure) {
+        throw aiFailure;
+      }
       if (!parsed.length) {
         toast.info("Nenhuma transação identificada. Tente com mais detalhes.");
         return;
@@ -194,7 +225,8 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
           hint: t.category_hint,
           type: t.type,
         });
-        const account_id = guessAccount(accounts, t.payment_method, t.type);
+        const institution = t.institution || null;
+        const account_id = guessAccount(accounts, t.payment_method, t.type, institution);
         const role = t.role || (t.type === "transfer" ? "transfer" : t.type);
         return {
           id: uid(),
@@ -210,6 +242,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
           counterpart_account_id: t.type === "transfer" ? guessCounterpartAccount(accounts, account_id, role) : "",
           confidence: t.confidence ?? 0.7,
           transfer_direction: t.transfer_direction || null,
+          institution,
         };
       });
       setDrafts(newDrafts);
@@ -442,7 +475,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                         )}
                         <Select value={d.type} onValueChange={(value) => {
                           const type = value as DraftTx["type"];
-                          const accountId = guessAccount(accounts, d.payment_method, type);
+                          const accountId = guessAccount(accounts, d.payment_method, type, d.institution);
                           updateDraft(d.id, {
                             type,
                             role: type === "transfer" ? "transfer" : type,
@@ -489,7 +522,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                           inputMode="decimal"
                           value={String(d.amount).replace(".", ",")}
                           onChange={(e) => {
-                            const n = parseFloat(e.target.value.replace(",", ".")) || 0;
+                            const n = parseBrazilianCurrency(e.target.value) || 0;
                             updateDraft(d.id, { amount: n });
                           }}
                           className="h-9 font-semibold"
