@@ -98,6 +98,35 @@ describe("deterministic smart input parser", () => {
       { description: "Academia", amount: 89.9 },
     ]);
   });
+
+  it("applies a month header to every following transaction", () => {
+    const results = parseDeterministicTransactions(
+      "MÊS JUNHO\n\nRECEITA Reginaldo Dos Santos 219,80\nRECEITA Gabriella Meneses 21,90",
+      referenceDate,
+    );
+
+    expect(results).toMatchObject([
+      { description: "Reginaldo Dos Santos", amount: 219.8, type: "income", date: "2026-06-05" },
+      { description: "Gabriella Meneses", amount: 21.9, type: "income", date: "2026-06-05" },
+    ]);
+  });
+
+  it("keeps a transaction-specific month above the list context", () => {
+    const results = parseDeterministicTransactions("MÊS JUNHO\nConta maio 100\nConta 200", referenceDate);
+    expect(results.map((item) => item.date)).toEqual(["2026-05-05", "2026-06-05"]);
+  });
+
+  it("extracts an explicit category without polluting the description", () => {
+    expect(parseDeterministicTransaction(
+      "RECEITA Gabriella Meneses 21,90 CATEGORIA Transferência recebida",
+      referenceDate,
+    )).toMatchObject({
+      description: "Gabriella Meneses",
+      amount: 21.9,
+      type: "income",
+      category_hint: "Transferência recebida",
+    });
+  });
 });
 
 describe("smart parser merge and account matching", () => {

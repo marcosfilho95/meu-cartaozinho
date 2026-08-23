@@ -29,7 +29,10 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatCurrency } from "@/lib/constants";
 import {
+  isGenericSmartCategoryId,
+  resolveHistoricalClassification,
   resolveSmartCategoryId,
+  type SmartClassificationHistory,
   type SmartCategoryOption,
 } from "@/lib/financeSmartClassification";
 import { parseSmartInputWithAi } from "@/lib/finance/aiService";
@@ -37,6 +40,7 @@ import { recognizeFinancialImageLocally } from "@/lib/finance/localImageOcr";
 import {
   matchAccountByInstitution,
   mergeAiWithDeterministicResult,
+  normalizeText,
   parseBrazilianCurrency,
   parseDeterministicTransactions,
   type SmartParsedTransaction,
@@ -65,6 +69,7 @@ interface DraftTx {
   confidence: number;
   transfer_direction: "in" | "out" | null;
   institution: string | null;
+  learned_from_history: boolean;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -117,6 +122,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
   const [drafts, setDrafts] = useState<DraftTx[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [categories, setCategories] = useState<SmartCategoryOption[]>([]);
+  const [classificationHistory, setClassificationHistory] = useState<SmartClassificationHistory[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -130,7 +136,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     setOptionsLoading(true);
 
     const loadOptions = async () => {
-      const [accs, cats] = await Promise.all([
+      const [accs, cats, history] = await Promise.all([
         supabase
           .from("accounts")
           .select("id, name, type, institution, current_balance")
@@ -142,12 +148,23 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
           .select("id, name, kind, color, parent_id")
           .eq("user_id", userId)
           .order("name"),
+        supabase
+          .from("transactions")
+          .select("source, type, category_id, account_id, payment_method, transaction_date, created_at")
+          .eq("user_id", userId)
+          .is("deleted_at", null)
+          .not("category_id", "is", null)
+          .order("transaction_date", { ascending: false })
+          .order("created_at", { ascending: false })
+          .limit(500),
       ]);
       if (accs.error) throw accs.error;
       if (cats.error) throw cats.error;
+      if (history.error) throw history.error;
       if (cancelled) return;
       setAccounts(accs.data || []);
       setCategories((cats.data || []) as SmartCategoryOption[]);
+      setClassificationHistory((history.data || []) as SmartClassificationHistory[]);
     };
 
     void loadOptions()
@@ -265,14 +282,26 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
       }
 
       const newDrafts: DraftTx[] = parsed.map((t) => {
-        const category_id = resolveSmartCategoryId({
+        const suggestedCategoryId = resolveSmartCategoryId({
           categories,
           description: String(t.description || ""),
           hint: t.category_hint,
           type: t.type,
         });
+        const previous = resolveHistoricalClassification(classificationHistory, String(t.description || ""), t.type);
+        const previousCategoryExists = Boolean(previous?.category_id && categories.some((category) => category.id === previous.category_id));
+        const normalizedInput = normalizeText(String(payload.text || ""));
+        const hasExplicitCategory = Boolean(
+          t.category_hint && normalizedInput.includes(`categoria ${normalizeText(t.category_hint)}`),
+        );
+        const category_id = suggestedCategoryId && (hasExplicitCategory || !isGenericSmartCategoryId(categories, suggestedCategoryId))
+          ? suggestedCategoryId
+          : previousCategoryExists ? previous!.category_id! : suggestedCategoryId;
         const institution = t.institution || null;
-        const account_id = guessAccount(accounts, t.payment_method, t.type, institution);
+        const previousAccountExists = Boolean(previous?.account_id && accounts.some((account) => account.id === previous.account_id));
+        const account_id = institution
+          ? guessAccount(accounts, t.payment_method, t.type, institution)
+          : previousAccountExists ? previous!.account_id : guessAccount(accounts, t.payment_method, t.type, institution);
         const role = t.role || (t.type === "transfer" ? "transfer" : t.type);
         return {
           id: uid(),
@@ -281,7 +310,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
           amount: Number(t.amount),
           description: String(t.description),
           date: t.date,
-          payment_method: t.payment_method,
+          payment_method: t.payment_method || (previous?.payment_method as PaymentMethod | null) || null,
           category_hint: t.category_hint,
           category_id,
           account_id,
@@ -289,6 +318,10 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
           confidence: t.confidence ?? 0.7,
           transfer_direction: t.transfer_direction || null,
           institution,
+          learned_from_history: Boolean(
+            (previousCategoryExists && !hasExplicitCategory && (!suggestedCategoryId || isGenericSmartCategoryId(categories, suggestedCategoryId))) ||
+            (!institution && previousAccountExists)
+          ),
         };
       });
       setDrafts(newDrafts);
@@ -535,6 +568,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                             category_id: resolveSmartCategoryId({ categories, description: d.description, hint: d.category_hint, type }),
                             account_id: accountId,
                             counterpart_account_id: type === "transfer" ? guessCounterpartAccount(accounts, accountId, "transfer") : "",
+                            learned_from_history: false,
                           });
                         }}>
                           <SelectTrigger className="h-7 w-32 text-[11px]"><SelectValue /></SelectTrigger>
@@ -652,6 +686,11 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                         {d.category_hint && !d.category_id && (
                           <p className="mt-0.5 text-[10px] text-primary">
                             IA sugeriu: {d.category_hint}
+                          </p>
+                        )}
+                        {d.learned_from_history && (
+                          <p className="mt-1 text-[10px] text-success">
+                            Repetimos a classificação do último lançamento com este nome.
                           </p>
                         )}
                       </div>

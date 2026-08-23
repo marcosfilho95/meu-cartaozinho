@@ -16,6 +16,14 @@ export interface SmartCategoryOption {
   parent_id?: string | null;
 }
 
+export interface SmartClassificationHistory {
+  source: string | null;
+  type: string;
+  category_id: string | null;
+  account_id: string;
+  payment_method?: string | null;
+}
+
 const FALLBACK_RULE_NAMES = new Set(["outros", "outros (receita)", "outros receita"]);
 
 const KNOWN_GENERIC_CATEGORY_NAMES = new Set([
@@ -97,6 +105,27 @@ const findCategoryByLabel = (categories: SmartCategoryOption[], label: string | 
 const isGenericCategory = (category: SmartCategoryOption, categories: SmartCategoryOption[]) =>
   categories.some((item) => item.parent_id === category.id)
   || KNOWN_GENERIC_CATEGORY_NAMES.has(normalizeLabel(category.name));
+
+export const isGenericSmartCategoryId = (categories: SmartCategoryOption[], categoryId: string) => {
+  const category = categories.find((item) => item.id === categoryId);
+  return !category || FALLBACK_RULE_NAMES.has(normalizeLabel(category.name)) || isGenericCategory(category, categories);
+};
+
+const classificationKey = (value: string) => normalizeLabel(value)
+  .replace(/^(?:receita|despesa|gasto|pagamento)\s+/, "")
+  .replace(/\s+/g, " ")
+  .trim();
+
+/** Usa a ocorrência mais recente (a lista já deve vir ordenada) do mesmo favorecido/descrição. */
+export const resolveHistoricalClassification = (
+  history: SmartClassificationHistory[],
+  description: string,
+  type: SmartTransactionType,
+) => {
+  const key = classificationKey(description);
+  if (!key) return undefined;
+  return history.find((item) => item.type === type && classificationKey(item.source || "") === key);
+};
 
 /**
  * Combines the model hint with local, deterministic merchant rules.

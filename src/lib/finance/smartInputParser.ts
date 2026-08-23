@@ -201,7 +201,14 @@ const inferPaymentMethod = (normalized: string, institution: string | null): Sma
   return null;
 };
 
-const inferCategory = (normalized: string): string | null => {
+const extractExplicitCategory = (text: string): string | null => {
+  const match = text.match(/\bcategoria\s*(?::|=|-)?\s*(.+?)\s*$/i);
+  return match?.[1]?.trim() || null;
+};
+
+const inferCategory = (text: string, normalized: string): string | null => {
+  const explicit = extractExplicitCategory(text);
+  if (explicit) return explicit;
   if (/\buber\b|\b99\b|\btaxi\b/.test(normalized)) return "Uber e Táxi";
   if (/\bgasolina\b|\bcombustivel\b|\bposto\b/.test(normalized)) return "Gasolina";
   if (/\bsalario\b/.test(normalized)) return "Salário";
@@ -210,6 +217,8 @@ const inferCategory = (normalized: string): string | null => {
 
 const freeformDescription = (text: string): string => text
   .replace(/^\s*(?:[-*•]|\d+[.)])\s*/, "")
+  .replace(/^\s*(?:receita|despesa|gasto)\s+/i, "")
+  .replace(/\s+\bcategoria\s*(?::|=|-)?\s*.+$/i, "")
   .replace(/\s+(?:r\$\s*)?(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?\s*(?:reais?)?\s*$/i, "")
   .replace(/\s+/g, " ")
   .trim();
@@ -253,7 +262,7 @@ export const parseDeterministicTransaction = (
     description: buildDescription(text, normalized, institution, type),
     date: safeIsoDate(year, month, day),
     payment_method: paymentMethod,
-    category_hint: inferCategory(normalized),
+    category_hint: inferCategory(text, normalized),
     institution,
     explicit_day: parts.day,
     explicit_month: parts.month,
@@ -267,12 +276,29 @@ export const parseDeterministicTransaction = (
 export const parseDeterministicTransactions = (
   text: string,
   referenceDate = new Date(),
-): SmartParsedTransaction[] => text
-  .split(/\r?\n|;/)
-  .map((line) => line.trim())
-  .filter(Boolean)
-  .map((line) => parseDeterministicTransaction(line, referenceDate))
-  .filter((transaction): transaction is SmartParsedTransaction => Boolean(transaction));
+): SmartParsedTransaction[] => {
+  const lines = text.split(/\r?\n|;/).map((line) => line.trim()).filter(Boolean);
+  const contextLine = lines.find((line) =>
+    parseDeterministicTransaction(line, referenceDate) === null &&
+    /\b(?:mes|competencia|referencia)\b/.test(normalizeText(line)),
+  );
+  const context = contextLine ? extractDateParts(contextLine, referenceDate) : null;
+
+  return lines
+    .map((line) => parseDeterministicTransaction(line, referenceDate))
+    .filter((transaction): transaction is SmartParsedTransaction => Boolean(transaction))
+    .map((transaction) => {
+      if (!context?.month || transaction.explicit_month !== null) return transaction;
+      const year = transaction.explicit_year ?? context.year ?? referenceDate.getFullYear();
+      const day = transaction.explicit_day ?? 5;
+      return {
+        ...transaction,
+        date: safeIsoDate(year, context.month, day),
+        explicit_month: context.month,
+        explicit_year: context.year ?? transaction.explicit_year,
+      };
+    });
+};
 
 const isInstitutionCategory = (category: unknown, institution: string | null): boolean => {
   if (typeof category !== "string") return false;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  resolveHistoricalClassification,
   resolveSmartCategoryId,
   type SmartCategoryOption,
 } from "@/lib/financeSmartClassification";
@@ -53,5 +54,25 @@ describe("smart transaction category resolution", () => {
 
   it("never selects an expense category for income", () => {
     expect(resolve("Uber 45 reais cartão", "Transporte", categories, "income")).toBe("");
+  });
+
+  it("reuses the latest classification for the same normalized person", () => {
+    const history = [
+      { source: "Receita Gabriella Meneses", type: "income", category_id: "transfer-in", account_id: "checking", payment_method: "pix" },
+      { source: "Gabriella Meneses", type: "income", category_id: "older", account_id: "cash", payment_method: null },
+    ];
+
+    expect(resolveHistoricalClassification(history, "GABRIELLA   MENESES", "income")).toMatchObject({
+      category_id: "transfer-in",
+      account_id: "checking",
+      payment_method: "pix",
+    });
+  });
+
+  it("does not copy a classification from a different transaction type", () => {
+    const history = [
+      { source: "Gabriella Meneses", type: "expense", category_id: "food", account_id: "card" },
+    ];
+    expect(resolveHistoricalClassification(history, "Gabriella Meneses", "income")).toBeUndefined();
   });
 });
