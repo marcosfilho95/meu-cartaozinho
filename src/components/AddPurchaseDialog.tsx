@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { toast } from "sonner";
 import { AlertCircle, Plus } from "lucide-react";
 import { addMonths, generateInstallments, formatMonth, formatCurrency, getCurrentMonth } from "@/lib/installments";
+import { syncCartaozinhoMonths } from "@/lib/finance/cartaozinhoSync";
 
 const purchaseSchema = z.object({
   card_id: z.string().uuid("Selecione um cartao"),
@@ -250,6 +251,13 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
       toast.error("Erro ao gerar parcelas: " + instError.message);
       return;
     }
+
+    const affectedMonths = [...new Set(rows.map((row) => row.ref_month))];
+    const syncResults = await syncCartaozinhoMonths(userId, affectedMonths);
+    if (syncResults.length !== affectedMonths.length) {
+      console.warn("[AddPurchase] Nem todos os meses foram sincronizados.", { affectedMonths, syncResults });
+    }
+    window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId, months: affectedMonths } }));
 
     toast.success(`Compra salva com ${data.installments_count} parcela(s)`);
     reset({
