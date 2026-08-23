@@ -248,7 +248,7 @@ const ExpectedBillsPage: React.FC<ExpectedBillsPageProps> = ({ userId }) => {
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">Valor</Label>
-              <Input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" placeholder="0,00" className="mt-1" />
+              <Input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" placeholder="Ex.: 300,00" className="mt-1" />
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">Vencimento</Label>

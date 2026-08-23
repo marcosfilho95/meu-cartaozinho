@@ -172,8 +172,8 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
 
   const selectGoalForAllocation = (goalId: string) => {
     setSelectedGoalId(goalId);
-    const currentRule = percentageRules.find((rule) => rule.goal_id === goalId);
-    setAllocPercentage(currentRule ? String(currentRule.value).replace(".", ",") : "");
+    setAllocPercentage("");
+    setAllocAmount("");
   };
 
   const handleAllocate = async () => {
@@ -462,7 +462,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                   <Input
                     type="text"
                     inputMode="decimal"
-                    placeholder="10"
+                    placeholder="Ex.: 10"
                     value={allocPercentage}
                     onChange={(event) => setAllocPercentage(event.target.value)}
                     className="h-11 border-2 pr-10 text-center text-lg font-bold focus:border-primary"
@@ -473,16 +473,21 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                 <Input
                   type="text"
                   inputMode="decimal"
-                  placeholder="0,00"
+                  placeholder="Ex.: 500,00"
                   value={allocAmount}
                   onChange={(event) => setAllocAmount(event.target.value)}
                   className="h-11 border-2 text-center text-lg font-bold focus:border-primary"
                 />
               )}
               {allocationMode === "percentage" && (
-                <p className="mt-1.5 truncate text-center text-xs font-semibold text-primary" title={parsedPercentage > 0 ? `${parsedPercentage.toLocaleString("pt-BR")}% → ${formatCurrency(percentageAmount)}` : `Base: ${formatCurrency(monthlySurplus)}`}>
-                  {parsedPercentage > 0 ? `${parsedPercentage.toLocaleString("pt-BR")}% → ${formatCurrency(percentageAmount)}` : `Base: ${formatCurrency(monthlySurplus)}`}
-                </p>
+                <div className="mt-1.5 text-center text-xs">
+                  <p className="truncate font-semibold text-primary" title={parsedPercentage > 0 ? `${parsedPercentage.toLocaleString("pt-BR")}% → ${formatCurrency(percentageAmount)}` : `Base: ${formatCurrency(monthlySurplus)}`}>
+                    {parsedPercentage > 0 ? `${parsedPercentage.toLocaleString("pt-BR")}% → ${formatCurrency(percentageAmount)}` : `Base: ${formatCurrency(monthlySurplus)}`}
+                  </p>
+                  {selectedGoalId && selectedConfiguredPercentage > 0 && parsedPercentage === 0 && (
+                    <p className="mt-1 text-[10px] text-muted-foreground">Regra atual: {selectedConfiguredPercentage.toLocaleString("pt-BR")}%. Digite o percentual deste aporte.</p>
+                  )}
+                </div>
               )}
             </div>
             <div className="min-w-0">
@@ -653,7 +658,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                           size="sm"
                           className="gradient-primary h-9 flex-1 gap-1.5 rounded-xl text-xs text-primary-foreground"
                           onClick={() => {
-                            setSelectedGoalId(goal.id);
+                            selectGoalForAllocation(goal.id);
                             document.querySelector("[data-allocate]")?.scrollIntoView({ behavior: "smooth", block: "center" });
                           }}
                         >
@@ -770,7 +775,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
               <Input
                 type="text"
                 inputMode="decimal"
-                placeholder="0,00"
+                placeholder="Ex.: 250,00"
                 value={withdrawAmount}
                 onChange={(e) => setWithdrawAmount(e.target.value)}
                 className="mt-1"

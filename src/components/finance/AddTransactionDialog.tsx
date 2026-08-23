@@ -519,7 +519,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
             <Input
               type="text"
               inputMode="decimal"
-              placeholder="0,00"
+              placeholder="Ex.: 250,00"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               className="mt-1 h-14 border-2 text-center text-2xl font-bold focus:border-primary"

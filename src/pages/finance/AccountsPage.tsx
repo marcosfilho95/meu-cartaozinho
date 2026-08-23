@@ -330,7 +330,7 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">Saldo inicial (R$)</Label>
-              <Input type="text" inputMode="decimal" value={initialBalance} onChange={(e) => setInitialBalance(e.target.value)} placeholder="0,00" className="mt-1" />
+              <Input type="text" inputMode="decimal" value={initialBalance} onChange={(e) => setInitialBalance(e.target.value)} placeholder="Ex.: 1.500,00" className="mt-1" />
             </div>
             {type === "credit_card" && (
               <div className="grid grid-cols-3 gap-3">
@@ -344,7 +344,7 @@ const AccountsPage: React.FC<AccountsPageProps> = ({ userId }) => {
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Limite</Label>
-                  <Input type="text" inputMode="decimal" value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} placeholder="0,00" className="mt-1" />
+                  <Input type="text" inputMode="decimal" value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} placeholder="Ex.: 5.000,00" className="mt-1" />
                 </div>
               </div>
             )}

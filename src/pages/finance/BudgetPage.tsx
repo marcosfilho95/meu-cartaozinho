@@ -684,7 +684,7 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
                   }}
                   inputMode="decimal"
                   aria-label="Limite total de gastos do mês"
-                  placeholder="7.000,00"
+                  placeholder="Ex.: 7.000,00"
                   className="h-11 pl-10 text-base font-bold"
                   disabled={savingGoal}
                 />
@@ -1093,7 +1093,7 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
               <Input
                 type="text"
                 inputMode="decimal"
-                placeholder="0,00"
+                placeholder="Ex.: 500,00"
                 value={formAmount}
                 onChange={(e) => setFormAmount(e.target.value)}
                 className="h-12 text-xl font-bold text-center border-2 focus:border-primary"

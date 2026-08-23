@@ -89,7 +89,7 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
       subgroup_id: forcedSubgroupId || "",
       subgroup_name: "",
       description: "",
-      installment_amount: 0,
+      installment_amount: "" as unknown as number,
       installments_count: 1,
       due_day: defaultCard?.default_due_day || 5,
       start_month: getCurrentMonth(),
@@ -265,7 +265,7 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
       subgroup_id: subgroupId,
       subgroup_name: "",
       description: "",
-      installment_amount: 0,
+      installment_amount: "" as unknown as number,
       installments_count: 1,
       due_day: data.due_day,
       start_month: getCurrentMonth(),
@@ -397,12 +397,12 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label>Valor da parcela (R$)</Label>
-                  <Input type="number" step="0.01" min="0.01" placeholder="150.00" {...register("installment_amount")} />
+                  <Input type="number" step="0.01" min="0.01" placeholder="Ex.: 150,00" {...register("installment_amount")} />
                   {errors.installment_amount && <p className="text-sm text-destructive">{errors.installment_amount.message}</p>}
                 </div>
                 <div className="space-y-2">
                   <Label>Parcelas</Label>
-                  <Input type="number" min={1} max={60} placeholder="10" {...register("installments_count")} />
+                  <Input type="number" min={1} max={60} placeholder="Ex.: 10" {...register("installments_count")} />
                   {errors.installments_count && <p className="text-sm text-destructive">{errors.installments_count.message}</p>}
                 </div>
               </div>
@@ -410,7 +410,7 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label>Dia de cobranca</Label>
-                  <Input type="number" min={1} max={28} placeholder="5" {...register("due_day")} />
+                  <Input type="number" min={1} max={28} placeholder="Ex.: 5" {...register("due_day")} />
                   {errors.due_day && <p className="text-sm text-destructive">{errors.due_day.message}</p>}
                 </div>
                 <div className="space-y-2">
