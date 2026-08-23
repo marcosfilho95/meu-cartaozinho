@@ -38,7 +38,7 @@ import {
   matchAccountByInstitution,
   mergeAiWithDeterministicResult,
   parseBrazilianCurrency,
-  parseDeterministicTransaction,
+  parseDeterministicTransactions,
   type SmartParsedTransaction,
 } from "@/lib/finance/smartInputParser";
 
@@ -223,9 +223,9 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         return;
       }
 
-      let local = tab === "text"
-        ? parseDeterministicTransaction(String(payload.text), new Date())
-        : null;
+      let localParsed = tab !== "image"
+        ? parseDeterministicTransactions(String(payload.text), new Date())
+        : [];
       let aiParsed: SmartParsedTransaction[] = [];
       let aiFailure: unknown = null;
       try {
@@ -237,19 +237,24 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
       if (tab === "image" && imageDataUrl && (aiFailure || aiParsed.length === 0)) {
         toast.info("A leitura online não encontrou dados. Tentando reconhecer o texto da imagem...");
         const recognizedText = await recognizeFinancialImageLocally(imageDataUrl);
-        local = parseDeterministicTransaction(recognizedText, new Date());
-        if (local) {
+        localParsed = parseDeterministicTransactions(recognizedText, new Date());
+        if (localParsed.length) {
           console.info("[SmartAdd] Imagem reconhecida pelo OCR local.");
         }
       }
 
       let parsed: SmartParsedTransaction[] = aiParsed;
-      if (local && aiParsed.length <= 1) {
-        parsed = [mergeAiWithDeterministicResult(aiParsed[0], local)];
+      if (localParsed.length > 0 && aiParsed.length === localParsed.length) {
+        parsed = localParsed.map((local, index) => mergeAiWithDeterministicResult(aiParsed[index], local));
+      } else if (localParsed.length > 1) {
+        // Uma linha representa sempre um lançamento; não permita que a IA agrupe a lista.
+        parsed = localParsed;
+      } else if (localParsed.length === 1 && aiParsed.length <= 1) {
+        parsed = [mergeAiWithDeterministicResult(aiParsed[0], localParsed[0])];
       }
-      if (aiFailure && local) {
+      if (aiFailure && localParsed.length) {
         console.warn("[SmartAdd] IA indisponível; usando parser local.", aiFailure);
-      } else if (local && aiParsed.length === 0) {
+      } else if (localParsed.length && aiParsed.length === 0) {
         console.warn("[SmartAdd] IA retornou vazio após o retry; usando parser local.");
       } else if (aiFailure) {
         throw aiFailure;
@@ -408,24 +413,27 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
 
               <TabsContent value="text" className="mt-4 space-y-2">
                 <Label className="text-xs text-muted-foreground">
-                  Ex.: “Nubank, fatura de agosto, R$ 5.000” ou “Recebi R$ 7.000 em agosto”.
+                  Digite um lançamento por linha. Você pode adicionar quantos precisar.
                 </Label>
                 <Textarea
-                  placeholder="Digite uma ou várias transações..."
+                  placeholder={"TIM Conta 62\nEnergia Conta 300\nInternet 99,90"}
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   rows={5}
                   className="resize-none"
                   autoFocus
                 />
+                <p className="text-[11px] text-muted-foreground">
+                  Cada linha será cadastrada separadamente. Você poderá revisar tudo antes de salvar.
+                </p>
               </TabsContent>
 
               <TabsContent value="paste" className="mt-4 space-y-2">
                 <Label className="text-xs text-muted-foreground">
-                  Cole uma descrição, uma fatura resumida ou uma pequena lista. Revise todos os valores antes de salvar.
+                  Cole uma lista com um lançamento por linha. Revise todos os valores antes de salvar.
                 </Label>
                 <Textarea
-                  placeholder="Cole o texto aqui..."
+                  placeholder={"TIM Conta 62\nEnergia Conta 300\nInternet 99,90"}
                   value={pasted}
                   onChange={(e) => setPasted(e.target.value)}
                   rows={8}

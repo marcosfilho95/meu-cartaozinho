@@ -4,6 +4,7 @@ import {
   mergeAiWithDeterministicResult,
   parseBrazilianCurrency,
   parseDeterministicTransaction,
+  parseDeterministicTransactions,
 } from "@/lib/finance/smartInputParser";
 
 const referenceDate = new Date(2026, 7, 23, 12);
@@ -76,6 +77,26 @@ describe("deterministic smart input parser", () => {
 
   it("returns null when there is no identifiable amount", () => {
     expect(parseDeterministicTransaction("fatura do Nubank em maio", referenceDate)).toBeNull();
+  });
+
+  it("parses several simple expenses with one transaction per line", () => {
+    const results = parseDeterministicTransactions(
+      "TIM Conta 62\nEnergia Conta 300\n\nInternet 99,90",
+      referenceDate,
+    );
+
+    expect(results).toMatchObject([
+      { description: "TIM Conta", amount: 62, type: "expense", date: "2026-08-05" },
+      { description: "Energia Conta", amount: 300, type: "expense", date: "2026-08-05" },
+      { description: "Internet", amount: 99.9, type: "expense", date: "2026-08-05" },
+    ]);
+  });
+
+  it("supports bullets, numbering and semicolon-separated quick entries", () => {
+    expect(parseDeterministicTransactions("- Aluguel 1.900; 2. Academia 89,90", referenceDate)).toMatchObject([
+      { description: "Aluguel", amount: 1900 },
+      { description: "Academia", amount: 89.9 },
+    ]);
   });
 });
 

@@ -97,7 +97,15 @@ const extractAmount = (text: string): number | null => {
     if (/(?:\/|-)\s*$/.test(before) || /^\s*(?:\/|-)/.test(after)) return [];
     if (/\b(?:dia|ano)\s*$/i.test(before) && !/r\$/i.test(raw)) return [];
     if (amount <= 31 && /^\s*(?:de\s+)?(?:janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)/i.test(after)) return [];
-    if (digits.length === 4 && amount >= 1900 && amount <= 2200 && !/r\$|reais?/i.test(`${raw}${after}`)) return [];
+    const likelyYearContext = !before.trim() ||
+      /\b(?:ano|em|de|janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s*$/i.test(before);
+    if (
+      digits.length === 4 &&
+      amount >= 1900 &&
+      amount <= 2200 &&
+      !/r\$|reais?/i.test(`${raw}${after}`) &&
+      likelyYearContext
+    ) return [];
     const score = (/r\$/i.test(raw) ? 5 : 0) + (/^\s*reais?\b/i.test(after) ? 4 : 0) + (amount > 31 ? 2 : 0);
     return [{ amount, score, index }];
   });
@@ -200,12 +208,25 @@ const inferCategory = (normalized: string): string | null => {
   return null;
 };
 
-const buildDescription = (normalized: string, institution: string | null, type: SmartTransactionType): string => {
+const freeformDescription = (text: string): string => text
+  .replace(/^\s*(?:[-*•]|\d+[.)])\s*/, "")
+  .replace(/\s+(?:r\$\s*)?(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?\s*(?:reais?)?\s*$/i, "")
+  .replace(/\s+/g, " ")
+  .trim();
+
+const buildDescription = (
+  text: string,
+  normalized: string,
+  institution: string | null,
+  type: SmartTransactionType,
+): string => {
   if (/\bfatura\b/.test(normalized) && institution) return `Fatura ${institution}`;
   if (/\buber\b/.test(normalized)) return "Uber";
   if (/\bgasolina\b|\bcombustivel\b/.test(normalized)) return "Gasolina";
   if (/\bsalario\b/.test(normalized)) return "Salário";
   if (institution) return institution;
+  const description = freeformDescription(text);
+  if (description && !/\bfatura\b/.test(normalized)) return description;
   return type === "income" ? "Receita" : type === "transfer" ? "Transferência" : "Despesa";
 };
 
@@ -229,7 +250,7 @@ export const parseDeterministicTransaction = (
     type,
     role: type,
     amount,
-    description: buildDescription(normalized, institution, type),
+    description: buildDescription(text, normalized, institution, type),
     date: safeIsoDate(year, month, day),
     payment_method: paymentMethod,
     category_hint: inferCategory(normalized),
@@ -241,6 +262,17 @@ export const parseDeterministicTransaction = (
     transfer_direction: null,
   };
 };
+
+/** Interpreta listas rápidas, com um lançamento independente por linha. */
+export const parseDeterministicTransactions = (
+  text: string,
+  referenceDate = new Date(),
+): SmartParsedTransaction[] => text
+  .split(/\r?\n|;/)
+  .map((line) => line.trim())
+  .filter(Boolean)
+  .map((line) => parseDeterministicTransaction(line, referenceDate))
+  .filter((transaction): transaction is SmartParsedTransaction => Boolean(transaction));
 
 const isInstitutionCategory = (category: unknown, institution: string | null): boolean => {
   if (typeof category !== "string") return false;
