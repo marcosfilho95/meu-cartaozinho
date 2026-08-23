@@ -435,26 +435,26 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
             <PiggyBank className="h-5 w-5" /> Guardar dinheiro em um plano
           </h2>
         </div>
-        <CardContent className="space-y-3 p-4">
-          <div className="inline-flex rounded-xl border border-border bg-muted/40 p-1">
+        <CardContent className="space-y-4 p-4 sm:p-5">
+          <div className="grid w-full grid-cols-2 rounded-xl border border-border bg-muted/40 p-1 sm:inline-grid sm:w-auto">
             <button
               type="button"
               onClick={() => setAllocationMode("percentage")}
-              className={cn("rounded-lg px-3 py-1.5 text-xs font-semibold transition", allocationMode === "percentage" ? "bg-background text-primary shadow-sm" : "text-muted-foreground")}
+              className={cn("whitespace-nowrap rounded-lg px-3 py-2 text-[11px] font-semibold transition sm:text-xs", allocationMode === "percentage" ? "bg-background text-primary shadow-sm" : "text-muted-foreground")}
             >
               Percentual do disponível
             </button>
             <button
               type="button"
               onClick={() => setAllocationMode("manual")}
-              className={cn("rounded-lg px-3 py-1.5 text-xs font-semibold transition", allocationMode === "manual" ? "bg-background text-primary shadow-sm" : "text-muted-foreground")}
+              className={cn("whitespace-nowrap rounded-lg px-3 py-2 text-[11px] font-semibold transition sm:text-xs", allocationMode === "manual" ? "bg-background text-primary shadow-sm" : "text-muted-foreground")}
             >
               Valor manual
             </button>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div>
-              <p className="mb-1 text-[11px] font-semibold text-muted-foreground">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_220px] lg:items-end">
+            <div className="min-w-0">
+              <p className="mb-1.5 text-[11px] font-semibold leading-snug text-muted-foreground sm:min-h-7 lg:min-h-0">
                 {allocationMode === "percentage" ? "Quanto do valor disponível deseja guardar?" : "Quanto você quer guardar manualmente?"}
               </p>
               {allocationMode === "percentage" ? (
@@ -480,15 +480,15 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                 />
               )}
               {allocationMode === "percentage" && (
-                <p className="mt-1 text-center text-xs font-semibold text-primary">
+                <p className="mt-1.5 truncate text-center text-xs font-semibold text-primary" title={parsedPercentage > 0 ? `${parsedPercentage.toLocaleString("pt-BR")}% → ${formatCurrency(percentageAmount)}` : `Base: ${formatCurrency(monthlySurplus)}`}>
                   {parsedPercentage > 0 ? `${parsedPercentage.toLocaleString("pt-BR")}% → ${formatCurrency(percentageAmount)}` : `Base: ${formatCurrency(monthlySurplus)}`}
                 </p>
               )}
             </div>
-            <div>
-              <p className="mb-1 text-[11px] font-semibold text-muted-foreground">Em qual plano?</p>
+            <div className="min-w-0">
+              <p className="mb-1.5 text-[11px] font-semibold leading-snug text-muted-foreground sm:min-h-7 lg:min-h-0">Em qual plano?</p>
               <Select value={selectedGoalId} onValueChange={selectGoalForAllocation}>
-                <SelectTrigger className="h-11">
+                <SelectTrigger className="h-11 w-full min-w-0">
                   <SelectValue placeholder="Escolha um plano" />
                 </SelectTrigger>
                 <SelectContent>
@@ -503,9 +503,9 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-end">
+            <div className="flex items-end sm:col-span-2 lg:col-span-1">
               <Button
-                className="gradient-primary h-11 w-full gap-2 text-sm font-semibold text-primary-foreground"
+                className="gradient-primary h-11 w-full gap-2 whitespace-nowrap text-sm font-semibold text-primary-foreground"
                 onClick={handleAllocate}
                 disabled={saving}
               >
@@ -514,10 +514,19 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
               </Button>
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-center text-[11px] text-muted-foreground">
-              <span>Disponível em {referenceLabel}: <strong className="text-success">{formatCurrency(monthlySurplus)}</strong></span>
-              <span>Ainda pode reservar: <strong className="text-success">{formatCurrency(availableBalance)}</strong></span>
-              <span>Percentuais dos planos: <strong className={allocationMode === "percentage" && projectedPercentage > 100 ? "text-destructive" : "text-primary"}>{(allocationMode === "percentage" && parsedPercentage > 0 && selectedGoalId ? projectedPercentage : configuredPercentage).toFixed(0)}%</strong> de 100%</span>
+          <div className="grid gap-2 border-t border-border/60 pt-3 sm:grid-cols-3">
+            <div className="flex items-center justify-between gap-3 rounded-xl bg-muted/35 px-3 py-2 sm:flex-col sm:justify-center sm:gap-1 sm:text-center">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Disponível no mês</span>
+              <strong className="shrink-0 text-xs tabular-nums text-success">{formatCurrency(monthlySurplus)}</strong>
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-xl bg-muted/35 px-3 py-2 sm:flex-col sm:justify-center sm:gap-1 sm:text-center">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Ainda pode reservar</span>
+              <strong className="shrink-0 text-xs tabular-nums text-success">{formatCurrency(availableBalance)}</strong>
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-xl bg-muted/35 px-3 py-2 sm:flex-col sm:justify-center sm:gap-1 sm:text-center">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Percentual dos planos</span>
+              <strong className={cn("shrink-0 text-xs tabular-nums", allocationMode === "percentage" && projectedPercentage > 100 ? "text-destructive" : "text-primary")}>{(allocationMode === "percentage" && parsedPercentage > 0 && selectedGoalId ? projectedPercentage : configuredPercentage).toFixed(0)}% de 100%</strong>
+            </div>
           </div>
         </CardContent>
       </Card>
