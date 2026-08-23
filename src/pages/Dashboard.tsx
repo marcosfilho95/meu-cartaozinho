@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, CreditCard, Layers3, Plus, ShoppingCart, Wallet, WalletCards } from "lucide-react";
+import { ArrowRight, CreditCard, Layers3, Plus, ShoppingCart, WalletCards } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 import { AddCardDialog } from "@/components/AddCardDialog";
@@ -48,6 +48,26 @@ const BANK_CHART_COLORS: Record<string, string> = {
 };
 
 const FALLBACK_CHART_COLORS = ["#0F766E", "#2563EB", "#D97706", "#DB2777", "#7C3AED"];
+
+const BANK_CARD_BACKGROUNDS: Record<string, string> = {
+  nubank: "linear-gradient(135deg, #8a05be 0%, #5b0878 52%, #260532 100%)",
+  amazonprime: "linear-gradient(135deg, #ff7a00 0%, #b94700 52%, #27150a 100%)",
+  bradesco: "linear-gradient(135deg, #d4153d 0%, #8d0928 52%, #300814 100%)",
+  bb: "linear-gradient(135deg, #172b67 0%, #0d1a43 58%, #07102d 100%)",
+  c6: "linear-gradient(135deg, #303030 0%, #111827 55%, #020617 100%)",
+  inter: "linear-gradient(135deg, #ff7a00 0%, #ad4300 54%, #321500 100%)",
+  santander: "linear-gradient(135deg, #ec1c24 0%, #9d0b18 54%, #32070b 100%)",
+  itau: "linear-gradient(135deg, #ec7000 0%, #7c2d12 52%, #1e1b4b 100%)",
+  caixa: "linear-gradient(135deg, #0875b9 0%, #07527e 55%, #06263d 100%)",
+  picpay: "linear-gradient(135deg, #21c25e 0%, #08783a 52%, #03321d 100%)",
+  mercadopago: "linear-gradient(135deg, #009ee3 0%, #086b9e 52%, #062d46 100%)",
+};
+
+const FALLBACK_CARD_BACKGROUNDS = [
+  "linear-gradient(135deg, #0f766e 0%, #064e3b 55%, #022c22 100%)",
+  "linear-gradient(135deg, #2563eb 0%, #1e3a8a 55%, #172554 100%)",
+  "linear-gradient(135deg, #7c3aed 0%, #4c1d95 55%, #2e1065 100%)",
+];
 
 const formatCardMonth = (value: string) => {
   const [year, month] = value.split("-").map(Number);
@@ -285,7 +305,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
                 const total = totals[card.id]?.total || 0;
                 const count = totals[card.id]?.count || 0;
                 const percentage = grandTotal > 0 ? (total / grandTotal) * 100 : 0;
-                const color = BANK_CHART_COLORS[card.brand || ""] || FALLBACK_CHART_COLORS[index % FALLBACK_CHART_COLORS.length];
+                const cardBackground = BANK_CARD_BACKGROUNDS[card.brand || ""] || FALLBACK_CARD_BACKGROUNDS[index % FALLBACK_CARD_BACKGROUNDS.length];
                 const isOpening = openingCardId === card.id;
                 return (
                   <button
@@ -294,48 +314,49 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
                     onClick={() => openCard(card)}
                     aria-label={`Abrir o cartão ${card.name}`}
                     aria-busy={isOpening}
+                    style={{ background: cardBackground }}
                     className={cn(
-                      "group relative isolate flex min-h-[205px] touch-manipulation overflow-hidden rounded-[1.6rem] border border-white/10 bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-950 p-5 text-left text-white shadow-[0_14px_34px_-18px_rgba(2,44,34,0.9)] outline-none transition-all duration-300 ease-out hover:z-10 hover:-translate-y-2 hover:scale-[1.015] hover:shadow-[0_24px_46px_-18px_rgba(2,44,34,0.9)] focus-visible:z-10 focus-visible:-translate-y-1 focus-visible:ring-4 focus-visible:ring-primary/30 active:scale-[0.985] motion-reduce:transform-none motion-reduce:transition-none sm:min-h-[220px]",
+                      "group relative isolate flex aspect-[1.72/1] min-h-[220px] touch-manipulation overflow-hidden rounded-[1.7rem] border border-white/20 p-5 text-left text-white shadow-[0_18px_38px_-18px_rgba(15,23,42,0.75)] outline-none transition-all duration-300 ease-out hover:z-10 hover:-translate-y-2 hover:rotate-[-0.35deg] hover:scale-[1.015] hover:shadow-[0_30px_55px_-20px_rgba(15,23,42,0.85)] focus-visible:z-10 focus-visible:-translate-y-1 focus-visible:ring-4 focus-visible:ring-primary/30 active:scale-[0.985] motion-reduce:transform-none motion-reduce:transition-none sm:min-h-0 sm:p-6",
                       isOpening && "z-20 -translate-y-3 scale-[1.025] ring-4 ring-primary/25 shadow-[0_28px_52px_-16px_rgba(2,44,34,0.95)]",
                     )}
                   >
-                    <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1.5" style={{ backgroundColor: color }} />
-                    <span aria-hidden="true" className="absolute -right-14 -top-16 h-48 w-48 rounded-full opacity-25 blur-2xl transition-transform duration-500 group-hover:scale-125" style={{ backgroundColor: color }} />
-                    <span aria-hidden="true" className="absolute -bottom-24 -left-16 h-48 w-48 rounded-full bg-white/5" />
+                    <span aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(115deg,transparent_20%,rgba(255,255,255,0.10)_46%,transparent_70%)] opacity-0 transition-all duration-700 group-hover:translate-x-1/3 group-hover:opacity-100" />
+                    <span aria-hidden="true" className="absolute -right-16 -top-20 h-60 w-60 rounded-full border border-white/10 bg-white/5" />
+                    <span aria-hidden="true" className="absolute -bottom-28 -left-20 h-56 w-56 rounded-full border border-white/10 bg-black/10" />
 
                     <div className="relative z-10 flex w-full flex-col">
                       <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-center gap-2.5">
-                          <span className="flex h-11 w-14 items-center justify-center rounded-xl border border-white/15 bg-white/10 shadow-inner backdrop-blur-sm">
-                            <Wallet className="h-6 w-6 text-white/90" aria-hidden="true" />
+                        <div className="flex items-center gap-3">
+                          <span aria-hidden="true" className="relative h-10 w-14 overflow-hidden rounded-lg border border-amber-950/25 bg-gradient-to-br from-[#fff1a8] via-[#d8b955] to-[#927128] shadow-[inset_0_1px_2px_rgba(255,255,255,0.65),0_2px_4px_rgba(0,0,0,0.22)]">
+                            <span className="absolute inset-y-0 left-1/2 border-l border-amber-950/30" />
+                            <span className="absolute inset-x-0 top-1/2 border-t border-amber-950/30" />
+                            <span className="absolute left-1 top-1/2 h-5 w-4 -translate-y-1/2 rounded border border-amber-950/30" />
+                            <span className="absolute right-1 top-1/2 h-5 w-4 -translate-y-1/2 rounded border border-amber-950/30" />
                           </span>
-                          <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/55">Minha carteira</span>
+                          <span className="hidden text-[9px] font-semibold uppercase tracking-[0.22em] text-white/65 min-[390px]:inline">Meu Cartãozinho</span>
                         </div>
-                        <span className="rounded-xl bg-white/95 p-1.5 shadow-sm">
-                          <BankLogo brand={card.brand} size={38} />
+                        <span className="rounded-xl border border-white/20 bg-white/95 p-1.5 shadow-md">
+                          <BankLogo brand={card.brand} size={42} />
                         </span>
                       </div>
 
-                      <div className="mt-5">
-                        <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/55">Fatura de {formatCardMonth(month)}</p>
-                        <p className={cn("mt-1 font-heading text-2xl font-bold tracking-tight sm:text-[1.7rem]", total > 0 ? "text-white" : "text-white/60")}>{formatCurrency(total)}</p>
+                      <div className="mt-auto pb-4 pt-4 sm:pb-5">
+                        <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-white/65">Fatura de {formatCardMonth(month)}</p>
+                        <p className={cn("mt-1 font-heading text-[1.65rem] font-bold tracking-tight drop-shadow-sm sm:text-3xl", total > 0 ? "text-white" : "text-white/60")}>{formatCurrency(total)}</p>
                       </div>
 
-                      <div className="mt-auto flex items-end justify-between gap-4 pt-5">
+                      <div className="flex items-end justify-between gap-4 border-t border-white/15 pt-3">
                         <div className="min-w-0">
-                          <h3 className="truncate font-heading text-lg font-bold text-white">{card.name}</h3>
-                          <p className="mt-0.5 text-xs text-white/60">{count > 0 ? `${count} ${count === 1 ? "parcela" : "parcelas"} no mês` : "Sem valores no mês"}</p>
+                          <p className="text-[8px] font-semibold uppercase tracking-[0.18em] text-white/55">Instituição</p>
+                          <h3 className="mt-0.5 truncate font-heading text-base font-bold text-white sm:text-lg">{card.name}</h3>
+                          <p className="mt-0.5 text-[11px] text-white/65">{count > 0 ? `${count} ${count === 1 ? "parcela" : "parcelas"} no mês` : "Sem valores no mês"}</p>
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
-                          <span className="hidden text-right text-[11px] font-semibold text-white/70 sm:block">{percentage.toFixed(0)}% do total</span>
-                          <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/10 transition-all duration-300 group-hover:translate-x-1 group-hover:bg-white group-hover:text-slate-950">
+                          <span className="rounded-full border border-white/15 bg-black/10 px-2.5 py-1 text-[10px] font-bold text-white/85">{percentage.toFixed(0)}%</span>
+                          <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/10 transition-all duration-300 group-hover:translate-x-1 group-hover:bg-white group-hover:text-slate-950">
                             <ArrowRight className="h-4 w-4" aria-hidden="true" />
                           </span>
                         </div>
-                      </div>
-
-                      <div className="mt-3 h-1 overflow-hidden rounded-full bg-white/10">
-                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${percentage}%`, backgroundColor: color }} />
                       </div>
                     </div>
                   </button>
@@ -344,7 +365,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
               <AddCardDialog
                 userId={userId}
                 onCardAdded={fetchData}
-                trigger={<button type="button" className="group flex min-h-[205px] touch-manipulation flex-col items-center justify-center rounded-[1.6rem] border border-dashed border-border bg-muted/15 p-5 text-center outline-none transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 hover:bg-primary/5 hover:shadow-card focus-visible:ring-4 focus-visible:ring-primary/20 active:scale-[0.985] motion-reduce:transform-none sm:min-h-[220px]"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary transition-transform duration-300 group-hover:scale-110"><Plus className="h-5 w-5" /></div><p className="mt-3 text-sm font-semibold">Adicionar outro cartão</p><p className="mt-1 text-xs text-muted-foreground">Nubank, Amazon Prime, Mercado Pago e outros</p></button>}
+                trigger={<button type="button" className="group flex aspect-[1.72/1] min-h-[220px] touch-manipulation flex-col items-center justify-center rounded-[1.7rem] border border-dashed border-border bg-muted/15 p-5 text-center outline-none transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 hover:bg-primary/5 hover:shadow-card focus-visible:ring-4 focus-visible:ring-primary/20 active:scale-[0.985] motion-reduce:transform-none sm:min-h-0"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary transition-transform duration-300 group-hover:scale-110"><Plus className="h-5 w-5" /></div><p className="mt-3 text-sm font-semibold">Adicionar outro cartão</p><p className="mt-1 text-xs text-muted-foreground">Nubank, Amazon Prime, Mercado Pago e outros</p></button>}
               />
             </div>
           </section>
