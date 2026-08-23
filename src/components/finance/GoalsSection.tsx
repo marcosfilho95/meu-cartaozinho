@@ -32,7 +32,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/constants";
 import { getGoalMonthlyRequirement, type PlanningGoal } from "@/lib/financePlanning";
-import { resolveFinancialRules, type FinancialRuleVersion } from "@/lib/financialRules";
+import { calculateAvailablePercentageAmount, createFinancialRuleVersion, getGoalPercentageTotal, resolveFinancialRules, type FinancialRuleVersion } from "@/lib/financialRules";
 import { getErrorMessage } from "@/lib/supabaseUntyped";
 import {
   ArrowDownLeft,
@@ -91,6 +91,8 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
   const [goalDialogOpen, setGoalDialogOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<GoalItem | null>(null);
   const [allocAmount, setAllocAmount] = useState("");
+  const [allocPercentage, setAllocPercentage] = useState("");
+  const [allocationMode, setAllocationMode] = useState<"percentage" | "manual">("percentage");
   const [selectedGoalId, setSelectedGoalId] = useState("");
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -110,6 +112,15 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
     () => goals.filter((goal) => !goal.is_completed || Number(goal.current_amount || 0) > 0),
     [goals],
   );
+  const activeFinancialRules = useMemo(
+    () => resolveFinancialRules(financialRules, refMonth),
+    [financialRules, refMonth],
+  );
+  const percentageRules = useMemo(
+    () => activeFinancialRules.filter((rule) => rule.goal_id && rule.value_type === "percentage"),
+    [activeFinancialRules],
+  );
+  const configuredPercentage = useMemo(() => getGoalPercentageTotal(financialRules, refMonth), [financialRules, refMonth]);
 
   useEffect(() => {
     if (!expandedGoalId) {
@@ -147,6 +158,10 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
   const availableFromClosing = Math.max(monthlySurplus - allocatedThisMonth, 0);
   const availableInAccount = Math.max(Number(primaryAccount?.current_balance || 0), 0);
   const availableBalance = Math.min(availableFromClosing, availableInAccount);
+  const parsedPercentage = Number(allocPercentage.replace(",", ".")) || 0;
+  const percentageAmount = calculateAvailablePercentageAmount(monthlySurplus, parsedPercentage);
+  const selectedConfiguredPercentage = Number(percentageRules.find((rule) => rule.goal_id === selectedGoalId)?.value || 0);
+  const projectedPercentage = configuredPercentage - selectedConfiguredPercentage + parsedPercentage;
   const referenceLabel = new Date(`${refMonth}-15T12:00:00`).toLocaleDateString("pt-BR", {
     month: "long",
     year: "numeric",
@@ -155,15 +170,33 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
   const isMissingPlanningRpc = (error: { code?: string; message?: string } | null) =>
     Boolean(error && (error.code === "PGRST202" || /function|schema cache|reserve_goal_funds|withdraw_goal_funds|delete_goal/i.test(error.message || "")));
 
+  const selectGoalForAllocation = (goalId: string) => {
+    setSelectedGoalId(goalId);
+    const currentRule = percentageRules.find((rule) => rule.goal_id === goalId);
+    setAllocPercentage(currentRule ? String(currentRule.value).replace(".", ",") : "");
+  };
+
   const handleAllocate = async () => {
-    const amount = parseFloat(allocAmount.replace(",", "."));
+    const amount = allocationMode === "percentage"
+      ? percentageAmount
+      : parseFloat(allocAmount.replace(",", "."));
     if (!amount || amount <= 0) {
-      toast.error("Informe um valor válido.");
+      toast.error(allocationMode === "percentage" ? "Informe um percentual válido." : "Informe um valor válido.");
       return;
     }
     if (!selectedGoalId) {
       toast.error("Selecione uma meta.");
       return;
+    }
+    if (allocationMode === "percentage") {
+      if (parsedPercentage <= 0 || parsedPercentage > 100) {
+        toast.error("Informe um percentual entre 0% e 100%.");
+        return;
+      }
+      if (projectedPercentage > 100.00001) {
+        toast.error(`Os planos somariam ${projectedPercentage.toFixed(1)}%. O limite é 100% do valor disponível.`);
+        return;
+      }
     }
     if (!primaryAccount) {
       toast.error("Nenhuma conta disponível para debitar.");
@@ -180,6 +213,25 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
       if (!goal) throw new Error("Meta não encontrada.");
       const remaining = Math.max(Number(goal.target_amount) - Number(goal.current_amount), 0);
       if (amount > remaining) throw new Error(`Faltam ${formatCurrency(remaining)} para concluir esta meta.`);
+
+      if (allocationMode === "percentage") {
+        const currentRule = activeFinancialRules.find((rule) => rule.goal_id === selectedGoalId);
+        const ruleChanged = !currentRule || currentRule.value_type !== "percentage" ||
+          currentRule.calculation_base !== "available_after_priorities" || Number(currentRule.value) !== parsedPercentage;
+        if (ruleChanged) {
+          await createFinancialRuleVersion({
+            user_id: userId,
+            rule_key: `goal:${goal.id}`,
+            rule_type: goal.goal_type || "custom",
+            effective_month: refMonth,
+            value_type: "percentage",
+            value: parsedPercentage,
+            calculation_base: "available_after_priorities",
+            goal_id: goal.id,
+            priority: goal.priority ?? 100,
+          });
+        }
+      }
 
       const rpcResult = await (supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }>)("reserve_goal_funds", {
         p_goal_id: selectedGoalId,
@@ -228,6 +280,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
 
       toast.success(`${formatCurrency(amount)} reservado para "${goal.name}".`);
       setAllocAmount("");
+      setAllocPercentage("");
       setSelectedGoalId("");
       onReload();
     } catch (error) {
@@ -383,21 +436,58 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
           </h2>
         </div>
         <CardContent className="space-y-3 p-4">
+          <div className="inline-flex rounded-xl border border-border bg-muted/40 p-1">
+            <button
+              type="button"
+              onClick={() => setAllocationMode("percentage")}
+              className={cn("rounded-lg px-3 py-1.5 text-xs font-semibold transition", allocationMode === "percentage" ? "bg-background text-primary shadow-sm" : "text-muted-foreground")}
+            >
+              Percentual do disponível
+            </button>
+            <button
+              type="button"
+              onClick={() => setAllocationMode("manual")}
+              className={cn("rounded-lg px-3 py-1.5 text-xs font-semibold transition", allocationMode === "manual" ? "bg-background text-primary shadow-sm" : "text-muted-foreground")}
+            >
+              Valor manual
+            </button>
+          </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
-              <p className="mb-1 text-[11px] font-semibold text-muted-foreground">Quanto você quer guardar?</p>
-              <Input
-                type="text"
-                inputMode="decimal"
-                placeholder="0,00"
-                value={allocAmount}
-                onChange={(e) => setAllocAmount(e.target.value)}
-                className="h-11 border-2 text-center text-lg font-bold focus:border-primary"
-              />
+              <p className="mb-1 text-[11px] font-semibold text-muted-foreground">
+                {allocationMode === "percentage" ? "Quanto do valor disponível deseja guardar?" : "Quanto você quer guardar manualmente?"}
+              </p>
+              {allocationMode === "percentage" ? (
+                <div className="relative">
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="10"
+                    value={allocPercentage}
+                    onChange={(event) => setAllocPercentage(event.target.value)}
+                    className="h-11 border-2 pr-10 text-center text-lg font-bold focus:border-primary"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">%</span>
+                </div>
+              ) : (
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  value={allocAmount}
+                  onChange={(event) => setAllocAmount(event.target.value)}
+                  className="h-11 border-2 text-center text-lg font-bold focus:border-primary"
+                />
+              )}
+              {allocationMode === "percentage" && (
+                <p className="mt-1 text-center text-xs font-semibold text-primary">
+                  {parsedPercentage > 0 ? `${parsedPercentage.toLocaleString("pt-BR")}% → ${formatCurrency(percentageAmount)}` : `Base: ${formatCurrency(monthlySurplus)}`}
+                </p>
+              )}
             </div>
             <div>
               <p className="mb-1 text-[11px] font-semibold text-muted-foreground">Em qual plano?</p>
-              <Select value={selectedGoalId} onValueChange={setSelectedGoalId}>
+              <Select value={selectedGoalId} onValueChange={selectGoalForAllocation}>
                 <SelectTrigger className="h-11">
                   <SelectValue placeholder="Escolha um plano" />
                 </SelectTrigger>
@@ -424,11 +514,11 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
               </Button>
             </div>
           </div>
-          {availableBalance > 0 && (
-            <p className="text-center text-[11px] text-muted-foreground">
-              Capacidade restante deste fechamento: <span className="font-bold text-success">{formatCurrency(availableBalance)}</span>
-            </p>
-          )}
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-center text-[11px] text-muted-foreground">
+              <span>Disponível em {referenceLabel}: <strong className="text-success">{formatCurrency(monthlySurplus)}</strong></span>
+              <span>Ainda pode reservar: <strong className="text-success">{formatCurrency(availableBalance)}</strong></span>
+              <span>Percentuais dos planos: <strong className={allocationMode === "percentage" && projectedPercentage > 100 ? "text-destructive" : "text-primary"}>{(allocationMode === "percentage" && parsedPercentage > 0 && selectedGoalId ? projectedPercentage : configuredPercentage).toFixed(0)}%</strong> de 100%</span>
+          </div>
         </CardContent>
       </Card>
 
@@ -635,6 +725,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
         refMonth={refMonth}
         goal={editingGoal}
         currentRule={editingGoal ? resolveFinancialRules(financialRules, refMonth).find((rule) => rule.goal_id === editingGoal.id) || null : null}
+        financialRules={financialRules}
         onCreated={onReload}
       />
 

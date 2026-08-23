@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildFinancialPlan, resolveFinancialRules, type FinancialRuleVersion } from "@/lib/financialRules";
+import { buildFinancialPlan, calculateAvailablePercentageAmount, getGoalPercentageTotal, resolveFinancialRules, type FinancialRuleVersion } from "@/lib/financialRules";
 
 const version = (overrides: Partial<FinancialRuleVersion>): FinancialRuleVersion => ({
   id: "id",
@@ -43,5 +43,13 @@ describe("financial rules by competence", () => {
     const plan = buildFinancialPlan([version({}), emergency, travel], "2026-08", 14000);
     expect(plan.goalAmounts.get("emergency")).toBe(700);
     expect(plan.goalAmounts.get("travel")).toBe(630);
+  });
+
+  it("calcula o aporte sobre o disponível e permite validar o teto de 100%", () => {
+    const travel = version({ rule_key: "goal:travel", goal_id: "travel", value_type: "percentage", value: 10 });
+    const car = version({ rule_key: "goal:car", goal_id: "car", value_type: "percentage", value: 25 });
+    expect(calculateAvailablePercentageAmount(7000, 10)).toBe(700);
+    expect(getGoalPercentageTotal([travel, car], "2026-08")).toBe(35);
+    expect(getGoalPercentageTotal([travel, car], "2026-08", "travel") + 80).toBe(105);
   });
 });

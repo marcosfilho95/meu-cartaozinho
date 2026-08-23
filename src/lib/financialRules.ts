@@ -35,6 +35,17 @@ export const resolveFinancialRules = (versions: FinancialRuleVersion[], refMonth
   return [...latest.values()].sort((left, right) => left.priority - right.priority);
 };
 
+export const calculateAvailablePercentageAmount = (available: number, percentage: number) =>
+  Math.round(Math.max(available, 0) * Math.max(percentage, 0)) / 100;
+
+export const getGoalPercentageTotal = (
+  versions: FinancialRuleVersion[],
+  refMonth: string,
+  excludedGoalId?: string,
+) => resolveFinancialRules(versions, refMonth)
+  .filter((rule) => rule.goal_id && rule.goal_id !== excludedGoalId && rule.value_type === "percentage")
+  .reduce((total, rule) => total + Number(rule.value || 0), 0);
+
 export const calculateRuleAmount = (
   rule: FinancialRuleVersion,
   income: number,
@@ -45,7 +56,7 @@ export const calculateRuleAmount = (
   const base = rule.calculation_base === "total_income"
     ? Math.max(income, 0)
     : Math.max(availableAfterPriorities, 0);
-  return Math.round(base * Math.max(Number(rule.value || 0), 0)) / 100;
+  return calculateAvailablePercentageAmount(base, Number(rule.value || 0));
 };
 
 export const buildFinancialPlan = (

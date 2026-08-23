@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { createFinancialRuleVersion, type FinancialRuleBase, type FinancialRuleValueType, type FinancialRuleVersion } from "@/lib/financialRules";
+import { createFinancialRuleVersion, getGoalPercentageTotal, type FinancialRuleBase, type FinancialRuleValueType, type FinancialRuleVersion } from "@/lib/financialRules";
 import { monthTitle } from "@/lib/financeInsights";
 
 interface EditableGoal { id: string; name: string; goal_type?: string; priority?: number }
@@ -20,6 +20,7 @@ interface AddGoalDialogProps {
   onCreated: () => void;
   goal?: EditableGoal | null;
   currentRule?: FinancialRuleVersion | null;
+  financialRules?: FinancialRuleVersion[];
 }
 
 const GOAL_TYPES = [
@@ -40,7 +41,7 @@ const GOAL_TEMPLATES = [
 
 const parseNumber = (value: string) => Number(value.trim().replace(/R\$/gi, "").replace(/\s/g, "").replace(/\.(?=\d{3}(?:\D|$))/g, "").replace(",", "."));
 
-export const AddGoalDialog: React.FC<AddGoalDialogProps> = ({ open, onOpenChange, userId, refMonth, onCreated, goal = null, currentRule = null }) => {
+export const AddGoalDialog: React.FC<AddGoalDialogProps> = ({ open, onOpenChange, userId, refMonth, onCreated, goal = null, currentRule = null, financialRules = [] }) => {
   const editing = Boolean(goal);
   const [name, setName] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
@@ -69,6 +70,10 @@ export const AddGoalDialog: React.FC<AddGoalDialogProps> = ({ open, onOpenChange
     const ruleValue = parseNumber(allocation);
     if (!Number.isFinite(ruleValue) || ruleValue < 0) return void toast.error("Informe uma regra mensal válida.");
     if (valueType === "percentage" && ruleValue > 100) return void toast.error("O percentual não pode passar de 100%.");
+    if (valueType === "percentage") {
+      const totalAfterChange = getGoalPercentageTotal(financialRules, refMonth, goal?.id) + ruleValue;
+      if (totalAfterChange > 100.00001) return void toast.error(`Os planos somariam ${totalAfterChange.toFixed(1)}%. O limite é 100%.`);
+    }
 
     setSaving(true);
     let createdGoalId: string | null = null;
