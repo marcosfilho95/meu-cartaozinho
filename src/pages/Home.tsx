@@ -18,7 +18,7 @@ import {
 } from "@/lib/finance/cartaozinhoSync";
 import { ensureDefaultCategories } from "@/lib/financeCategoryDefaults";
 import { ensureDefaultAccounts } from "@/lib/financeDefaults";
-import { compareMonths, monthTitle, summarizeMonth, type MonthSummary } from "@/lib/financeInsights";
+import { monthTitle, summarizeMonth, type MonthSummary } from "@/lib/financeInsights";
 import { calculateNetWorth, calculateReserveMovement, type GoalMovement } from "@/lib/financeOverview";
 import { fetchFinanceTransactions, getLastMonthKeys, monthKey, type FinanceTx } from "@/lib/financeShared";
 import { getErrorMessage, untypedSupabase } from "@/lib/supabaseUntyped";
@@ -108,36 +108,9 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
 
   const evolution = useMemo(() => historyKeys.map((key) => {
     const summary = summarizeMonth(data.transactions, key);
-    return { key, month: `${key.slice(5, 7)}/${key.slice(2, 4)}`, receitas: summary.income, despesas: -summary.expenses, resultado: summary.result, hasData: summary.hasData };
+    return { key, month: `${key.slice(5, 7)}/${key.slice(2, 4)}`, receitas: summary.income, despesas: -summary.expenses, resultado: summary.result };
   }), [data.transactions, historyKeys]);
 
-  const comparison = useMemo(() => compareMonths(data.transactions, selectedMonth), [data.transactions, selectedMonth]);
-  const evolutionInsights = useMemo(() => {
-    const monthsWithData = evolution.filter((month) => month.hasData);
-    if (monthsWithData.length === 0) return [];
-    const averageResult = monthsWithData.reduce((sum, month) => sum + month.resultado, 0) / monthsWithData.length;
-    const bestMonth = monthsWithData.reduce((best, month) => month.resultado > best.resultado ? month : best);
-    const items = [
-      {
-        label: "Resultado médio",
-        value: formatCurrency(averageResult),
-        tone: averageResult >= 0 ? "text-success" : "text-destructive",
-      },
-      {
-        label: "Melhor resultado",
-        value: `${bestMonth.month} · ${formatCurrency(bestMonth.resultado)}`,
-        tone: bestMonth.resultado >= 0 ? "text-success" : "text-destructive",
-      },
-    ];
-    if (comparison.monthsWithData > 0 && comparison.expensesDeltaPct !== 0) {
-      items.unshift({
-        label: "Gastos x mês anterior",
-        value: `${Math.abs(comparison.expensesDeltaPct).toFixed(0)}% ${comparison.expensesDelta > 0 ? "maiores" : "menores"}`,
-        tone: comparison.expensesDelta > 0 ? "text-destructive" : "text-success",
-      });
-    }
-    return items.slice(0, 3);
-  }, [comparison.expensesDelta, comparison.expensesDeltaPct, comparison.monthsWithData, evolution]);
   const hasMonthData = data.summary.hasData || data.reserved > 0 || data.card.total > 0;
   const goalUsage = data.spendingGoal > 0 ? Math.min((data.summary.expenses / data.spendingGoal) * 100, 999) : null;
   const metricCards = [
@@ -201,7 +174,6 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
-              {evolutionInsights.length > 0 && <div className="mt-3 grid gap-2 border-t border-border/60 pt-3 sm:grid-cols-3">{evolutionInsights.map((insight) => <div key={insight.label} className="rounded-xl bg-muted/45 p-3"><p className="text-[10px] uppercase tracking-wide text-muted-foreground">{insight.label}</p><p className={cn("mt-1 text-xs font-bold tabular-nums", insight.tone)}>{insight.value}</p></div>)}</div>}
             </CardContent>
           </Card>
 

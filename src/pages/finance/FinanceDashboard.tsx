@@ -41,12 +41,16 @@ import { syncCartaozinhoIncomeMonths } from "@/lib/finance/cartaozinhoSync";
 import { ensureDefaultCategories } from "@/lib/financeCategoryDefaults";
 import { ensureDefaultAccounts } from "@/lib/financeDefaults";
 import {
+  buildCategoryTrends,
+  buildInsights,
+  compareMonths,
   getAnalysisMonthKeys,
   monthTitle,
   projectGoal,
   summarizeMonth,
   summarizePeriod,
   type AnalysisPeriod,
+  type Insight,
 } from "@/lib/financeInsights";
 import { calculateReserveMovement, getTransactionReferenceMonth, type GoalMovement } from "@/lib/financeOverview";
 import { type PlanningGoal } from "@/lib/financePlanning";
@@ -75,6 +79,12 @@ const analysisPeriodLabels: Record<AnalysisPeriod, string> = {
   semester: "Semestral",
   year: "Anual",
   all: "Todo o período",
+};
+
+const insightToneStyles: Record<Insight["tone"], string> = {
+  positive: "border-success/25 bg-success/5 text-success",
+  neutral: "border-border/70 bg-card text-foreground",
+  attention: "border-warning/35 bg-warning/5 text-foreground",
 };
 
 const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
@@ -129,6 +139,8 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   }, [load, userId]);
 
   const summary = useMemo(() => summarizeMonth(transactions, referenceMonth), [referenceMonth, transactions]);
+  const comparison = useMemo(() => compareMonths(transactions, referenceMonth), [referenceMonth, transactions]);
+  const categoryTrends = useMemo(() => buildCategoryTrends(transactions, referenceMonth), [referenceMonth, transactions]);
   const reserveMovement = useMemo(() => calculateReserveMovement(goalMovements, referenceMonth), [goalMovements, referenceMonth]);
   const reservedForPlans = Math.max(reserveMovement.net, 0);
 
@@ -182,6 +194,15 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     Number(goal.monthly_target || 0) || (activeGoals.length ? averageReserve / activeGoals.length : 0),
     referenceMonth,
   )), [activeGoals.length, averageReserve, goals, referenceMonth]);
+  const insights = useMemo(() => buildInsights({
+    refMonth: referenceMonth,
+    summary,
+    comparison,
+    categoryTrends,
+    spendingGoal: spendingGoal || null,
+    reservedForPlans,
+    goalProjections,
+  }), [categoryTrends, comparison, goalProjections, referenceMonth, reservedForPlans, spendingGoal, summary]);
 
   const metricCards = [
     { label: "Receitas", value: summary.income, icon: TrendingUp, tone: "text-success", helper: "Tudo que entrou no mês" },
@@ -215,6 +236,18 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
           {metricCards.map(({ label, value, icon: Icon, tone, helper }) => <Card key={label} className="border-border/70 shadow-card"><CardContent className="p-4"><div className="flex items-center justify-between"><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{label}</p><Icon className={cn("h-4 w-4", tone)} /></div><p className={cn("mt-3 text-2xl font-bold tabular-nums", tone)}>{formatCurrency(value)}</p><p className="mt-1 text-[11px] text-muted-foreground">{helper}</p></CardContent></Card>)}
         </section>
       )}
+
+      {!loading && <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-card to-card shadow-card">
+        <CardContent className="p-5">
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Sparkles className="h-4 w-4" /></div>
+            <div><h2 className="font-heading font-bold">Leitura de {monthTitle(referenceMonth)}</h2><p className="mt-0.5 text-xs text-muted-foreground">Insights atualizados automaticamente quando você troca o mês.</p></div>
+          </div>
+          <div className="mt-4 grid gap-2 md:grid-cols-2">
+            {insights.slice(0, 4).map((insight) => <div key={insight.id} className={cn("rounded-xl border p-3 text-sm leading-relaxed", insightToneStyles[insight.tone])}>{insight.text}</div>)}
+          </div>
+        </CardContent>
+      </Card>}
 
       <section className="space-y-3">
         <div className="flex flex-col gap-3 px-1 sm:flex-row sm:items-end sm:justify-between">
