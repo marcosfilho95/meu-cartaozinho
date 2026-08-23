@@ -18,10 +18,11 @@ import {
 import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
 import { getStoredProfile, setStoredProfile } from "@/lib/profileCache";
 import { getCardDetailCache, setCardDetailCache } from "@/lib/cardDetailCache";
+import { getCardBrandTheme } from "@/lib/cardBrandTheme";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, Plus, Trash2, ShoppingCart } from "lucide-react";
+import { ChartPie, CreditCard, Pencil, Plus, ReceiptText, ShoppingCart, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
 import {
@@ -316,6 +317,7 @@ const CardDetail: React.FC = () => {
     }
     return { label: "Sem lancamentos", className: "border-border bg-secondary text-secondary-foreground" };
   }, [installments, month]);
+  const cardTheme = useMemo(() => getCardBrandTheme(card?.brand), [card?.brand]);
 
   useEffect(() => {
     if (loading) {
@@ -329,9 +331,14 @@ const CardDetail: React.FC = () => {
   if (!userId) return null;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div
+      className="flex min-h-screen flex-col bg-background"
+      style={{ background: `linear-gradient(180deg, ${cardTheme.soft} 0px, hsl(var(--background)) 520px)` }}
+    >
       <AppHeader
         containerClassName="max-w-6xl"
+        headerClassName="pb-10"
+        headerStyle={{ background: cardTheme.background }}
         title={card?.name || "Cartao"}
         greeting={headerProfile.greeting}
         userName={headerProfile.firstName}
@@ -340,32 +347,70 @@ const CardDetail: React.FC = () => {
         showBack
         backTo="/cards"
       >
-        <div className="mt-3 flex items-center gap-3">
-          <BankLogo brand={card?.brand} size={40} />
-          <p className="text-xs font-medium text-primary-foreground/80">Detalhe da fatura mensal</p>
+        <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/10 px-3 py-1.5 backdrop-blur-sm">
+          <CreditCard className="h-4 w-4 text-white/80" />
+          <p className="text-xs font-medium text-white/80">Detalhe da fatura mensal</p>
         </div>
       </AppHeader>
 
-      <div className="container -mt-4 flex-1 space-y-4 pb-4">
+      <div className="container -mt-6 flex-1 space-y-4 pb-4">
         {card ? (
-        <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-elevated animate-fade-in">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <MonthNavigator currentMonth={month} onMonthChange={setMonth} />
-              <Badge variant="outline" className={monthStatusUI.className}>
-                {monthStatusUI.label}
-              </Badge>
+        <div className="grid gap-4 animate-fade-in lg:grid-cols-[1.15fr_0.85fr]">
+          <section className="relative isolate min-h-[255px] overflow-hidden rounded-[1.8rem] border border-white/20 p-5 text-white shadow-elevated sm:p-6" style={{ background: cardTheme.background }}>
+            <span aria-hidden="true" className="absolute -right-20 -top-24 h-72 w-72 rounded-full border border-white/10 bg-white/5" />
+            <span aria-hidden="true" className="absolute -bottom-32 -left-20 h-64 w-64 rounded-full border border-white/10 bg-black/10" />
+            <div className="relative z-10 flex h-full flex-col">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <span aria-hidden="true" className="relative h-11 w-16 overflow-hidden rounded-lg border border-amber-950/25 bg-gradient-to-br from-[#fff1a8] via-[#d8b955] to-[#927128] shadow-[inset_0_1px_2px_rgba(255,255,255,0.65),0_2px_4px_rgba(0,0,0,0.22)]">
+                    <span className="absolute inset-y-0 left-1/2 border-l border-amber-950/30" />
+                    <span className="absolute inset-x-0 top-1/2 border-t border-amber-950/30" />
+                    <span className="absolute left-1 top-1/2 h-6 w-5 -translate-y-1/2 rounded border border-amber-950/30" />
+                    <span className="absolute right-1 top-1/2 h-6 w-5 -translate-y-1/2 rounded border border-amber-950/30" />
+                  </span>
+                  <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-white/65">Meu Cartãozinho</span>
+                </div>
+                <span className="rounded-xl border border-white/20 bg-white/95 p-1.5 shadow-md"><BankLogo brand={card.brand} size={44} /></span>
+              </div>
+
+              <div className="mt-auto py-5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/65">Fatura de {new Date(`${month}-15T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</p>
+                <p className="mt-1 font-heading text-3xl font-extrabold tracking-tight drop-shadow-sm sm:text-4xl">{formatCurrency(subgroupTotal)}</p>
+              </div>
+
+              <div className="flex items-end justify-between gap-4 border-t border-white/15 pt-3">
+                <div>
+                  <p className="text-[8px] font-semibold uppercase tracking-[0.18em] text-white/55">Instituição</p>
+                  <p className="mt-0.5 font-heading text-lg font-bold">{card.name}</p>
+                </div>
+                <div className="text-right">
+                  <Badge variant="outline" className="border-white/20 bg-white/10 text-white">{monthStatusUI.label}</Badge>
+                  <p className="mt-1.5 text-[10px] text-white/65">{installments.length} parcela{installments.length === 1 ? "" : "s"} no mês</p>
+                </div>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" className="gap-2" onClick={() => navigate("/compras")}>
+          </section>
+
+          <aside className="flex flex-col rounded-[1.8rem] border border-border/70 bg-card p-5 shadow-elevated">
+            <div className="flex items-center gap-2">
+              <ReceiptText className="h-5 w-5" style={{ color: cardTheme.accent }} />
+              <div><h2 className="font-heading text-lg font-bold">Navegue pela fatura</h2><p className="text-xs text-muted-foreground">Troque o mês ou abra as compras cadastradas.</p></div>
+            </div>
+            <div className="mt-5"><MonthNavigator currentMonth={month} onMonthChange={setMonth} /></div>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="rounded-xl p-3" style={{ backgroundColor: cardTheme.soft }}><p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Pessoas</p><p className="mt-1 font-heading text-lg font-bold">{subgroups.length}</p></div>
+              <div className="rounded-xl p-3" style={{ backgroundColor: cardTheme.soft }}><p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Parcelas</p><p className="mt-1 font-heading text-lg font-bold">{installments.length}</p></div>
+            </div>
+            <div className="mt-auto grid gap-2 pt-5 sm:grid-cols-[1fr_auto] lg:grid-cols-1 xl:grid-cols-[1fr_auto]">
+              <Button className="gap-2 text-white" style={{ backgroundColor: cardTheme.accent }} onClick={() => navigate("/compras")}>
                 <ShoppingCart className="h-4 w-4" />
                 Ver compras
               </Button>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="destructive" className="gap-2">
+                  <Button variant="outline" className="w-full gap-2 border-destructive/30 text-destructive hover:bg-destructive/10 sm:w-auto lg:w-full xl:w-auto">
                     <Trash2 className="h-4 w-4" />
-                    Excluir cartao
+                    Excluir
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
@@ -384,30 +429,33 @@ const CardDetail: React.FC = () => {
                 </AlertDialogContent>
               </AlertDialog>
             </div>
-          </div>
+          </aside>
         </div>
         ) : (
           <div className="h-20 animate-pulse rounded-2xl bg-muted" />
         )}
 
         <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
-          <section className="order-2 flex h-full flex-col rounded-2xl border border-border/70 bg-card p-4 shadow-card animate-fade-in xl:order-2">
+          <section className="order-2 flex h-full flex-col rounded-2xl border border-border/70 bg-card p-4 shadow-card animate-fade-in xl:order-2" style={{ boxShadow: `inset 0 3px 0 ${cardTheme.accent}, var(--tw-shadow)` }}>
             <div className="mb-3 flex w-full items-center justify-between gap-3">
-              <div>
+              <div className="flex items-start gap-2.5">
+                <span className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-xl" style={{ backgroundColor: cardTheme.soft, color: cardTheme.accent }}><Users className="h-4 w-4" /></span>
+                <div>
                 <h2 className="font-heading text-lg font-bold text-foreground">Quem usou o cartão?</h2>
                 <p className="text-xs text-muted-foreground">Adicione quem pediu seu cartão emprestado</p>
+                </div>
               </div>
               <p className="text-xs text-muted-foreground">{subgroups.length} Usuário(s)</p>
             </div>
 
-            <div className="mb-3 flex flex-row items-center gap-2">
+            <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
               <Input
                 className="flex-1"
                 placeholder="Ex: Pai, Tio, Primo"
                 value={newSubgroupName}
                 onChange={(e) => setNewSubgroupName(e.target.value)}
               />
-              <Button className="shrink-0 gap-2" onClick={createSubgroup}>
+              <Button className="w-full shrink-0 gap-2 sm:w-auto" onClick={createSubgroup}>
                 <Plus className="h-4 w-4" />
                 Criar
               </Button>
@@ -504,8 +552,8 @@ const CardDetail: React.FC = () => {
             )}
           </section>
 
-          <section className="order-1 h-full rounded-2xl border border-border/70 bg-card p-4 shadow-card animate-fade-in xl:order-1">
-            <h2 className="font-heading text-lg font-bold text-foreground">Divisão de gastos</h2>
+          <section className="order-1 h-full rounded-2xl border border-border/70 bg-card p-4 shadow-card animate-fade-in xl:order-1" style={{ boxShadow: `inset 0 3px 0 ${cardTheme.accent}, var(--tw-shadow)` }}>
+            <div className="flex items-center gap-2.5"><span className="flex h-8 w-8 items-center justify-center rounded-xl" style={{ backgroundColor: cardTheme.soft, color: cardTheme.accent }}><ChartPie className="h-4 w-4" /></span><h2 className="font-heading text-lg font-bold text-foreground">Divisão de gastos</h2></div>
 
             {subgroupChartData.length === 0 ? (
               <p className="mt-2 text-sm text-muted-foreground">Nenhuma conta para este mes.</p>
@@ -590,6 +638,8 @@ const CardDetail: React.FC = () => {
             subgroupNames={subgroups.map((s) => s.name)}
             onUpdate={fetchData}
             onInstallmentsChange={setInstallments}
+            accentColor={cardTheme.accent}
+            accentSoft={cardTheme.soft}
           />
         )}
       </div>

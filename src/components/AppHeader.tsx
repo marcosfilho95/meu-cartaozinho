@@ -24,6 +24,8 @@ interface AppHeaderProps {
   onToggleTheme?: () => void;
   topActions?: React.ReactNode;
   containerClassName?: string;
+  headerClassName?: string;
+  headerStyle?: React.CSSProperties;
   children?: React.ReactNode;
 }
 
@@ -39,6 +41,8 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   preferHistoryBack = false,
   topActions,
   containerClassName,
+  headerClassName,
+  headerStyle,
   children,
 }) => {
   const navigate = useNavigate();
@@ -62,7 +66,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   };
 
   return (
-    <header className="gradient-primary px-4 pb-7 pt-5">
+    <header className={cn("gradient-primary px-4 pb-7 pt-5", headerClassName)} style={headerStyle}>
       <div className={cn("mx-auto max-w-2xl", containerClassName)}>
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">

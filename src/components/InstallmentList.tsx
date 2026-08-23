@@ -45,6 +45,8 @@ interface InstallmentListProps {
   subgroupNames: string[];
   onUpdate: () => void;
   onInstallmentsChange?: (items: (Installment & { purchases: PurchaseInfo | null })[]) => void;
+  accentColor?: string;
+  accentSoft?: string;
 }
 
 export const InstallmentList: React.FC<InstallmentListProps> = ({
@@ -56,6 +58,8 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
   subgroupNames,
   onUpdate,
   onInstallmentsChange,
+  accentColor = "#0f766e",
+  accentSoft = "rgba(15, 118, 110, 0.10)",
 }) => {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [localInstallments, setLocalInstallments] = useState(installments);
@@ -198,10 +202,10 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <div className="rounded-xl border border-primary/30 bg-gradient-to-r from-primary/15 to-primary/5 px-3 py-2 shadow-sm">
+      <div className="rounded-xl border px-3 py-2 shadow-sm" style={{ borderColor: accentColor, backgroundColor: accentSoft }}>
         <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-primary/40 bg-background">
-            <MousePointerClick className="h-3.5 w-3.5 text-primary" />
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border bg-background" style={{ borderColor: accentColor }}>
+            <MousePointerClick className="h-3.5 w-3.5" style={{ color: accentColor }} />
           </span>
           Clique em "Confirmar" para marcar a parcela como paga.
         </p>
@@ -209,10 +213,11 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
       {grouped.map((group) => {
         const isCollapsed = collapsedGroups[group.subgroupId] || false;
         return (
-          <section key={group.subgroupId} className="overflow-hidden rounded-xl border border-border bg-card shadow-card">
+          <section key={group.subgroupId} className="overflow-hidden rounded-xl border border-border bg-card shadow-card" style={{ borderLeftColor: accentColor, borderLeftWidth: 3 }}>
             <div
               role="button"
-              className="flex w-full flex-col gap-3 bg-accent/35 px-4 py-3 text-left transition-colors hover:bg-accent/55 sm:flex-row sm:items-center sm:justify-between"
+              className="flex w-full flex-col gap-3 px-4 py-3 text-left transition-[filter] hover:brightness-[0.98] sm:flex-row sm:items-center sm:justify-between"
+              style={{ backgroundColor: accentSoft }}
               onClick={() => setCollapsedGroups((prev) => ({ ...prev, [group.subgroupId]: !isCollapsed }))}
             >
               <div className="flex min-w-0 items-start gap-2">
@@ -399,7 +404,7 @@ export const InstallmentList: React.FC<InstallmentListProps> = ({
         );
       })}
 
-      <div className="flex items-center justify-between rounded-xl bg-accent/45 p-4">
+      <div className="flex items-center justify-between rounded-xl border p-4" style={{ backgroundColor: accentSoft, borderColor: accentColor }}>
         <div>
           <p className="font-heading text-base font-bold text-foreground">Total do mes</p>
           <p className="text-xs text-muted-foreground">{activeCount} parcela(s) ativa(s)</p>

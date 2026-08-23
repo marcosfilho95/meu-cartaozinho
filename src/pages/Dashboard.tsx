@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
 import { getDashboardCache, setDashboardCache } from "@/lib/dashboardCache";
+import { getCardBrandTheme } from "@/lib/cardBrandTheme";
 import {
   addMonths,
   formatCurrency,
@@ -48,26 +49,6 @@ const BANK_CHART_COLORS: Record<string, string> = {
 };
 
 const FALLBACK_CHART_COLORS = ["#0F766E", "#2563EB", "#D97706", "#DB2777", "#7C3AED"];
-
-const BANK_CARD_BACKGROUNDS: Record<string, string> = {
-  nubank: "linear-gradient(135deg, #8a05be 0%, #5b0878 52%, #260532 100%)",
-  amazonprime: "linear-gradient(135deg, #ff7a00 0%, #b94700 52%, #27150a 100%)",
-  bradesco: "linear-gradient(135deg, #d4153d 0%, #8d0928 52%, #300814 100%)",
-  bb: "linear-gradient(135deg, #172b67 0%, #0d1a43 58%, #07102d 100%)",
-  c6: "linear-gradient(135deg, #303030 0%, #111827 55%, #020617 100%)",
-  inter: "linear-gradient(135deg, #ff7a00 0%, #ad4300 54%, #321500 100%)",
-  santander: "linear-gradient(135deg, #ec1c24 0%, #9d0b18 54%, #32070b 100%)",
-  itau: "linear-gradient(135deg, #ec7000 0%, #7c2d12 52%, #1e1b4b 100%)",
-  caixa: "linear-gradient(135deg, #0875b9 0%, #07527e 55%, #06263d 100%)",
-  picpay: "linear-gradient(135deg, #21c25e 0%, #08783a 52%, #03321d 100%)",
-  mercadopago: "linear-gradient(135deg, #009ee3 0%, #086b9e 52%, #062d46 100%)",
-};
-
-const FALLBACK_CARD_BACKGROUNDS = [
-  "linear-gradient(135deg, #0f766e 0%, #064e3b 55%, #022c22 100%)",
-  "linear-gradient(135deg, #2563eb 0%, #1e3a8a 55%, #172554 100%)",
-  "linear-gradient(135deg, #7c3aed 0%, #4c1d95 55%, #2e1065 100%)",
-];
 
 const formatCardMonth = (value: string) => {
   const [year, month] = value.split("-").map(Number);
@@ -305,7 +286,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
                 const total = totals[card.id]?.total || 0;
                 const count = totals[card.id]?.count || 0;
                 const percentage = grandTotal > 0 ? (total / grandTotal) * 100 : 0;
-                const cardBackground = BANK_CARD_BACKGROUNDS[card.brand || ""] || FALLBACK_CARD_BACKGROUNDS[index % FALLBACK_CARD_BACKGROUNDS.length];
+                const cardBackground = getCardBrandTheme(card.brand, index).background;
                 const isOpening = openingCardId === card.id;
                 return (
                   <button
