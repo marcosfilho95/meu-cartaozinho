@@ -141,7 +141,7 @@ const RecurrencesPage: React.FC<RecurrencesPageProps> = ({ userId }) => {
               <Repeat className="h-4 w-4 text-primary" />
               <h1 className="font-heading text-base font-bold">Despesas fixas</h1>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">Valores que se repetem são reaproveitados automaticamente no fechamento de cada mês.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Valores que se repetem são reaproveitados automaticamente na revisão de cada mês.</p>
           </div>
           <Button onClick={() => setDialogOpen(true)} className="gap-1.5">Nova despesa fixa</Button>
         </CardContent>
@@ -198,7 +198,7 @@ const RecurrencesPage: React.FC<RecurrencesPageProps> = ({ userId }) => {
               <div><Label>Valor</Label><Input className="mt-1" inputMode="decimal" value={editAmount} onChange={(event) => setEditAmount(event.target.value)} /></div>
               <div><Label>Dia do mês</Label><Input className="mt-1" type="number" min={1} max={31} value={editDay} onChange={(event) => setEditDay(event.target.value)} /></div>
             </div>
-            <p className="text-xs text-muted-foreground">A mudança afeta apenas os próximos fechamentos. Valores já registrados continuam iguais.</p>
+            <p className="text-xs text-muted-foreground">A mudança afeta apenas as próximas revisões. Valores já registrados continuam iguais.</p>
             <Button className="w-full" onClick={saveEdit} disabled={saving}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar ajuste"}</Button>
           </div>
         </DialogContent>

@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 
 const PRIMARY_ITEMS = [
   { to: "/financas", icon: LayoutDashboard, label: "Início", end: true },
-  { to: "/financas/fechamento", icon: ListChecks, label: "Fechamento" },
+  { to: "/financas/fechamento", icon: ListChecks, label: "Revisão" },
   { to: "/financas/transacoes", icon: ArrowLeftRight, label: "Lançamentos" },
   { to: "/financas/cofrinhos", icon: PiggyBank, label: "Planos" },
 ];

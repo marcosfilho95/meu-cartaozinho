@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUpRight, CreditCard, LineChart as LineChartIcon, PiggyBank, Plus, Target, Wallet } from "lucide-react";
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { AppHeader } from "@/components/AppHeader";
 import { MonthNavigator } from "@/components/MonthNavigator";
@@ -20,7 +20,7 @@ import { ensureDefaultCategories } from "@/lib/financeCategoryDefaults";
 import { ensureDefaultAccounts } from "@/lib/financeDefaults";
 import { compareMonths, monthTitle, summarizeMonth, type MonthSummary } from "@/lib/financeInsights";
 import { calculateNetWorth, calculateReserveMovement, type GoalMovement } from "@/lib/financeOverview";
-import { fetchFinanceTransactions, getLastMonthKeys, getMonthLabel, monthKey, type FinanceTx } from "@/lib/financeShared";
+import { fetchFinanceTransactions, getLastMonthKeys, monthKey, type FinanceTx } from "@/lib/financeShared";
 import { getErrorMessage, untypedSupabase } from "@/lib/supabaseUntyped";
 import { cn } from "@/lib/utils";
 
@@ -108,10 +108,36 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
 
   const evolution = useMemo(() => historyKeys.map((key) => {
     const summary = summarizeMonth(data.transactions, key);
-    return { key, month: getMonthLabel(key), receitas: summary.income, despesas: summary.expenses, resultado: summary.result };
+    return { key, month: `${key.slice(5, 7)}/${key.slice(2, 4)}`, receitas: summary.income, despesas: -summary.expenses, resultado: summary.result, hasData: summary.hasData };
   }), [data.transactions, historyKeys]);
 
   const comparison = useMemo(() => compareMonths(data.transactions, selectedMonth), [data.transactions, selectedMonth]);
+  const evolutionInsights = useMemo(() => {
+    const monthsWithData = evolution.filter((month) => month.hasData);
+    if (monthsWithData.length === 0) return [];
+    const averageResult = monthsWithData.reduce((sum, month) => sum + month.resultado, 0) / monthsWithData.length;
+    const bestMonth = monthsWithData.reduce((best, month) => month.resultado > best.resultado ? month : best);
+    const items = [
+      {
+        label: "Resultado médio",
+        value: formatCurrency(averageResult),
+        tone: averageResult >= 0 ? "text-success" : "text-destructive",
+      },
+      {
+        label: "Melhor resultado",
+        value: `${bestMonth.month} · ${formatCurrency(bestMonth.resultado)}`,
+        tone: bestMonth.resultado >= 0 ? "text-success" : "text-destructive",
+      },
+    ];
+    if (comparison.monthsWithData > 0 && comparison.expensesDeltaPct !== 0) {
+      items.unshift({
+        label: "Gastos x mês anterior",
+        value: `${Math.abs(comparison.expensesDeltaPct).toFixed(0)}% ${comparison.expensesDelta > 0 ? "maiores" : "menores"}`,
+        tone: comparison.expensesDelta > 0 ? "text-destructive" : "text-success",
+      });
+    }
+    return items.slice(0, 3);
+  }, [comparison.expensesDelta, comparison.expensesDeltaPct, comparison.monthsWithData, evolution]);
   const hasMonthData = data.summary.hasData || data.reserved > 0 || data.card.total > 0;
   const goalUsage = data.spendingGoal > 0 ? Math.min((data.summary.expenses / data.spendingGoal) * 100, 999) : null;
   const metricCards = [
@@ -130,11 +156,11 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-primary">Visão financeira</p>
             <h1 className="mt-2 max-w-2xl font-heading text-3xl leading-tight tracking-tight text-foreground sm:text-4xl">Entenda seu mês e transforme planos em progresso.</h1>
-            <p className="mt-2 max-w-xl text-sm text-muted-foreground">Organize receitas, gastos e objetivos em um fechamento simples.</p>
+            <p className="mt-2 max-w-xl text-sm text-muted-foreground">Organize receitas, gastos e objetivos em uma revisão mensal simples.</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <MonthNavigator currentMonth={selectedMonth} onMonthChange={setSelectedMonth} />
-            <Button onClick={() => navigate(`/financas/fechamento?mes=${selectedMonth}`)} className="gap-2"><LineChartIcon className="h-4 w-4" /> Fazer fechamento</Button>
+            <Button onClick={() => navigate(`/financas/fechamento?mes=${selectedMonth}`)} className="gap-2"><LineChartIcon className="h-4 w-4" /> Revisar mês</Button>
           </div>
         </header>
 
@@ -145,7 +171,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
         ) : !hasMonthData ? (
           <Card className="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/10 via-card to-card shadow-elevated">
             <CardContent className="flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
-              <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">{monthTitle(selectedMonth)}</p><h2 className="mt-2 font-heading text-2xl">Comece o fechamento deste mês</h2><p className="mt-2 max-w-xl text-sm text-muted-foreground">Informe sua renda, faturas e despesas para visualizar o resultado e planejar seus objetivos.</p></div>
+              <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">{monthTitle(selectedMonth)}</p><h2 className="mt-2 font-heading text-2xl">Revise os valores deste mês</h2><p className="mt-2 max-w-xl text-sm text-muted-foreground">Informe sua renda, faturas e despesas para visualizar o resultado e planejar seus objetivos.</p></div>
               <Button size="lg" onClick={() => navigate(`/financas/fechamento?mes=${selectedMonth}`)}>Começar agora</Button>
             </CardContent>
           </Card>
@@ -159,22 +185,23 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
           <Card className="border-border/70 shadow-card">
             <CardContent className="p-5">
               <div className="flex items-start justify-between gap-4">
-                <div><h2 className="font-heading text-lg font-bold">Evolução financeira</h2><p className="mt-1 text-xs text-muted-foreground">Receitas, despesas e resultado dos últimos seis meses.</p></div>
-                {comparison.monthsWithData > 0 && comparison.expensesDeltaPct !== 0 && <span className={cn("rounded-full px-2.5 py-1 text-[10px] font-semibold", comparison.expensesDelta > 0 ? "bg-destructive/10 text-destructive" : "bg-success/10 text-success")}>Gastos {Math.abs(comparison.expensesDeltaPct).toFixed(0)}% {comparison.expensesDelta > 0 ? "maiores" : "menores"}</span>}
+                <div><h2 className="font-heading text-lg font-bold">Evolução financeira</h2><p className="mt-1 text-xs text-muted-foreground">Receitas acima, despesas abaixo e linha do resultado · últimos seis meses.</p></div>
               </div>
               <div className="mt-4 h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={evolution} margin={{ top: 8, right: 4, left: -18, bottom: 0 }}>
-                    <defs><linearGradient id="homeIncome" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="hsl(var(--success))" stopOpacity={0.25} /><stop offset="100%" stopColor="hsl(var(--success))" stopOpacity={0} /></linearGradient></defs>
+                  <ComposedChart data={evolution} stackOffset="sign" margin={{ top: 8, right: 4, left: -18, bottom: 12 }}>
                     <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.55} />
+                    <ReferenceLine y={0} stroke="hsl(var(--foreground))" strokeOpacity={0.25} />
                     <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={11} />
                     <YAxis tickLine={false} axisLine={false} fontSize={10} tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
-                    <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))" }} />
-                    <Area type="monotone" dataKey="receitas" name="Receitas" stroke="hsl(var(--success))" fill="url(#homeIncome)" strokeWidth={2.2} />
-                    <Area type="monotone" dataKey="despesas" name="Despesas" stroke="hsl(var(--destructive))" fill="transparent" strokeWidth={2} />
-                  </AreaChart>
+                    <Tooltip formatter={(value: number, name: string) => [formatCurrency(name === "Despesas" ? Math.abs(value) : value), name]} contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))" }} />
+                    <Bar dataKey="receitas" name="Receitas" stackId="movimento" barSize={28} fill="hsl(var(--success))" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="despesas" name="Despesas" stackId="movimento" barSize={28} fill="hsl(var(--destructive))" fillOpacity={0.76} radius={[0, 0, 4, 4]} />
+                    <Line type="monotone" dataKey="resultado" name="Resultado" stroke="hsl(var(--primary))" strokeWidth={2.4} dot={{ r: 2.5, fill: "hsl(var(--card))" }} activeDot={{ r: 4 }} />
+                  </ComposedChart>
                 </ResponsiveContainer>
               </div>
+              {evolutionInsights.length > 0 && <div className="mt-3 grid gap-2 border-t border-border/60 pt-3 sm:grid-cols-3">{evolutionInsights.map((insight) => <div key={insight.label} className="rounded-xl bg-muted/45 p-3"><p className="text-[10px] uppercase tracking-wide text-muted-foreground">{insight.label}</p><p className={cn("mt-1 text-xs font-bold tabular-nums", insight.tone)}>{insight.value}</p></div>)}</div>}
             </CardContent>
           </Card>
 
@@ -204,7 +231,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
           </button>
         </section>
 
-        <Card className="border-border/70 shadow-card"><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><PiggyBank className="h-5 w-5" /></div><div><h2 className="font-heading font-bold">Seus planos</h2><p className="text-xs text-muted-foreground">{data.netWorth.goals > 0 ? `${formatCurrency(data.netWorth.goals)} já guardados em cofrinhos.` : "Crie uma viagem, reserva ou compra futura e acompanhe o progresso."}</p></div></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => navigate("/financas/cofrinhos")}><PiggyBank className="mr-2 h-4 w-4" /> Ver planos</Button><Button onClick={() => navigate(`/financas/fechamento?mes=${selectedMonth}`)}><Plus className="mr-2 h-4 w-4" /> Organizar mês</Button></div></CardContent></Card>
+        <Card className="border-border/70 shadow-card"><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><PiggyBank className="h-5 w-5" /></div><div><h2 className="font-heading font-bold">Seus planos</h2><p className="text-xs text-muted-foreground">{data.netWorth.goals > 0 ? `${formatCurrency(data.netWorth.goals)} já guardados em cofrinhos.` : "Crie uma viagem, reserva ou compra futura e acompanhe o progresso."}</p></div></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => navigate("/financas/cofrinhos")}><PiggyBank className="mr-2 h-4 w-4" /> Ver planos</Button><Button onClick={() => navigate(`/financas/fechamento?mes=${selectedMonth}`)}><Plus className="mr-2 h-4 w-4" /> Revisar mês</Button></div></CardContent></Card>
 
         <p className="pb-3 text-center text-[11px] text-muted-foreground">Patrimônio estimado: <span className={cn("font-semibold", data.netWorth.total >= 0 ? "text-foreground" : "text-destructive")}>{formatCurrency(data.netWorth.total)}</span></p>
       </main>
