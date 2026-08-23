@@ -19,7 +19,7 @@ O handoff do Lovable foi continuado localmente. A experiência principal foi red
 - Meta mensal de gastos exibida com progresso e comparação.
 - Caixinhas mantidas e enriquecidas com progresso, valor restante e previsão de conclusão.
 - Meu Cartãozinho sincronizado como uma única receita prevista mensal e idempotente.
-- Regra de recebimento aplicada a partir de maio/2026: o saldo de cada mês do Cartãozinho entra como receita no Organizador dois meses depois.
+- Regra de recebimento aplicada a partir de maio/2026: o saldo de cada mês do Cartãozinho entra como receita no mesmo mês no Organizador.
 - Opção de cartão Amazon Prime adicionada com marca visual própria.
 - Motor determinístico de indicadores e dicas conectado às telas.
 - Testes do motor financeiro e da agregação do Cartãozinho adicionados.

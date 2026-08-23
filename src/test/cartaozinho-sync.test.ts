@@ -14,15 +14,15 @@ describe("cartaozinhoSync", () => {
     expect(cartaozinhoExternalId("2026-09")).toBe("meu_cartaozinho:2026-09");
   });
 
-  it("leva o saldo do Cartãozinho para dois meses depois no Organizador", () => {
-    expect(cartaozinhoReceiptMonth("2026-05")).toBe("2026-07");
-    expect(cartaozinhoReceiptMonth("2026-12")).toBe("2027-02");
-    expect(cartaozinhoSourceMonthForReceipt("2026-07")).toBe("2026-05");
+  it("mantém no Organizador o total do próprio mês do Cartãozinho", () => {
+    expect(cartaozinhoReceiptMonth("2026-05")).toBe("2026-05");
+    expect(cartaozinhoReceiptMonth("2026-12")).toBe("2026-12");
+    expect(cartaozinhoSourceMonthForReceipt("2026-07")).toBe("2026-07");
   });
 
   it("identifica o mês de origem sem confundir com o mês da receita", () => {
     expect(cartaozinhoSourceMonthFromExternalId("meu_cartaozinho:2026-08")).toBe("2026-08");
-    expect(cartaozinhoReceiptMonth("2026-08")).toBe("2026-10");
+    expect(cartaozinhoReceiptMonth("2026-08")).toBe("2026-08");
     expect(cartaozinhoSourceMonthFromExternalId("meu_cartaozinho:2026-13")).toBeNull();
     expect(cartaozinhoSourceMonthFromExternalId("importacao:2026-08")).toBeNull();
   });

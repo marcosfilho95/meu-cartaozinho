@@ -31,7 +31,7 @@ O usuário pode adicionar um valor manualmente, descrever vários valores em tex
 - Não há parcelamento no Organizador. Uma fatura ou total informado vira um único lançamento no mês de competência.
 - Despesas fixas, como aluguel e educação, podem ser repetidas nos próximos meses. O usuário pode editar valores futuros, pausar, encerrar ou ignorar somente um mês.
 - Despesas variáveis são classificadas por categoria e comparadas com a meta mensal de gastos.
-- O Meu Cartãozinho gera uma única receita prevista por mês, somando o valor a receber de todas as pessoas. A partir de maio/2026, cada total entra no Organizador dois meses depois (maio em julho, junho em agosto). A sincronização é idempotente e não recria os lançamentos individuais antigos.
+- O Meu Cartãozinho gera uma única receita prevista por mês, somando o valor a receber de todas as pessoas. A partir de maio/2026, cada total entra no mesmo mês no Organizador (maio em maio, julho em julho). A sincronização é idempotente e não recria os lançamentos individuais antigos.
 - Indicadores e dicas usam valores reais: receitas, despesas, resultado, fixas, variáveis, percentual comprometido, taxa de economia, comparação com o mês anterior e média recente.
 - Na ausência de histórico suficiente, o sistema mostra um estado vazio honesto em vez de inventar conclusões.
 

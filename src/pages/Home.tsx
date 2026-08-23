@@ -13,7 +13,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/constants";
 import {
   fetchCartaozinhoMonthTotals,
-  cartaozinhoReceiptMonth,
   syncCartaozinhoIncomeMonth,
   type CartaozinhoMonthTotal,
 } from "@/lib/finance/cartaozinhoSync";
@@ -196,7 +195,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
         <section className="grid gap-4 md:grid-cols-2">
           <button type="button" onClick={() => navigate("/cards")} className="group rounded-2xl border border-border/70 bg-card p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-elevated">
             <div className="flex items-start justify-between gap-4"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary"><CreditCard className="h-5 w-5" /></div><ArrowUpRight className="h-4 w-4 text-muted-foreground transition group-hover:text-primary" /></div>
-            <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Cartões e faturas</p><h2 className="mt-1 font-heading text-xl font-bold">Meu Cartãozinho</h2><p className="mt-3 text-2xl font-bold text-primary">{formatCurrency(data.card.total)}</p><p className="mt-1 text-xs text-muted-foreground">Gerado em {monthTitle(selectedMonth).toLocaleLowerCase("pt-BR")} · entra no Organizador em {monthTitle(cartaozinhoReceiptMonth(selectedMonth)).toLocaleLowerCase("pt-BR")}{data.card.people > 0 ? ` · ${data.card.people} ${data.card.people === 1 ? "pessoa" : "pessoas"}` : ""}</p>
+            <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Cartões e faturas</p><h2 className="mt-1 font-heading text-xl font-bold">Meu Cartãozinho</h2><p className="mt-3 text-2xl font-bold text-primary">{formatCurrency(data.card.total)}</p><p className="mt-1 text-xs text-muted-foreground">Total de {monthTitle(selectedMonth).toLocaleLowerCase("pt-BR")} · mesmo valor usado no Organizador{data.card.people > 0 ? ` · ${data.card.people} ${data.card.people === 1 ? "pessoa" : "pessoas"}` : ""}</p>
           </button>
 
           <button type="button" onClick={() => navigate("/financas")} className="group rounded-2xl border border-border/70 bg-card p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-elevated">

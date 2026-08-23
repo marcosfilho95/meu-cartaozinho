@@ -4,7 +4,8 @@
  * Regras:
  * - Uma única receita prevista por mês de origem, identificada por
  *   `meu_cartaozinho:AAAA-MM` no campo `external_id` (idempotente: nunca duplica).
- * - A partir de maio/2026, o valor entra no Organizador dois meses depois.
+ * - A partir de maio/2026, cada mês do Organizador recebe somente o total
+ *   do mesmo mês no Meu Cartãozinho.
  * - Não recria os antigos lançamentos individuais por parcela.
  * - Se o total do mês mudar, a receita é atualizada; se zerar, é removida
  *   (somente quando ainda estiver como prevista/pendente).
@@ -14,7 +15,7 @@ import { addMonthsToKey } from "@/lib/financeShared";
 
 export const CARTAOZINHO_CATEGORY = "Meu Cartãozinho";
 export const CARTAOZINHO_SYNC_START_MONTH = "2026-05";
-export const CARTAOZINHO_RECEIPT_DELAY_MONTHS = 2;
+export const CARTAOZINHO_RECEIPT_DELAY_MONTHS = 0;
 
 /** O identificador preserva o mês em que as parcelas foram geradas. */
 export const cartaozinhoExternalId = (sourceMonth: string) => `meu_cartaozinho:${sourceMonth}`;
@@ -144,9 +145,9 @@ export type CartaozinhoSyncResult = {
 };
 
 /**
- * Corrige lançamentos antigos que tenham sido gravados no próprio mês de origem.
- * Isso evita somar, por exemplo, o total de agosto à receita de agosto: ele pertence
- * a outubro, enquanto agosto recebe exclusivamente o total de junho.
+ * Corrige lançamentos antigos que tenham sido deslocados para outro mês.
+ * A competência precisa ser idêntica ao mês do identificador externo: o total
+ * de julho pertence a julho, sem reutilizar o valor de maio.
  */
 export const reconcileCartaozinhoReceiptMonths = async (userId: string) => {
   const { data, error } = await supabase
@@ -190,7 +191,7 @@ export const reconcileCartaozinhoReceiptMonths = async (userId: string) => {
 
 /**
  * Sincroniza a receita agregada usando o mês de origem do Cartãozinho.
- * A competência no Organizador ocorre dois meses depois: maio/2026 entra em julho/2026.
+ * A competência no Organizador é o próprio mês de origem: julho/2026 entra em julho/2026.
  */
 export const syncCartaozinhoMonth = async (
   userId: string,
