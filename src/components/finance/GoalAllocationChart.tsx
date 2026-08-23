@@ -5,10 +5,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/constants";
 import { calculateSuggestedContribution } from "@/lib/goalContributions";
 import type { FinancialRuleVersion } from "@/lib/financialRules";
+import { getGoalIcon } from "./goalVisuals";
 
 type AllocationGoal = {
   id: string;
   name: string;
+  goal_type?: string | null;
 };
 
 interface GoalAllocationChartProps {
@@ -110,10 +112,14 @@ export const GoalAllocationChart: React.FC<GoalAllocationChartProps> = ({
         </div>
 
         <div className="grid gap-2 sm:grid-cols-2">
-          {chart.plans.map((plan) => (
+          {chart.plans.map((plan) => {
+            const GoalIcon = getGoalIcon(plan);
+            return (
             <div key={plan.id} className="flex items-center justify-between gap-3 rounded-xl border border-border/70 px-3 py-2.5">
               <div className="flex min-w-0 items-center gap-2">
-                <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: plan.color }} />
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white" style={{ backgroundColor: plan.color }}>
+                  <GoalIcon className="h-4 w-4" aria-hidden="true" />
+                </span>
                 <div className="min-w-0">
                   <p className="truncate text-xs font-semibold text-foreground">{plan.name}</p>
                   <p className="text-[10px] text-muted-foreground">
@@ -125,7 +131,8 @@ export const GoalAllocationChart: React.FC<GoalAllocationChartProps> = ({
                 {plan.share.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
               </strong>
             </div>
-          ))}
+            );
+          })}
           <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-border px-3 py-2.5">
             <div className="flex items-center gap-2">
               <span className="h-3 w-3 rounded-full bg-muted-foreground/20" />

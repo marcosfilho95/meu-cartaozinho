@@ -68,6 +68,7 @@ import {
 import { AddGoalDialog } from "./AddGoalDialog";
 import { GoalAllocationChart } from "./GoalAllocationChart";
 import { GoalProjectionDialog } from "./GoalProjectionDialog";
+import { getGoalIcon, sortGoalsByAllocationPercentage } from "./goalVisuals";
 
 type GoalItem = PlanningGoal & { id: string; goal_type?: string; priority?: number };
 type GoalAccount = {
@@ -159,6 +160,10 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
   const activeProjectionVersions = useMemo(
     () => resolveGoalProjectionVersions(projectionVersions, refMonth),
     [projectionVersions, refMonth],
+  );
+  const sortedVisibleGoals = useMemo(
+    () => sortGoalsByAllocationPercentage(visibleGoals, activeFinancialRules),
+    [activeFinancialRules, visibleGoals],
   );
 
   useEffect(() => {
@@ -500,7 +505,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
       </div>
 
       <GoalAllocationChart
-        goals={visibleGoals}
+        goals={sortedVisibleGoals}
         activeRules={activeFinancialRules}
         monthlyIncome={monthlyIncome}
         monthlyAvailable={monthlySurplus}
@@ -539,14 +544,17 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                   <SelectValue placeholder="Escolha um plano" />
                 </SelectTrigger>
                 <SelectContent>
-                  {goals.map((g) => (
+                  {sortedVisibleGoals.map((g) => {
+                    const GoalIcon = getGoalIcon(g);
+                    return (
                     <SelectItem key={g.id} value={g.id}>
                       <span className="flex items-center gap-2">
-                        <Target className="h-3.5 w-3.5 text-primary" />
+                        <GoalIcon className="h-3.5 w-3.5 text-primary" />
                         {g.name}
                       </span>
                     </SelectItem>
-                  ))}
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
@@ -591,7 +599,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
         </Button>
       </div>
 
-      {visibleGoals.length === 0 ? (
+      {sortedVisibleGoals.length === 0 ? (
         <Card className="border-2 border-dashed border-border">
           <CardContent className="py-8 text-center">
             <PiggyBank className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
@@ -608,7 +616,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
         </Card>
       ) : (
         <div className="space-y-3">
-          {visibleGoals.map((goal) => {
+          {sortedVisibleGoals.map((goal) => {
             const current = Number(goal.current_amount || 0);
             const projectionVersion = activeProjectionVersions.get(goal.id) || null;
             const target = calculateGoalTarget(Number(goal.target_amount || 0), projectionVersion, averageMonthlyExpenses);
@@ -641,6 +649,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
               : null;
             const monthsCovered = averageMonthlyExpenses > 0 ? current / averageMonthlyExpenses : 0;
             const isContributionOpen = contributionGoalId === goal.id;
+            const GoalIcon = getGoalIcon(goal);
             const ruleLabel = !currentRule
               ? "Meta mensal não definida"
               : currentRule.value_type === "percentage"
@@ -655,7 +664,11 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                 <CardContent className="p-0">
                   <div className="space-y-3 p-4">
                     <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 flex-1 items-start gap-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary shadow-sm">
+                          <GoalIcon className="h-5 w-5" aria-hidden="true" />
+                        </span>
+                        <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <h3 className="truncate font-heading text-base font-bold">{goal.name}</h3>
                           {targetReached && (
@@ -670,6 +683,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                         <p className="mt-1 text-[11px] font-semibold text-primary">
                           Meta de {referenceLabel}: {ruleLabel}
                         </p>
+                        </div>
                       </div>
                       <div className="flex items-center gap-1">
                         <Button
