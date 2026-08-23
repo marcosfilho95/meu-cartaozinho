@@ -33,6 +33,7 @@ import {
   type SmartCategoryOption,
 } from "@/lib/financeSmartClassification";
 import { parseSmartInputWithAi } from "@/lib/finance/aiService";
+import { recognizeFinancialImageLocally } from "@/lib/finance/localImageOcr";
 import {
   matchAccountByInstitution,
   mergeAiWithDeterministicResult,
@@ -222,7 +223,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         return;
       }
 
-      const local = tab === "text"
+      let local = tab === "text"
         ? parseDeterministicTransaction(String(payload.text), new Date())
         : null;
       let aiParsed: SmartParsedTransaction[] = [];
@@ -231,6 +232,15 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         aiParsed = await parseSmartInputWithAi(payload);
       } catch (error) {
         aiFailure = error;
+      }
+
+      if (tab === "image" && imageDataUrl && (aiFailure || aiParsed.length === 0)) {
+        toast.info("A leitura online não encontrou dados. Tentando reconhecer o texto da imagem...");
+        const recognizedText = await recognizeFinancialImageLocally(imageDataUrl);
+        local = parseDeterministicTransaction(recognizedText, new Date());
+        if (local) {
+          console.info("[SmartAdd] Imagem reconhecida pelo OCR local.");
+        }
       }
 
       let parsed: SmartParsedTransaction[] = aiParsed;

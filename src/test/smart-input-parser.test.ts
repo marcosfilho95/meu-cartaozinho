@@ -12,6 +12,7 @@ describe("deterministic smart input parser", () => {
   it.each([
     ["Nubank fatura de 2706,27 reais no mês de MAIO", 2706.27, "2026-05-05", "Nubank", "Fatura Nubank"],
     ["fatura c6 julho 3250,40", 3250.4, "2026-07-05", "C6", "Fatura C6"],
+    ["Fatura paga R$ 4.189,25 Vencimento 05 de Junho de 2026", 4189.25, "2026-06-05", null, "Despesa"],
     ["PicPay 1500 junho", 1500, "2026-06-05", "PicPay", "PicPay"],
     ["Nubank 2800 vencimento dia 10 de maio", 2800, "2026-05-10", "Nubank", "Nubank"],
     ["Fatura Nubank de R$ 2.800,50 em agosto", 2800.5, "2026-08-05", "Nubank", "Fatura Nubank"],
