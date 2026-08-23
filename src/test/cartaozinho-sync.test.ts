@@ -3,11 +3,26 @@ import { describe, expect, it } from "vitest";
 import {
   aggregateCartaozinhoRows,
   cartaozinhoExternalId,
+  cartaozinhoReceiptMonth,
+  cartaozinhoSourceMonthForReceipt,
+  shouldSyncCartaozinhoSourceMonth,
 } from "@/lib/finance/cartaozinhoSync";
 
 describe("cartaozinhoSync", () => {
   it("cria um identificador mensal estável", () => {
     expect(cartaozinhoExternalId("2026-09")).toBe("meu_cartaozinho:2026-09");
+  });
+
+  it("leva o saldo do Cartãozinho para dois meses depois no Organizador", () => {
+    expect(cartaozinhoReceiptMonth("2026-05")).toBe("2026-07");
+    expect(cartaozinhoReceiptMonth("2026-12")).toBe("2027-02");
+    expect(cartaozinhoSourceMonthForReceipt("2026-07")).toBe("2026-05");
+  });
+
+  it("começa a integração somente em maio de 2026", () => {
+    expect(shouldSyncCartaozinhoSourceMonth("2026-04")).toBe(false);
+    expect(shouldSyncCartaozinhoSourceMonth("2026-05")).toBe(true);
+    expect(shouldSyncCartaozinhoSourceMonth("2027-01")).toBe(true);
   });
 
   it("soma parcelas por mês e deduplica pessoas sem diferenciar maiúsculas", () => {

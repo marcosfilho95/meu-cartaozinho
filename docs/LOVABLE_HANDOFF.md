@@ -19,6 +19,7 @@ O handoff do Lovable foi continuado localmente. A experiência principal foi red
 - Meta mensal de gastos exibida com progresso e comparação.
 - Caixinhas mantidas e enriquecidas com progresso, valor restante e previsão de conclusão.
 - Meu Cartãozinho sincronizado como uma única receita prevista mensal e idempotente.
+- Regra de recebimento aplicada a partir de maio/2026: o saldo de cada mês do Cartãozinho entra como receita no Organizador dois meses depois.
 - Opção de cartão Amazon Prime adicionada com marca visual própria.
 - Motor determinístico de indicadores e dicas conectado às telas.
 - Testes do motor financeiro e da agregação do Cartãozinho adicionados.
@@ -47,6 +48,8 @@ Ela protege a sincronização mensal contra duplicatas usando índices únicos p
 A migration foi aplicada e verificada no projeto Supabase oficial configurado no repositório (`udqadiqnallwsdqqnuji`). O índice `idx_transactions_monthly_automation_unique` está ativo.
 
 O `.env` local aponta para outro projeto (`bockojhtmjrtfvkgfocf`), que não está disponível na conta Supabase conectada. Esse ambiente não foi alterado; antes de usá-lo em produção, é necessário confirmar qual projeto deve fornecer os dados do aplicativo.
+
+A migration `20260823170000_shift_cartaozinho_income_by_two_months.sql` também foi aplicada ao projeto oficial para corrigir lançamentos automáticos existentes. No ambiente alternativo, o próprio sincronizador faz a mesma correção ao abrir o Organizador.
 
 ## Validação executada
 

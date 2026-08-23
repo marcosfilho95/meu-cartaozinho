@@ -42,7 +42,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/constants";
-import { syncCartaozinhoMonths } from "@/lib/finance/cartaozinhoSync";
+import { syncCartaozinhoIncomeMonths } from "@/lib/finance/cartaozinhoSync";
 import { ensureDefaultCategories } from "@/lib/financeCategoryDefaults";
 import { ensureDefaultAccounts } from "@/lib/financeDefaults";
 import {
@@ -107,7 +107,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     try {
       await Promise.allSettled([ensureDefaultAccounts(userId), ensureDefaultCategories(userId)]);
       const syncMonths = Array.from({ length: 6 }, (_, index) => addMonthsToKey(referenceMonth, -index));
-      await syncCartaozinhoMonths(userId, syncMonths);
+      await syncCartaozinhoIncomeMonths(userId, syncMonths);
 
       const [accountsRes, goalsRes, goalTxRes, budgetsRes, loadedTransactions] = await Promise.all([
         supabase.from("accounts").select("id, name, type, current_balance").eq("user_id", userId).eq("is_active", true).order("name"),

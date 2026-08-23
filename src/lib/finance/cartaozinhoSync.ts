@@ -2,17 +2,31 @@
  * Integração mensal agregada entre o "Meu Cartãozinho" e o Organizador.
  *
  * Regras:
- * - Uma única receita prevista por mês, identificada por `meu_cartaozinho:AAAA-MM`
- *   no campo `external_id` (idempotente: nunca duplica).
+ * - Uma única receita prevista por mês de origem, identificada por
+ *   `meu_cartaozinho:AAAA-MM` no campo `external_id` (idempotente: nunca duplica).
+ * - A partir de maio/2026, o valor entra no Organizador dois meses depois.
  * - Não recria os antigos lançamentos individuais por parcela.
  * - Se o total do mês mudar, a receita é atualizada; se zerar, é removida
  *   (somente quando ainda estiver como prevista/pendente).
  */
 import { supabase } from "@/integrations/supabase/client";
+import { addMonthsToKey } from "@/lib/financeShared";
 
 export const CARTAOZINHO_CATEGORY = "Meu Cartãozinho";
+export const CARTAOZINHO_SYNC_START_MONTH = "2026-05";
+export const CARTAOZINHO_RECEIPT_DELAY_MONTHS = 2;
 
-export const cartaozinhoExternalId = (refMonth: string) => `meu_cartaozinho:${refMonth}`;
+/** O identificador preserva o mês em que as parcelas foram geradas. */
+export const cartaozinhoExternalId = (sourceMonth: string) => `meu_cartaozinho:${sourceMonth}`;
+
+export const cartaozinhoReceiptMonth = (sourceMonth: string) =>
+  addMonthsToKey(sourceMonth, CARTAOZINHO_RECEIPT_DELAY_MONTHS);
+
+export const cartaozinhoSourceMonthForReceipt = (receiptMonth: string) =>
+  addMonthsToKey(receiptMonth, -CARTAOZINHO_RECEIPT_DELAY_MONTHS);
+
+export const shouldSyncCartaozinhoSourceMonth = (sourceMonth: string) =>
+  sourceMonth >= CARTAOZINHO_SYNC_START_MONTH;
 
 export type CartaozinhoMonthTotal = {
   refMonth: string;
@@ -117,19 +131,22 @@ const resolveAccountId = async (userId: string) => {
 };
 
 export type CartaozinhoSyncResult = {
-  refMonth: string;
+  sourceMonth: string;
+  receiptMonth: string;
   total: number;
   action: "created" | "updated" | "removed" | "unchanged" | "skipped";
 };
 
-/** Sincroniza (idempotente) a receita prevista agregada do mês. */
+/**
+ * Sincroniza a receita agregada usando o mês de origem do Cartãozinho.
+ * A competência no Organizador ocorre dois meses depois: maio/2026 entra em julho/2026.
+ */
 export const syncCartaozinhoMonth = async (
   userId: string,
-  refMonth: string,
+  sourceMonth: string,
 ): Promise<CartaozinhoSyncResult> => {
-  const totals = await fetchCartaozinhoMonthTotals(userId, [refMonth]);
-  const total = totals[refMonth]?.total ?? 0;
-  const externalId = cartaozinhoExternalId(refMonth);
+  const receiptMonth = cartaozinhoReceiptMonth(sourceMonth);
+  const externalId = cartaozinhoExternalId(sourceMonth);
 
   const { data: existingRows, error: findError } = await supabase
     .from("transactions")
@@ -141,29 +158,46 @@ export const syncCartaozinhoMonth = async (
   if (findError) throw findError;
   const existing = existingRows?.[0];
 
+  if (!shouldSyncCartaozinhoSourceMonth(sourceMonth)) {
+    if (existing && existing.status !== "paid") {
+      const { error } = await supabase.from("transactions").delete().eq("id", existing.id);
+      if (error) throw error;
+      return { sourceMonth, receiptMonth, total: 0, action: "removed" };
+    }
+    return { sourceMonth, receiptMonth, total: 0, action: "skipped" };
+  }
+
+  const totals = await fetchCartaozinhoMonthTotals(userId, [sourceMonth]);
+  const total = totals[sourceMonth]?.total ?? 0;
+
   if (total <= 0) {
     if (existing && existing.status !== "paid") {
       await supabase.from("transactions").delete().eq("id", existing.id);
-      return { refMonth, total: 0, action: "removed" };
+      return { sourceMonth, receiptMonth, total: 0, action: "removed" };
     }
-    return { refMonth, total: 0, action: existing ? "skipped" : "unchanged" };
+    return { sourceMonth, receiptMonth, total: 0, action: existing ? "skipped" : "unchanged" };
   }
 
   if (existing) {
-    if (Math.round(Number(existing.amount) * 100) === Math.round(total * 100)) {
-      return { refMonth, total, action: "unchanged" };
-    }
-    if (existing.status === "paid") return { refMonth, total, action: "skipped" };
+    const amountChanged = Math.round(Number(existing.amount) * 100) !== Math.round(total * 100);
     const { error } = await supabase
       .from("transactions")
-      .update({ amount: total })
+      .update({
+        amount: total,
+        transaction_date: `${receiptMonth}-01`,
+        competence_month: receiptMonth,
+        due_date: `${receiptMonth}-01`,
+        description_original: `Meu Cartãozinho — ${sourceMonth} · recebido em ${receiptMonth}`,
+        notes: `Meu Cartãozinho — ${sourceMonth} · recebido em ${receiptMonth}`,
+        metadata: { integration: "meu_cartaozinho", source_month: sourceMonth, receipt_month: receiptMonth },
+      })
       .eq("id", existing.id);
     if (error) throw error;
-    return { refMonth, total, action: "updated" };
+    return { sourceMonth, receiptMonth, total, action: amountChanged ? "updated" : "unchanged" };
   }
 
   const accountId = await resolveAccountId(userId);
-  if (!accountId) return { refMonth, total, action: "skipped" };
+  if (!accountId) return { sourceMonth, receiptMonth, total, action: "skipped" };
   const categoryId = await resolveCategoryId(userId);
 
   const { error } = await supabase.from("transactions").insert({
@@ -173,17 +207,18 @@ export const syncCartaozinhoMonth = async (
     type: "income",
     amount: total,
     status: "pending",
-    transaction_date: `${refMonth}-01`,
-    competence_month: refMonth,
+    transaction_date: `${receiptMonth}-01`,
+    competence_month: receiptMonth,
+    due_date: `${receiptMonth}-01`,
     external_id: externalId,
     source: "cartaozinho_sync",
     source_origin: "integration",
-    description_original: `Meu Cartãozinho — ${refMonth}`,
-    notes: `Meu Cartãozinho — ${refMonth}`,
-    metadata: { integration: "meu_cartaozinho", ref_month: refMonth },
+    description_original: `Meu Cartãozinho — ${sourceMonth} · recebido em ${receiptMonth}`,
+    notes: `Meu Cartãozinho — ${sourceMonth} · recebido em ${receiptMonth}`,
+    metadata: { integration: "meu_cartaozinho", source_month: sourceMonth, receipt_month: receiptMonth },
   });
   if (error) throw error;
-  return { refMonth, total, action: "created" };
+  return { sourceMonth, receiptMonth, total, action: "created" };
 };
 
 /** Sincroniza vários meses (usado ao abrir a Home e o painel do Organizador). */
@@ -198,3 +233,10 @@ export const syncCartaozinhoMonths = async (userId: string, refMonths: string[])
   }
   return results;
 };
+
+/** Sincroniza os meses do Organizador convertendo-os para os meses de origem. */
+export const syncCartaozinhoIncomeMonth = async (userId: string, receiptMonth: string) =>
+  syncCartaozinhoMonth(userId, cartaozinhoSourceMonthForReceipt(receiptMonth));
+
+export const syncCartaozinhoIncomeMonths = async (userId: string, receiptMonths: string[]) =>
+  syncCartaozinhoMonths(userId, receiptMonths.map(cartaozinhoSourceMonthForReceipt));
