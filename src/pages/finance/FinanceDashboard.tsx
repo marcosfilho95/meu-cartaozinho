@@ -245,7 +245,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
         </section>
       )}
 
-      <section className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-3 md:grid-cols-2">
         <Card className="border-border/70 shadow-card">
           <CardContent className="flex h-full min-h-64 flex-col p-4">
             <div className="flex items-start justify-between gap-2">
@@ -274,7 +274,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
         <Card className="border-border/70 shadow-card">
           <CardContent className="h-full min-h-64 p-4">
             <div className="flex items-start justify-between gap-2"><div><h2 className="font-heading font-bold">Evolução financeira</h2><p className="mt-0.5 text-[11px] text-muted-foreground">Últimos seis meses</p></div><BarChart3 className="h-4 w-4 shrink-0 text-primary" /></div>
-            <div className="mt-3 h-44"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={evolution} margin={{ top: 6, left: -30, right: 0, bottom: 0 }}><CartesianGrid vertical={false} stroke="hsl(var(--border))" /><XAxis dataKey="month" axisLine={false} tickLine={false} fontSize={9} /><YAxis axisLine={false} tickLine={false} fontSize={8} tickFormatter={(value) => `${Math.round(value / 1000)}k`} /><Tooltip formatter={(value: number, name: string) => [formatCurrency(Math.abs(value)), name]} contentStyle={chartTooltipStyle} /><Bar dataKey="receitas" name="Receitas" fill="hsl(var(--success))" radius={[3, 3, 0, 0]} /><Bar dataKey="despesas" name="Despesas" fill="hsl(var(--destructive))" fillOpacity={0.72} radius={[0, 0, 3, 3]} /><Line dataKey="resultado" name="Resultado" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} /></ComposedChart></ResponsiveContainer></div>
+            <div className="mt-3 h-44"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={evolution} margin={{ top: 6, left: -30, right: 0, bottom: 0 }}><CartesianGrid vertical={false} stroke="hsl(var(--border))" /><XAxis dataKey="month" axisLine={false} tickLine={false} fontSize={9} /><YAxis axisLine={false} tickLine={false} fontSize={8} tickFormatter={(value) => `${Math.round(value / 1000)}k`} /><Tooltip formatter={(value: number, name: string) => [formatCurrency(Math.abs(value)), name]} contentStyle={chartTooltipStyle} /><Bar dataKey="receitas" name="Receitas" fill="hsl(var(--success))" radius={[3, 3, 0, 0]} /><Bar dataKey="despesas" name="Despesas" fill="hsl(var(--destructive))" fillOpacity={0.72} radius={[0, 0, 3, 3]} /><Line type="monotone" dataKey="resultado" name="Resultado" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} /></ComposedChart></ResponsiveContainer></div>
           </CardContent>
         </Card>
 

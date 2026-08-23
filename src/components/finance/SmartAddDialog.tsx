@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -162,15 +162,46 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     };
   }, [open, userId]);
 
-  const handleImagePick = async (file: File | undefined) => {
-    if (!file) return;
+  const handleImagePick = useCallback(async (file: File | undefined) => {
+    if (!file) return false;
+    if (!file.type.startsWith("image/")) {
+      toast.error("O conteúdo colado não é uma imagem.");
+      return false;
+    }
     if (file.size > 8 * 1024 * 1024) {
       toast.error("Imagem muito grande (máx. 8 MB)");
-      return;
+      return false;
     }
-    const url = await fileToDataUrl(file);
-    setImageDataUrl(url);
-  };
+    try {
+      const url = await fileToDataUrl(file);
+      setImageDataUrl(url);
+      return true;
+    } catch {
+      toast.error("Não foi possível abrir a imagem colada.");
+      return false;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open || drafts.length > 0) return;
+
+    const onPaste = (event: ClipboardEvent) => {
+      const imageItem = Array.from(event.clipboardData?.items || [])
+        .find((item) => item.kind === "file" && item.type.startsWith("image/"));
+      const imageFile = imageItem?.getAsFile();
+      if (!imageFile) return;
+
+      event.preventDefault();
+      void handleImagePick(imageFile).then((accepted) => {
+        if (!accepted) return;
+        setTab("image");
+        toast.success("Print colado! Confira a imagem e processe quando estiver pronto.");
+      });
+    };
+
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [drafts.length, handleImagePick, open]);
 
   const runParse = async () => {
     setLoading(true);
@@ -349,15 +380,19 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         <div className="max-h-[75vh] space-y-4 overflow-y-auto px-5 py-4">
           {drafts.length === 0 ? (
             <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
+              <div className="mb-3 flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-foreground">
+                <ClipboardPaste className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <p><strong>Colar um print:</strong> use <kbd className="rounded border bg-background px-1.5 py-0.5 font-mono text-[10px]">Win + Shift + S</kbd> e depois <kbd className="rounded border bg-background px-1.5 py-0.5 font-mono text-[10px]">Ctrl + V</kbd> nesta janela.</p>
+              </div>
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="text" className="gap-1.5">
                   <TypeIcon className="h-3.5 w-3.5" /> Texto
                 </TabsTrigger>
                 <TabsTrigger value="paste" className="gap-1.5">
-                  <ClipboardPaste className="h-3.5 w-3.5" /> Colar
+                  <ClipboardPaste className="h-3.5 w-3.5" /> Colar texto
                 </TabsTrigger>
                 <TabsTrigger value="image" className="gap-1.5">
-                  <ImageIcon className="h-3.5 w-3.5" /> Foto
+                  <ImageIcon className="h-3.5 w-3.5" /> Imagem
                 </TabsTrigger>
               </TabsList>
 
@@ -390,7 +425,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
 
               <TabsContent value="image" className="mt-4 space-y-3">
                 <Label className="text-xs text-muted-foreground">
-                  Envie um print com instituição, total e mês visíveis. Nenhum dado será salvo sem sua revisão.
+                  Cole com Ctrl + V ou selecione um print com instituição, total e mês visíveis. Nada será salvo sem sua revisão.
                 </Label>
                 <input
                   ref={fileInputRef}
