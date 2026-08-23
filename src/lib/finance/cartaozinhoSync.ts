@@ -19,6 +19,12 @@ export const CARTAOZINHO_RECEIPT_DELAY_MONTHS = 2;
 /** O identificador preserva o mês em que as parcelas foram geradas. */
 export const cartaozinhoExternalId = (sourceMonth: string) => `meu_cartaozinho:${sourceMonth}`;
 
+/** Extrai com segurança o mês de origem gravado no identificador da integração. */
+export const cartaozinhoSourceMonthFromExternalId = (externalId: string | null | undefined) => {
+  const match = /^meu_cartaozinho:(\d{4}-(0[1-9]|1[0-2]))$/.exec(externalId || "");
+  return match?.[1] ?? null;
+};
+
 export const cartaozinhoReceiptMonth = (sourceMonth: string) =>
   addMonthsToKey(sourceMonth, CARTAOZINHO_RECEIPT_DELAY_MONTHS);
 
@@ -138,6 +144,51 @@ export type CartaozinhoSyncResult = {
 };
 
 /**
+ * Corrige lançamentos antigos que tenham sido gravados no próprio mês de origem.
+ * Isso evita somar, por exemplo, o total de agosto à receita de agosto: ele pertence
+ * a outubro, enquanto agosto recebe exclusivamente o total de junho.
+ */
+export const reconcileCartaozinhoReceiptMonths = async (userId: string) => {
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("id, external_id, transaction_date, competence_month, due_date")
+    .eq("user_id", userId)
+    .like("external_id", "meu_cartaozinho:%")
+    .is("deleted_at", null);
+  if (error) throw error;
+
+  let corrected = 0;
+  for (const transaction of data || []) {
+    const sourceMonth = cartaozinhoSourceMonthFromExternalId(transaction.external_id);
+    if (!sourceMonth || !shouldSyncCartaozinhoSourceMonth(sourceMonth)) continue;
+
+    const receiptMonth = cartaozinhoReceiptMonth(sourceMonth);
+    const receiptDate = `${receiptMonth}-01`;
+    const isAligned = transaction.transaction_date === receiptDate
+      && transaction.competence_month === receiptMonth
+      && transaction.due_date === receiptDate;
+    if (isAligned) continue;
+
+    const label = `Meu Cartãozinho — ${sourceMonth} · recebido em ${receiptMonth}`;
+    const { error: updateError } = await supabase
+      .from("transactions")
+      .update({
+        transaction_date: receiptDate,
+        competence_month: receiptMonth,
+        due_date: receiptDate,
+        description_original: label,
+        notes: label,
+        metadata: { integration: "meu_cartaozinho", source_month: sourceMonth, receipt_month: receiptMonth },
+      })
+      .eq("id", transaction.id);
+    if (updateError) throw updateError;
+    corrected += 1;
+  }
+
+  return corrected;
+};
+
+/**
  * Sincroniza a receita agregada usando o mês de origem do Cartãozinho.
  * A competência no Organizador ocorre dois meses depois: maio/2026 entra em julho/2026.
  */
@@ -224,6 +275,11 @@ export const syncCartaozinhoMonth = async (
 /** Sincroniza vários meses (usado ao abrir a Home e o painel do Organizador). */
 export const syncCartaozinhoMonths = async (userId: string, refMonths: string[]) => {
   const results: CartaozinhoSyncResult[] = [];
+  try {
+    await reconcileCartaozinhoReceiptMonths(userId);
+  } catch (error) {
+    console.error("[cartaozinhoSync:reconcile]", error);
+  }
   for (const month of refMonths) {
     try {
       results.push(await syncCartaozinhoMonth(userId, month));
@@ -235,8 +291,14 @@ export const syncCartaozinhoMonths = async (userId: string, refMonths: string[])
 };
 
 /** Sincroniza os meses do Organizador convertendo-os para os meses de origem. */
-export const syncCartaozinhoIncomeMonth = async (userId: string, receiptMonth: string) =>
-  syncCartaozinhoMonth(userId, cartaozinhoSourceMonthForReceipt(receiptMonth));
+export const syncCartaozinhoIncomeMonth = async (userId: string, receiptMonth: string) => {
+  try {
+    await reconcileCartaozinhoReceiptMonths(userId);
+  } catch (error) {
+    console.error("[cartaozinhoSync:reconcile]", error);
+  }
+  return syncCartaozinhoMonth(userId, cartaozinhoSourceMonthForReceipt(receiptMonth));
+};
 
 export const syncCartaozinhoIncomeMonths = async (userId: string, receiptMonths: string[]) =>
   syncCartaozinhoMonths(userId, receiptMonths.map(cartaozinhoSourceMonthForReceipt));

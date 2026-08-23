@@ -4,6 +4,7 @@ import {
   aggregateCartaozinhoRows,
   cartaozinhoExternalId,
   cartaozinhoReceiptMonth,
+  cartaozinhoSourceMonthFromExternalId,
   cartaozinhoSourceMonthForReceipt,
   shouldSyncCartaozinhoSourceMonth,
 } from "@/lib/finance/cartaozinhoSync";
@@ -17,6 +18,13 @@ describe("cartaozinhoSync", () => {
     expect(cartaozinhoReceiptMonth("2026-05")).toBe("2026-07");
     expect(cartaozinhoReceiptMonth("2026-12")).toBe("2027-02");
     expect(cartaozinhoSourceMonthForReceipt("2026-07")).toBe("2026-05");
+  });
+
+  it("identifica o mês de origem sem confundir com o mês da receita", () => {
+    expect(cartaozinhoSourceMonthFromExternalId("meu_cartaozinho:2026-08")).toBe("2026-08");
+    expect(cartaozinhoReceiptMonth("2026-08")).toBe("2026-10");
+    expect(cartaozinhoSourceMonthFromExternalId("meu_cartaozinho:2026-13")).toBeNull();
+    expect(cartaozinhoSourceMonthFromExternalId("importacao:2026-08")).toBeNull();
   });
 
   it("começa a integração somente em maio de 2026", () => {
