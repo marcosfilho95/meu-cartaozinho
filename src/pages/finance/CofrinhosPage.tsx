@@ -88,9 +88,9 @@ const CofrinhosPage: React.FC<CofrinhosPageProps> = ({ userId }) => {
       <header className="flex items-center gap-2">
         <PiggyBank className="h-5 w-5 text-primary" />
         <div>
-          <h1 className="font-heading text-lg font-bold">Cofrinhos e sonhos</h1>
+          <h1 className="font-heading text-xl font-bold">Meus planos</h1>
           <p className="text-xs text-muted-foreground">
-            Casa, poupança, filhos, viagem: guarde por objetivo e acompanhe o progresso.
+            Escolha um objetivo, guarde quando puder e acompanhe quanto falta.
           </p>
         </div>
       </header>

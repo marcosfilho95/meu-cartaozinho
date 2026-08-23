@@ -41,7 +41,6 @@ import {
   Loader2,
   PiggyBank,
   Plus,
-  Shield,
   Target,
   Trash2,
   Wallet,
@@ -106,10 +105,6 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
     () => goals.filter((goal) => !goal.is_completed || Number(goal.current_amount || 0) > 0),
     [goals],
   );
-  const totalTargets = useMemo(
-    () => goals.reduce((sum, goal) => sum + Number(goal.target_amount || 0), 0),
-    [goals],
-  );
 
   useEffect(() => {
     if (!expandedGoalId) {
@@ -147,7 +142,6 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
   const availableFromClosing = Math.max(monthlySurplus - allocatedThisMonth, 0);
   const availableInAccount = Math.max(Number(primaryAccount?.current_balance || 0), 0);
   const availableBalance = Math.min(availableFromClosing, availableInAccount);
-  const totalProgress = totalTargets > 0 ? Math.min((totalReserved / totalTargets) * 100, 100) : 0;
   const referenceLabel = new Date(`${refMonth}-15T12:00:00`).toLocaleDateString("pt-BR", {
     month: "long",
     year: "numeric",
@@ -338,13 +332,13 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
 
   return (
     <section className="space-y-4">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Card className="border-0 shadow-card bg-gradient-to-br from-success/10 to-success/5">
           <CardContent className="p-4">
             <div className="mb-1 flex items-center gap-2">
               <Wallet className="h-4 w-4 text-success" />
               <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Disponível do fechamento
+                Você pode guardar agora
               </p>
             </div>
             <p
@@ -356,7 +350,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
               {formatCurrency(availableBalance)}
             </p>
             <p className="mt-0.5 text-[10px] text-muted-foreground">
-              Sobra de {referenceLabel} ainda não reservada
+              Sobra de {referenceLabel} disponível para seus planos
             </p>
           </CardContent>
         </Card>
@@ -366,27 +360,12 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
             <div className="mb-1 flex items-center gap-2">
               <PiggyBank className="h-4 w-4 text-primary" />
               <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Guardado nos cofrinhos
+                Total guardado
               </p>
             </div>
             <p className="font-heading text-2xl font-extrabold text-primary">{formatCurrency(totalReserved)}</p>
             <p className="mt-0.5 text-[10px] text-muted-foreground">
-              {visibleGoals.length} meta{visibleGoals.length !== 1 ? "s" : ""} ativa{visibleGoals.length !== 1 ? "s" : ""}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-card">
-          <CardContent className="p-4">
-            <div className="mb-1 flex items-center gap-2">
-              <Shield className="h-4 w-4 text-foreground/60" />
-              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Progresso dos sonhos
-              </p>
-            </div>
-            <p className="font-heading text-2xl font-extrabold text-foreground">{totalProgress.toFixed(0)}%</p>
-            <p className="mt-0.5 text-[10px] text-muted-foreground">
-              {formatCurrency(totalReserved)} de {formatCurrency(totalTargets)}
+              Em {visibleGoals.length} plano{visibleGoals.length !== 1 ? "s" : ""} ativo{visibleGoals.length !== 1 ? "s" : ""}
             </p>
           </CardContent>
         </Card>
@@ -395,13 +374,13 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
       <Card className="overflow-hidden border-0 shadow-elevated" data-allocate>
         <div className="gradient-primary px-4 py-3">
           <h2 className="flex items-center gap-2 font-heading text-base font-bold text-primary-foreground">
-            <PiggyBank className="h-5 w-5" /> Distribuir a sobra de {referenceLabel}
+            <PiggyBank className="h-5 w-5" /> Guardar dinheiro em um plano
           </h2>
         </div>
         <CardContent className="space-y-3 p-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
-              <p className="mb-1 text-[11px] font-semibold text-muted-foreground">Quanto reservar?</p>
+              <p className="mb-1 text-[11px] font-semibold text-muted-foreground">Quanto você quer guardar?</p>
               <Input
                 type="text"
                 inputMode="decimal"
@@ -412,10 +391,10 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
               />
             </div>
             <div>
-              <p className="mb-1 text-[11px] font-semibold text-muted-foreground">Para qual meta?</p>
+              <p className="mb-1 text-[11px] font-semibold text-muted-foreground">Em qual plano?</p>
               <Select value={selectedGoalId} onValueChange={setSelectedGoalId}>
                 <SelectTrigger className="h-11">
-                  <SelectValue placeholder="Selecione a meta" />
+                  <SelectValue placeholder="Escolha um plano" />
                 </SelectTrigger>
                 <SelectContent>
                   {goals.map((g) => (
@@ -436,7 +415,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                 disabled={saving}
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PiggyBank className="h-4 w-4" />}
-                Reservar agora
+                Guardar agora
               </Button>
             </div>
           </div>
@@ -450,14 +429,14 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
 
       <div className="flex items-center justify-between">
         <h2 className="flex items-center gap-2 font-heading text-sm font-bold">
-          <Target className="h-4 w-4 text-primary" /> Meus cofrinhos
+          <Target className="h-4 w-4 text-primary" /> Meus planos
         </h2>
         <Button
           size="sm"
           className="gradient-primary h-9 gap-1.5 rounded-xl border border-primary/30 px-3 text-xs font-bold text-primary-foreground shadow-md shadow-primary/30 hover:brightness-105"
           onClick={() => setGoalDialogOpen(true)}
         >
-          <Plus className="h-3.5 w-3.5" /> Novo cofrinho
+          <Plus className="h-3.5 w-3.5" /> Novo plano
         </Button>
       </div>
 
@@ -465,14 +444,14 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
         <Card className="border-2 border-dashed border-border">
           <CardContent className="py-8 text-center">
             <PiggyBank className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
-            <p className="text-sm font-medium text-muted-foreground">Nenhum cofrinho criado ainda.</p>
+            <p className="text-sm font-medium text-muted-foreground">Nenhum plano criado ainda.</p>
             <p className="mt-1 text-xs text-muted-foreground">Crie um objetivo para transformar sua sobra mensal em um plano.</p>
             <Button
               size="sm"
               className="gradient-primary mt-4 gap-1.5 border border-primary/30 text-primary-foreground shadow-md shadow-primary/30 hover:brightness-105"
               onClick={() => setGoalDialogOpen(true)}
             >
-              <Plus className="h-3.5 w-3.5" /> Criar primeiro cofrinho
+              <Plus className="h-3.5 w-3.5" /> Criar primeiro plano
             </Button>
           </CardContent>
         </Card>

@@ -57,6 +57,51 @@ export type MonthSummary = {
   hasData: boolean;
 };
 
+export type AnalysisPeriod = "month" | "semester" | "year" | "all";
+
+const periodMonths: Record<Exclude<AnalysisPeriod, "all">, number> = {
+  month: 1,
+  semester: 6,
+  year: 12,
+};
+
+export const getAnalysisMonthKeys = (
+  transactions: FinanceTx[],
+  refMonth: string,
+  period: AnalysisPeriod,
+) => {
+  if (period !== "all") {
+    const count = periodMonths[period];
+    return Array.from({ length: count }, (_, index) => addMonthsToKey(refMonth, index - count + 1));
+  }
+
+  const firstMonth = transactions
+    .filter(countable)
+    .map(getTransactionReferenceMonth)
+    .filter((month) => month <= refMonth)
+    .sort()[0];
+  if (!firstMonth) return [refMonth];
+
+  const keys: string[] = [];
+  for (let key = firstMonth; key <= refMonth; key = addMonthsToKey(key, 1)) keys.push(key);
+  return keys;
+};
+
+export const summarizePeriod = (transactions: FinanceTx[], monthKeys: string[]) => {
+  const months = monthKeys.map((key) => summarizeMonth(transactions, key));
+  const income = fromCents(months.reduce((sum, month) => sum + toCents(month.income), 0));
+  const expenses = fromCents(months.reduce((sum, month) => sum + toCents(month.expenses), 0));
+  const result = fromCents(toCents(income) - toCents(expenses));
+  const monthsWithData = months.filter((month) => month.hasData).length;
+  return {
+    income,
+    expenses,
+    result,
+    monthsWithData,
+    averageResult: monthsWithData > 0 ? result / monthsWithData : 0,
+  };
+};
+
 export const summarizeMonth = (transactions: FinanceTx[], refMonth: string): MonthSummary => {
   let incomeC = 0;
   let expenseC = 0;

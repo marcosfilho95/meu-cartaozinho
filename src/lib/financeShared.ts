@@ -282,6 +282,9 @@ export const fetchFinanceTransactions = async (userId: string, monthsBack = 12) 
   );
 };
 
+export const fetchAllFinanceTransactions = async (userId: string) =>
+  removeDisconnectedCardTransactions(await fetchFinanceTransactionScope(userId, {}));
+
 export const fetchFinanceTransactionsByMonth = async (userId: string, refMonth: string) => {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(refMonth)) {
     throw new Error("Mês de referência inválido.");

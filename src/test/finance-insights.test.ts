@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   buildInsights,
   compareMonths,
+  getAnalysisMonthKeys,
   groupSmallSlices,
   projectGoal,
   summarizeMonth,
+  summarizePeriod,
   toCents,
 } from "@/lib/financeInsights";
 import type { FinanceTx } from "@/lib/financeShared";
@@ -62,6 +64,32 @@ describe("financeInsights", () => {
     expect(comparison.expensesDeltaPct).toBe(20);
     expect(comparison.averageExpenses).toBe(750);
     expect(comparison.monthsWithData).toBe(2);
+  });
+
+  it("monta os períodos de análise até o mês de referência", () => {
+    const transactions = [
+      tx({ id: "first", transaction_date: "2025-11-10" }),
+      tx({ id: "future", transaction_date: "2026-09-10" }),
+    ];
+    expect(getAnalysisMonthKeys(transactions, "2026-08", "month")).toEqual(["2026-08"]);
+    expect(getAnalysisMonthKeys(transactions, "2026-08", "semester")).toEqual([
+      "2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08",
+    ]);
+    expect(getAnalysisMonthKeys(transactions, "2026-08", "year")).toHaveLength(12);
+    expect(getAnalysisMonthKeys(transactions, "2026-08", "all")[0]).toBe("2025-11");
+    expect(getAnalysisMonthKeys(transactions, "2026-08", "all").at(-1)).toBe("2026-08");
+  });
+
+  it("resume o período preservando o resultado negativo", () => {
+    const summary = summarizePeriod([
+      tx({ id: "income", type: "income", amount: 1000, transaction_date: "2026-07-10" }),
+      tx({ id: "expense-jul", amount: 1400, transaction_date: "2026-07-10" }),
+      tx({ id: "expense-aug", amount: 600, transaction_date: "2026-08-10" }),
+    ], ["2026-07", "2026-08"]);
+    expect(summary.income).toBe(1000);
+    expect(summary.expenses).toBe(2000);
+    expect(summary.result).toBe(-1000);
+    expect(summary.averageResult).toBe(-500);
   });
 
   it("agrupa categorias pequenas em Outros", () => {
