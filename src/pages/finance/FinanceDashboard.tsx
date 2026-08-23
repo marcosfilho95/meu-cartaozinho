@@ -34,6 +34,7 @@ import { MonthNavigator } from "@/components/MonthNavigator";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -101,6 +102,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const [financialRules, setFinancialRules] = useState<FinancialRuleVersion[]>([]);
   const [manualOpen, setManualOpen] = useState(false);
   const [smartOpen, setSmartOpen] = useState(false);
+  const [insightsOpen, setInsightsOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -251,31 +253,23 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
         </section>
       )}
 
-      {!loading && <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-card to-card shadow-card">
-        <CardContent className="p-5">
-          <div className="flex items-start gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Sparkles className="h-4 w-4" /></div>
-            <div><h2 className="font-heading font-bold">Leitura de {monthTitle(referenceMonth)}</h2><p className="mt-0.5 text-xs text-muted-foreground">Insights atualizados automaticamente quando você troca o mês.</p></div>
+      {!loading && (
+        <button
+          type="button"
+          onClick={() => setInsightsOpen(true)}
+          className="group flex w-full items-center justify-between gap-4 overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-r from-primary via-primary to-emerald-700 p-4 text-left text-primary-foreground shadow-lg shadow-primary/15 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:p-5"
+        >
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/20"><Sparkles className="h-5 w-5" /></div>
+            <div className="min-w-0">
+              <p className="font-heading text-base font-bold sm:text-lg">Insights da IA de {monthTitle(referenceMonth)}</p>
+              <p className="mt-0.5 text-xs text-primary-foreground/70">Abra para entender seus gastos, resultado e progresso da meta.</p>
+            </div>
           </div>
-           <div className="mt-4 grid gap-2 md:grid-cols-2">
-             {insights.slice(0, 4).map((insight) => <div key={insight.id} className={cn("rounded-xl border p-3 text-sm leading-relaxed", insightToneStyles[insight.tone])}>{insight.text}</div>)}
-           </div>
-           {spendingGoal > 0 && (
-             <button type="button" onClick={() => navigate("/financas/orcamento")} className="mt-4 w-full rounded-xl border border-border/70 bg-background/75 p-4 text-left transition-colors hover:bg-muted/40">
-               <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                 <span className="font-semibold">Meta: gastar no máximo {formatCurrency(spendingGoal)}</span>
-                 <strong className={spendingGoalRemaining >= 0 ? "text-success" : "text-destructive"}>
-                   {spendingGoalRemaining >= 0
-                     ? `${formatCurrency(spendingGoalRemaining)} disponíveis`
-                     : `${formatCurrency(Math.abs(spendingGoalRemaining))} acima da meta`}
-                 </strong>
-               </div>
-               <Progress value={Math.min(spendingGoalUsage, 100)} className="mt-3 h-2.5" />
-               <p className="mt-2 text-xs text-muted-foreground">{formatCurrency(summary.expenses)} gastos · {spendingGoalUsage.toFixed(0)}% utilizado</p>
-             </button>
-           )}
-         </CardContent>
-      </Card>}
+          <span className="hidden shrink-0 items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs font-bold text-primary transition-transform group-hover:translate-x-0.5 sm:flex">Ver insights <ArrowRight className="h-4 w-4" /></span>
+          <ArrowRight className="h-5 w-5 shrink-0 transition-transform group-hover:translate-x-0.5 sm:hidden" />
+        </button>
+      )}
 
       <section className="space-y-3">
         <div className="flex flex-col gap-3 px-1 sm:flex-row sm:items-end sm:justify-between">
@@ -365,6 +359,32 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
 
       <AddTransactionDialog open={manualOpen} onOpenChange={setManualOpen} userId={userId} defaultDate={`${referenceMonth}-01`} onSaved={load} />
       <SmartAddDialog open={smartOpen} onOpenChange={setSmartOpen} userId={userId} />
+      <Dialog open={insightsOpen} onOpenChange={setInsightsOpen}>
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto rounded-3xl border-primary/25 p-0 shadow-2xl">
+          <div className="bg-gradient-to-br from-primary/12 via-card to-card p-5 sm:p-6">
+            <DialogHeader className="text-left">
+              <div className="mb-1 flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md"><Sparkles className="h-5 w-5" /></div>
+              <DialogTitle className="font-heading text-xl sm:text-2xl">Insights da IA de {monthTitle(referenceMonth)}</DialogTitle>
+              <DialogDescription>Uma leitura objetiva dos números registrados nesta competência.</DialogDescription>
+            </DialogHeader>
+
+            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              {insights.slice(0, 4).map((insight) => <div key={insight.id} className={cn("rounded-2xl border p-4 text-sm leading-relaxed shadow-sm", insightToneStyles[insight.tone])}>{insight.text}</div>)}
+            </div>
+
+            {spendingGoal > 0 && (
+              <button type="button" onClick={() => { setInsightsOpen(false); navigate("/financas/orcamento"); }} className="mt-4 w-full rounded-2xl border border-border/70 bg-background p-4 text-left shadow-sm transition-all hover:border-primary/35 hover:shadow-md">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <span className="font-semibold">Meta: gastar no máximo {formatCurrency(spendingGoal)}</span>
+                  <strong className={spendingGoalRemaining >= 0 ? "text-success" : "text-destructive"}>{spendingGoalRemaining >= 0 ? `${formatCurrency(spendingGoalRemaining)} disponíveis` : `${formatCurrency(Math.abs(spendingGoalRemaining))} acima da meta`}</strong>
+                </div>
+                <Progress value={Math.min(spendingGoalUsage, 100)} className="mt-3 h-2.5" />
+                <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground"><span>{formatCurrency(summary.expenses)} gastos · {spendingGoalUsage.toFixed(0)}% utilizado</span><span className="font-semibold text-primary">Ajustar meta →</span></div>
+              </button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
