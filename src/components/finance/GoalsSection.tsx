@@ -31,8 +31,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/constants";
-import { getGoalMonthlyRequirement, type PlanningGoal } from "@/lib/financePlanning";
-import { calculateAvailablePercentageAmount, createFinancialRuleVersion, getGoalPercentageTotal, resolveFinancialRules, type FinancialRuleVersion } from "@/lib/financialRules";
+import { type PlanningGoal } from "@/lib/financePlanning";
+import { resolveFinancialRules, type FinancialRuleVersion } from "@/lib/financialRules";
+import {
+  calculateAvailableForContributions,
+  calculateMonthlyGoalAchievement,
+  calculateSuggestedContribution,
+} from "@/lib/goalContributions";
 import { getErrorMessage } from "@/lib/supabaseUntyped";
 import {
   ArrowDownLeft,
@@ -62,7 +67,9 @@ interface GoalsSectionProps {
   goals: GoalItem[];
   accounts: GoalAccount[];
   monthlySurplus: number;
+  monthlyIncome: number;
   allocatedThisMonth: number;
+  realizedByGoal: Record<string, number>;
   refMonth: string;
   financialRules?: FinancialRuleVersion[];
   onReload: () => void;
@@ -83,7 +90,9 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
   goals,
   accounts,
   monthlySurplus,
+  monthlyIncome,
   allocatedThisMonth,
+  realizedByGoal,
   refMonth,
   financialRules = [],
   onReload,
@@ -91,10 +100,10 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
   const [goalDialogOpen, setGoalDialogOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<GoalItem | null>(null);
   const [allocAmount, setAllocAmount] = useState("");
-  const [allocPercentage, setAllocPercentage] = useState("");
-  const [allocationMode, setAllocationMode] = useState<"percentage" | "manual">("percentage");
   const [selectedGoalId, setSelectedGoalId] = useState("");
   const [saving, setSaving] = useState(false);
+  const [contributionGoalId, setContributionGoalId] = useState<string | null>(null);
+  const [contributionAmount, setContributionAmount] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [expandedGoalId, setExpandedGoalId] = useState<string | null>(null);
   const [goalTxs, setGoalTxs] = useState<GoalTx[]>([]);
@@ -116,11 +125,6 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
     () => resolveFinancialRules(financialRules, refMonth),
     [financialRules, refMonth],
   );
-  const percentageRules = useMemo(
-    () => activeFinancialRules.filter((rule) => rule.goal_id && rule.value_type === "percentage"),
-    [activeFinancialRules],
-  );
-  const configuredPercentage = useMemo(() => getGoalPercentageTotal(financialRules, refMonth), [financialRules, refMonth]);
 
   useEffect(() => {
     if (!expandedGoalId) {
@@ -155,13 +159,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
       .sort((left, right) => Number(right.current_balance || 0) - Number(left.current_balance || 0));
     return liquidAccounts[0] || null;
   }, [accounts]);
-  const availableFromClosing = Math.max(monthlySurplus - allocatedThisMonth, 0);
-  const availableInAccount = Math.max(Number(primaryAccount?.current_balance || 0), 0);
-  const availableBalance = Math.min(availableFromClosing, availableInAccount);
-  const parsedPercentage = Number(allocPercentage.replace(",", ".")) || 0;
-  const percentageAmount = calculateAvailablePercentageAmount(monthlySurplus, parsedPercentage);
-  const selectedConfiguredPercentage = Number(percentageRules.find((rule) => rule.goal_id === selectedGoalId)?.value || 0);
-  const projectedPercentage = configuredPercentage - selectedConfiguredPercentage + parsedPercentage;
+  const availableBalance = calculateAvailableForContributions(monthlySurplus, allocatedThisMonth);
   const referenceLabel = new Date(`${refMonth}-15T12:00:00`).toLocaleDateString("pt-BR", {
     month: "long",
     year: "numeric",
@@ -172,31 +170,18 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
 
   const selectGoalForAllocation = (goalId: string) => {
     setSelectedGoalId(goalId);
-    setAllocPercentage("");
     setAllocAmount("");
   };
 
-  const handleAllocate = async () => {
-    const amount = allocationMode === "percentage"
-      ? percentageAmount
-      : parseFloat(allocAmount.replace(",", "."));
+  const handleAllocate = async (goalId = selectedGoalId, rawAmount = allocAmount) => {
+    const amount = parseFloat(rawAmount.replace(",", "."));
     if (!amount || amount <= 0) {
-      toast.error(allocationMode === "percentage" ? "Informe um percentual válido." : "Informe um valor válido.");
+      toast.error("Informe o valor que você realmente guardou.");
       return;
     }
-    if (!selectedGoalId) {
-      toast.error("Selecione uma meta.");
+    if (!goalId) {
+      toast.error("Selecione um plano.");
       return;
-    }
-    if (allocationMode === "percentage") {
-      if (parsedPercentage <= 0 || parsedPercentage > 100) {
-        toast.error("Informe um percentual entre 0% e 100%.");
-        return;
-      }
-      if (projectedPercentage > 100.00001) {
-        toast.error(`Os planos somariam ${projectedPercentage.toFixed(1)}%. O limite é 100% do valor disponível.`);
-        return;
-      }
     }
     if (!primaryAccount) {
       toast.error("Nenhuma conta disponível para debitar.");
@@ -209,36 +194,17 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
 
     setSaving(true);
     try {
-      const goal = goals.find((g) => g.id === selectedGoalId);
-      if (!goal) throw new Error("Meta não encontrada.");
+      const goal = goals.find((g) => g.id === goalId);
+      if (!goal) throw new Error("Plano não encontrado.");
       const remaining = Math.max(Number(goal.target_amount) - Number(goal.current_amount), 0);
-      if (amount > remaining) throw new Error(`Faltam ${formatCurrency(remaining)} para concluir esta meta.`);
-
-      if (allocationMode === "percentage") {
-        const currentRule = activeFinancialRules.find((rule) => rule.goal_id === selectedGoalId);
-        const ruleChanged = !currentRule || currentRule.value_type !== "percentage" ||
-          currentRule.calculation_base !== "available_after_priorities" || Number(currentRule.value) !== parsedPercentage;
-        if (ruleChanged) {
-          await createFinancialRuleVersion({
-            user_id: userId,
-            rule_key: `goal:${goal.id}`,
-            rule_type: goal.goal_type || "custom",
-            effective_month: refMonth,
-            value_type: "percentage",
-            value: parsedPercentage,
-            calculation_base: "available_after_priorities",
-            goal_id: goal.id,
-            priority: goal.priority ?? 100,
-          });
-        }
-      }
+      if (amount > remaining) throw new Error(`O objetivo final comporta mais ${formatCurrency(remaining)}.`);
 
       const rpcResult = await (supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }>)("reserve_goal_funds", {
-        p_goal_id: selectedGoalId,
+        p_goal_id: goalId,
         p_account_id: primaryAccount.id,
         p_amount: amount,
         p_ref_month: refMonth,
-        p_description: `Reserva do fechamento de ${referenceLabel}`,
+        p_description: `Aporte realizado em ${referenceLabel}`,
       });
       if (rpcResult.error && !isMissingPlanningRpc(rpcResult.error)) throw rpcResult.error;
 
@@ -249,7 +215,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
             current_amount: Number(goal.current_amount || 0) + amount,
             is_completed: Number(goal.current_amount || 0) + amount >= Number(goal.target_amount),
           })
-          .eq("id", selectedGoalId);
+          .eq("id", goalId);
         if (gErr) throw gErr;
         const { error: aErr } = await supabase
           .from("accounts")
@@ -258,30 +224,31 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
         if (aErr) throw aErr;
         let { error: tErr } = await supabase.from("goal_transactions").insert({
           user_id: userId,
-          goal_id: selectedGoalId,
+          goal_id: goalId,
           account_id: primaryAccount.id,
           amount,
           type: "deposit",
-          description: `Reserva do fechamento de ${referenceLabel}`,
+          description: `Aporte realizado em ${referenceLabel}`,
           ref_month: refMonth,
         });
         if (tErr && /account_id|ref_month/i.test(tErr.message)) {
           const fallback = await supabase.from("goal_transactions").insert({
             user_id: userId,
-            goal_id: selectedGoalId,
+            goal_id: goalId,
             amount,
             type: "deposit",
-            description: `Reserva do fechamento de ${referenceLabel}`,
+            description: `Aporte realizado em ${referenceLabel}`,
           });
           tErr = fallback.error;
         }
         if (tErr) throw tErr;
       }
 
-      toast.success(`${formatCurrency(amount)} reservado para "${goal.name}".`);
+      toast.success(`Aporte de ${formatCurrency(amount)} registrado em "${goal.name}".`);
       setAllocAmount("");
-      setAllocPercentage("");
       setSelectedGoalId("");
+      setContributionAmount("");
+      setContributionGoalId(null);
       onReload();
     } catch (error) {
       toast.error(getErrorMessage(error, "Erro ao reservar."));
@@ -436,62 +403,26 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
           </h2>
         </div>
         <CardContent className="space-y-4 p-4 sm:p-5">
-          <div className="grid w-full grid-cols-2 rounded-xl border border-border bg-muted/40 p-1 sm:inline-grid sm:w-auto">
-            <button
-              type="button"
-              onClick={() => setAllocationMode("percentage")}
-              className={cn("whitespace-nowrap rounded-lg px-3 py-2 text-[11px] font-semibold transition sm:text-xs", allocationMode === "percentage" ? "bg-background text-primary shadow-sm" : "text-muted-foreground")}
-            >
-              Percentual do disponível
-            </button>
-            <button
-              type="button"
-              onClick={() => setAllocationMode("manual")}
-              className={cn("whitespace-nowrap rounded-lg px-3 py-2 text-[11px] font-semibold transition sm:text-xs", allocationMode === "manual" ? "bg-background text-primary shadow-sm" : "text-muted-foreground")}
-            >
-              Valor manual
-            </button>
-          </div>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Registre somente o valor que saiu da sua conta e foi realmente guardado. A meta percentual é configurada em cada plano.
+          </p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_220px] lg:items-end">
             <div className="min-w-0">
-              <p className="mb-1.5 text-[11px] font-semibold leading-snug text-muted-foreground sm:min-h-7 lg:min-h-0">
-                {allocationMode === "percentage" ? "Quanto do valor disponível deseja guardar?" : "Quanto você quer guardar manualmente?"}
-              </p>
-              {allocationMode === "percentage" ? (
-                <div className="relative">
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="Ex.: 10"
-                    value={allocPercentage}
-                    onChange={(event) => setAllocPercentage(event.target.value)}
-                    className="h-11 border-2 pr-10 text-center text-lg font-bold focus:border-primary"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">%</span>
-                </div>
-              ) : (
+              <p className="mb-1.5 text-[11px] font-semibold text-muted-foreground">Quanto você realmente guardou?</p>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">R$</span>
                 <Input
                   type="text"
                   inputMode="decimal"
                   placeholder="Ex.: 500,00"
                   value={allocAmount}
                   onChange={(event) => setAllocAmount(event.target.value)}
-                  className="h-11 border-2 text-center text-lg font-bold focus:border-primary"
+                  className="h-11 border-2 pl-10 text-right text-base font-bold focus:border-primary"
                 />
-              )}
-              {allocationMode === "percentage" && (
-                <div className="mt-1.5 text-center text-xs">
-                  <p className="truncate font-semibold text-primary" title={parsedPercentage > 0 ? `${parsedPercentage.toLocaleString("pt-BR")}% → ${formatCurrency(percentageAmount)}` : `Base: ${formatCurrency(monthlySurplus)}`}>
-                    {parsedPercentage > 0 ? `${parsedPercentage.toLocaleString("pt-BR")}% → ${formatCurrency(percentageAmount)}` : `Base: ${formatCurrency(monthlySurplus)}`}
-                  </p>
-                  {selectedGoalId && selectedConfiguredPercentage > 0 && parsedPercentage === 0 && (
-                    <p className="mt-1 text-[10px] text-muted-foreground">Regra atual: {selectedConfiguredPercentage.toLocaleString("pt-BR")}%. Digite o percentual deste aporte.</p>
-                  )}
-                </div>
-              )}
+              </div>
             </div>
             <div className="min-w-0">
-              <p className="mb-1.5 text-[11px] font-semibold leading-snug text-muted-foreground sm:min-h-7 lg:min-h-0">Em qual plano?</p>
+              <p className="mb-1.5 text-[11px] font-semibold text-muted-foreground">Em qual plano?</p>
               <Select value={selectedGoalId} onValueChange={selectGoalForAllocation}>
                 <SelectTrigger className="h-11 w-full min-w-0">
                   <SelectValue placeholder="Escolha um plano" />
@@ -511,26 +442,26 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
             <div className="flex items-end sm:col-span-2 lg:col-span-1">
               <Button
                 className="gradient-primary h-11 w-full gap-2 whitespace-nowrap text-sm font-semibold text-primary-foreground"
-                onClick={handleAllocate}
+                onClick={() => void handleAllocate()}
                 disabled={saving}
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PiggyBank className="h-4 w-4" />}
-                Guardar agora
+                Registrar aporte
               </Button>
             </div>
           </div>
           <div className="grid gap-2 border-t border-border/60 pt-3 sm:grid-cols-3">
             <div className="flex items-center justify-between gap-3 rounded-xl bg-muted/35 px-3 py-2 sm:flex-col sm:justify-center sm:gap-1 sm:text-center">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Disponível no mês</span>
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Sobra disponível no mês</span>
               <strong className="shrink-0 text-xs tabular-nums text-success">{formatCurrency(monthlySurplus)}</strong>
             </div>
             <div className="flex items-center justify-between gap-3 rounded-xl bg-muted/35 px-3 py-2 sm:flex-col sm:justify-center sm:gap-1 sm:text-center">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Ainda pode reservar</span>
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Ainda pode guardar</span>
               <strong className="shrink-0 text-xs tabular-nums text-success">{formatCurrency(availableBalance)}</strong>
             </div>
             <div className="flex items-center justify-between gap-3 rounded-xl bg-muted/35 px-3 py-2 sm:flex-col sm:justify-center sm:gap-1 sm:text-center">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Percentual dos planos</span>
-              <strong className={cn("shrink-0 text-xs tabular-nums", allocationMode === "percentage" && projectedPercentage > 100 ? "text-destructive" : "text-primary")}>{(allocationMode === "percentage" && parsedPercentage > 0 && selectedGoalId ? projectedPercentage : configuredPercentage).toFixed(0)}% de 100%</strong>
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Guardado nesta competência</span>
+              <strong className="shrink-0 text-xs tabular-nums text-primary">{formatCurrency(allocatedThisMonth)}</strong>
             </div>
           </div>
         </CardContent>
@@ -572,7 +503,17 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
             const progress = Math.min((current / target) * 100, 100);
             const isCompleted = progress >= 100;
             const isExpanded = expandedGoalId === goal.id;
-            const monthlyRequirement = getGoalMonthlyRequirement(goal, refMonth);
+            const currentRule = activeFinancialRules.find((rule) => rule.goal_id === goal.id) || null;
+            const suggested = calculateSuggestedContribution(currentRule, { monthlyIncome, monthlyAvailable: monthlySurplus });
+            const actualThisMonth = Number(realizedByGoal[goal.id] || 0);
+            const monthlyAchievement = calculateMonthlyGoalAchievement(suggested, actualThisMonth);
+            const difference = actualThisMonth - suggested;
+            const isContributionOpen = contributionGoalId === goal.id;
+            const ruleLabel = !currentRule
+              ? "Meta mensal não definida"
+              : currentRule.value_type === "percentage"
+                ? `${Number(currentRule.value).toLocaleString("pt-BR")}% ${currentRule.calculation_base === "total_income" ? "da renda" : "do disponível"}`
+                : `${formatCurrency(Number(currentRule.value))} por mês`;
 
             return (
               <Card
@@ -594,11 +535,9 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                             ? `Prazo: ${new Date(goal.deadline + "T12:00:00").toLocaleDateString("pt-BR")}`
                             : "Sem prazo definido"}
                         </p>
-                        {monthlyRequirement > 0 && !isCompleted && (
-                          <p className="mt-0.5 text-[11px] font-semibold text-primary">
-                            Ritmo sugerido: {formatCurrency(monthlyRequirement)}/mês
-                          </p>
-                        )}
+                        <p className="mt-1 text-[11px] font-semibold text-primary">
+                          Meta de {referenceLabel}: {ruleLabel}
+                        </p>
                       </div>
                       <div className="flex items-center gap-1">
                         <Button
@@ -630,7 +569,31 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                       </div>
                     </div>
 
+                    <div className="grid grid-cols-2 gap-2 rounded-xl border border-border/70 bg-muted/25 p-3 sm:grid-cols-4">
+                      <div>
+                        <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Planejado</p>
+                        <p className="mt-1 text-xs font-bold text-foreground">{formatCurrency(suggested)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Guardado no mês</p>
+                        <p className="mt-1 text-xs font-bold text-success">{formatCurrency(actualThisMonth)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Diferença</p>
+                        <p className={cn("mt-1 text-xs font-bold", difference >= 0 ? "text-success" : "text-destructive")}>
+                          {difference > 0 ? "+" : ""}{formatCurrency(difference)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Meta mensal</p>
+                        <p className={cn("mt-1 text-xs font-bold", monthlyAchievement >= 100 ? "text-success" : "text-primary")}>
+                          {monthlyAchievement.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% atingida
+                        </p>
+                      </div>
+                    </div>
+
                     <div>
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Total acumulado do plano</p>
                       <div className="mb-1.5 flex items-end justify-between">
                         <span className="font-heading text-xl font-extrabold text-primary">{formatCurrency(current)}</span>
                         <span className="text-xs text-muted-foreground">de {formatCurrency(target)}</span>
@@ -658,11 +621,11 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                           size="sm"
                           className="gradient-primary h-9 flex-1 gap-1.5 rounded-xl text-xs text-primary-foreground"
                           onClick={() => {
-                            selectGoalForAllocation(goal.id);
-                            document.querySelector("[data-allocate]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                            setContributionGoalId(isContributionOpen ? null : goal.id);
+                            setContributionAmount("");
                           }}
                         >
-                          <ArrowUpRight className="h-3.5 w-3.5" /> Reservar
+                          <ArrowUpRight className="h-3.5 w-3.5" /> Informar aporte do mês
                         </Button>
                         <Button
                           variant="outline"
@@ -676,6 +639,38 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                         >
                           <ArrowDownLeft className="h-3.5 w-3.5" /> Retirar
                         </Button>
+                      </div>
+                    )}
+
+                    {isContributionOpen && !isCompleted && (
+                      <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+                        <Label className="text-[11px] font-semibold text-foreground">
+                          Quanto você realmente guardou em {referenceLabel}?
+                        </Label>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">R$</span>
+                            <Input
+                              type="text"
+                              inputMode="decimal"
+                              placeholder="Ex.: 900,00"
+                              value={contributionAmount}
+                              onChange={(event) => setContributionAmount(event.target.value)}
+                              className="h-10 bg-background pl-10 text-right font-bold"
+                            />
+                          </div>
+                          <Button
+                            className="h-10 gap-2 px-5"
+                            disabled={saving}
+                            onClick={() => void handleAllocate(goal.id, contributionAmount)}
+                          >
+                            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PiggyBank className="h-4 w-4" />}
+                            Registrar
+                          </Button>
+                        </div>
+                        <p className="mt-2 text-[10px] text-muted-foreground">
+                          Sugestão: {formatCurrency(suggested)} · ainda disponível no mês: {formatCurrency(availableBalance)}. Você pode superar a sugestão.
+                        </p>
                       </div>
                     )}
                   </div>
