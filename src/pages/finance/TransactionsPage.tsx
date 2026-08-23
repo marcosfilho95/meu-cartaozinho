@@ -4,8 +4,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MonthNavigator } from "@/components/MonthNavigator";
 
-import { ArrowDownCircle, ArrowUpCircle, Check, Clock, Loader2, Pencil, Search, Trash2 } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, Check, Clock, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { formatCurrency, TRANSACTION_STATUS_COLORS, TRANSACTION_STATUS_LABELS } from "@/lib/constants";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -16,26 +17,40 @@ import { FinanceTx, fetchFinanceTransactions, getCycleScopedTransactions, monthK
 import { getDashboardSummary } from "@/lib/financeSelectors";
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
 import { calculateAccountBalanceEffect } from "@/lib/financeOverview";
+import { useSearchParams } from "react-router-dom";
 
 interface TransactionsPageProps {
   userId: string;
 }
 
 const VISIBLE_BATCH_SIZE = 120;
+const isMonthKey = (value: string | null): value is string => /^\d{4}-(0[1-9]|1[0-2])$/.test(value || "");
 
 const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [viewMode, setViewMode] = useState<"billing" | "calendar">("billing");
+  const [viewMode, setViewMode] = useState<"billing" | "calendar">("calendar");
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const requestedMonth = searchParams.get("mes");
+    return isMonthKey(requestedMonth) ? requestedMonth : monthKey(new Date());
+  });
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(VISIBLE_BATCH_SIZE);
   const [editingTransaction, setEditingTransaction] = useState<FinanceTx | null>(null);
+  const [addingTransaction, setAddingTransaction] = useState(false);
 
   const cachedTransactions = userId ? getFinanceTransactionsCache<FinanceTx[]>(userId) || [] : [];
-  const currentMonth = monthKey(new Date());
   const todayDay = new Date().getDate();
+
+  const changeMonth = (month: string) => {
+    setSelectedMonth(month);
+    const next = new URLSearchParams(searchParams);
+    next.set("mes", month);
+    setSearchParams(next, { replace: true });
+  };
 
   const { data: transactions = [], isLoading, refetch } = useQuery({
     queryKey: ["transactions", userId],
@@ -64,11 +79,11 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
 
   const scopedTransactions = useMemo(() => {
     if (viewMode === "calendar") {
-      return transactions.filter((tx) => tx.transaction_date?.startsWith(currentMonth));
+      return transactions.filter((tx) => tx.transaction_date?.startsWith(selectedMonth));
     }
 
-    return getCycleScopedTransactions(transactions, currentMonth, todayDay);
-  }, [transactions, viewMode, currentMonth, todayDay]);
+    return getCycleScopedTransactions(transactions, selectedMonth, todayDay);
+  }, [transactions, viewMode, selectedMonth, todayDay]);
 
   const monthSummary = useMemo(() => getDashboardSummary(scopedTransactions), [scopedTransactions]);
 
@@ -186,7 +201,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
 
   React.useEffect(() => {
     setVisibleCount(VISIBLE_BATCH_SIZE);
-  }, [search, typeFilter, statusFilter, viewMode, currentMonth]);
+  }, [search, typeFilter, statusFilter, viewMode, selectedMonth]);
 
   React.useEffect(() => {
     if (visibleCount > filtered.length) {
@@ -197,14 +212,25 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
   const monthLabel =
     viewMode === "billing"
       ? "Ciclo de fatura por cartão (dinâmico)"
-      : `Calendário: ${new Date(`${currentMonth}-15T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}`;
+      : `Calendário de ${new Date(`${selectedMonth}-15T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}`;
 
   return (
     <>
       {/* Summary cards */}
       <div className="mx-auto max-w-5xl px-4 pt-2 pb-1">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground capitalize">{monthLabel}</p>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground capitalize">{monthLabel}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Encontre, edite ou exclua qualquer lançamento deste mês.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <MonthNavigator currentMonth={selectedMonth} onMonthChange={changeMonth} />
+            <Button className="h-10 gap-2" onClick={() => setAddingTransaction(true)}>
+              <Plus className="h-4 w-4" /> Novo lançamento
+            </Button>
+          </div>
+        </div>
+        <div className="mb-2 flex justify-end">
           <div className="flex items-center gap-1 rounded-xl border border-border/70 bg-card p-1">
             <button
               type="button"
@@ -302,8 +328,12 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
             <p className="pt-1 text-center text-xs text-muted-foreground">Carregando transações...</p>
           </div>
         ) : grouped.length === 0 ? (
-          <div className="py-12 text-center text-muted-foreground">
-            <p className="text-sm">Nenhuma transação encontrada.</p>
+          <div className="rounded-2xl border border-dashed border-border py-12 text-center text-muted-foreground">
+            <p className="text-sm font-medium text-foreground">Nenhum lançamento neste mês.</p>
+            <p className="mt-1 text-xs">Navegue pelos meses ou adicione um novo registro.</p>
+            <Button variant="outline" className="mt-4 gap-2" onClick={() => setAddingTransaction(true)}>
+              <Plus className="h-4 w-4" /> Adicionar lançamento
+            </Button>
           </div>
         ) : (
           <>
@@ -439,11 +469,18 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
       </div>
       <AddTransactionDialog
         key={editingTransaction?.id || "no-edit"}
-        open={Boolean(editingTransaction)}
-        onOpenChange={(open) => { if (!open) setEditingTransaction(null); }}
+        open={Boolean(editingTransaction) || addingTransaction}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingTransaction(null);
+            setAddingTransaction(false);
+          }
+        }}
         userId={userId}
         defaultType={editingTransaction?.type === "income" ? "income" : "expense"}
+        defaultDate={`${selectedMonth}-05`}
         editingTransaction={editingTransaction}
+        onSaved={() => void refetch()}
       />
     </>
   );
