@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   matchAccountByInstitution,
+  matchAccountByHint,
   mergeAiWithDeterministicResult,
   parseBrazilianCurrency,
   parseDeterministicTransaction,
@@ -127,6 +128,19 @@ describe("deterministic smart input parser", () => {
       category_hint: "Transferência recebida",
     });
   });
+
+  it("extracts account, category and description from the pipe format", () => {
+    expect(parseDeterministicTransactions(
+      "MÊS JULHO 2026\nDESPESA | VETER | 123,00 | CONTA Corrente | CATEGORIA Pets",
+      referenceDate,
+    )).toMatchObject([{
+      description: "VETER",
+      amount: 123,
+      date: "2026-07-05",
+      account_hint: "Corrente",
+      category_hint: "Pets",
+    }]);
+  });
 });
 
 describe("smart parser merge and account matching", () => {
@@ -142,6 +156,23 @@ describe("smart parser merge and account matching", () => {
 
   it("leaves account empty when the explicit institution has no matching account", () => {
     expect(matchAccountByInstitution(accounts, "Amazon Prime")).toBe("");
+  });
+
+  it("prioritizes the account name from CONTA over another account of the same type", () => {
+    const financialAccounts = [
+      { id: "food", name: "Alimentacao", type: "checking" },
+      { id: "checking", name: "Conta Corrente", type: "checking" },
+      { id: "cash", name: "Carteira", type: "cash" },
+    ];
+    expect(matchAccountByHint(financialAccounts, "Corrente")).toBe("checking");
+    expect(matchAccountByHint(financialAccounts, "Conta Corrente")).toBe("checking");
+  });
+
+  it("does not guess when a generic account type matches several accounts", () => {
+    expect(matchAccountByHint([
+      { id: "one", name: "Conta A", type: "checking" },
+      { id: "two", name: "Conta B", type: "checking" },
+    ], "corrente")).toBe("");
   });
 
   it("keeps explicit local fields when AI contradicts them", () => {

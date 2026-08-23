@@ -39,6 +39,7 @@ import { parseSmartInputWithAi } from "@/lib/finance/aiService";
 import { recognizeFinancialImageLocally } from "@/lib/finance/localImageOcr";
 import {
   matchAccountByInstitution,
+  matchAccountByHint,
   mergeAiWithDeterministicResult,
   normalizeText,
   parseBrazilianCurrency,
@@ -69,6 +70,7 @@ interface DraftTx {
   confidence: number;
   transfer_direction: "in" | "out" | null;
   institution: string | null;
+  account_hint: string | null;
   learned_from_history: boolean;
 }
 
@@ -299,9 +301,12 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
           : previousCategoryExists ? previous!.category_id! : suggestedCategoryId;
         const institution = t.institution || null;
         const previousAccountExists = Boolean(previous?.account_id && accounts.some((account) => account.id === previous.account_id));
-        const account_id = institution
-          ? guessAccount(accounts, t.payment_method, t.type, institution)
-          : previousAccountExists ? previous!.account_id : guessAccount(accounts, t.payment_method, t.type, institution);
+        const explicitAccountId = matchAccountByHint(accounts, t.account_hint);
+        const account_id = t.account_hint
+          ? explicitAccountId
+          : institution
+            ? guessAccount(accounts, t.payment_method, t.type, institution)
+            : previousAccountExists ? previous!.account_id : guessAccount(accounts, t.payment_method, t.type, institution);
         const role = t.role || (t.type === "transfer" ? "transfer" : t.type);
         return {
           id: uid(),
@@ -318,9 +323,10 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
           confidence: t.confidence ?? 0.7,
           transfer_direction: t.transfer_direction || null,
           institution,
+          account_hint: t.account_hint || null,
           learned_from_history: Boolean(
             (previousCategoryExists && !hasExplicitCategory && (!suggestedCategoryId || isGenericSmartCategoryId(categories, suggestedCategoryId))) ||
-            (!institution && previousAccountExists)
+            (!t.account_hint && !institution && previousAccountExists)
           ),
         };
       });
@@ -645,6 +651,13 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                             ))}
                           </SelectContent>
                         </Select>
+                        {d.account_hint && (
+                          <p className={cn("mt-1 text-[10px]", d.account_id ? "text-success" : "text-destructive")}>
+                            {d.account_id
+                              ? `Conta identificada pelo texto: ${d.account_hint}`
+                              : `Conta “${d.account_hint}” não encontrada. Selecione uma conta.`}
+                          </p>
+                        )}
                       </div>
                       {d.type === "transfer" && (
                         <div className="col-span-2">

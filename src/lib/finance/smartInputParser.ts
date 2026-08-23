@@ -11,6 +11,7 @@ export interface SmartParsedTransaction {
   payment_method: SmartPaymentMethod | null;
   category_hint: string | null;
   institution: string | null;
+  account_hint?: string | null;
   explicit_day: number | null;
   explicit_month: number | null;
   explicit_year: number | null;
@@ -206,6 +207,11 @@ const extractExplicitCategory = (text: string): string | null => {
   return match?.[1]?.trim() || null;
 };
 
+const extractExplicitAccount = (text: string): string | null => {
+  const match = text.match(/(?:^|\|)\s*conta\s*(?::|=|-)?\s*([^|]+?)(?=\s*\|\s*categoria\b|$)/i);
+  return match?.[1]?.trim() || null;
+};
+
 const inferCategory = (text: string, normalized: string): string | null => {
   const explicit = extractExplicitCategory(text);
   if (explicit) return explicit;
@@ -215,13 +221,29 @@ const inferCategory = (text: string, normalized: string): string | null => {
   return null;
 };
 
-const freeformDescription = (text: string): string => text
-  .replace(/^\s*(?:[-*•]|\d+[.)])\s*/, "")
-  .replace(/^\s*(?:receita|despesa|gasto)\s+/i, "")
-  .replace(/\s+\bcategoria\s*(?::|=|-)?\s*.+$/i, "")
-  .replace(/\s+(?:r\$\s*)?(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?\s*(?:reais?)?\s*$/i, "")
-  .replace(/\s+/g, " ")
-  .trim();
+const freeformDescription = (text: string): string => {
+  if (text.includes("|")) {
+    const descriptionPart = text
+      .split("|")
+      .map((part) => part.trim())
+      .find((part) =>
+        Boolean(part) &&
+        !/^(?:receita|despesa|gasto|transferencia)$/i.test(normalizeText(part)) &&
+        !/^(?:conta|categoria)\b/i.test(part) &&
+        parseBrazilianCurrency(part) === null,
+      );
+    if (descriptionPart) return descriptionPart;
+  }
+
+  return text
+    .replace(/^\s*(?:[-*•]|\d+[.)])\s*/, "")
+    .replace(/^\s*(?:receita|despesa|gasto)\s+/i, "")
+    .replace(/\s+\bcategoria\s*(?::|=|-)?\s*.+$/i, "")
+    .replace(/\s*\|\s*conta\s*(?::|=|-)?\s*.+$/i, "")
+    .replace(/\s+(?:r\$\s*)?(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?\s*(?:reais?)?\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+};
 
 const buildDescription = (
   text: string,
@@ -264,6 +286,7 @@ export const parseDeterministicTransaction = (
     payment_method: paymentMethod,
     category_hint: inferCategory(text, normalized),
     institution,
+    account_hint: extractExplicitAccount(text),
     explicit_day: parts.day,
     explicit_month: parts.month,
     explicit_year: parts.year,
@@ -329,6 +352,7 @@ export const mergeAiWithDeterministicResult = (
     payment_method: local.payment_method ?? ai?.payment_method ?? null,
     category_hint: local.category_hint ?? aiCategory ?? null,
     institution: local.institution ?? ai?.institution ?? null,
+    account_hint: local.account_hint ?? ai?.account_hint ?? null,
     explicit_day: local.explicit_day,
     explicit_month: local.explicit_month,
     explicit_year: local.explicit_year,
@@ -351,4 +375,41 @@ export const matchAccountByInstitution = (
     )));
   });
   return match?.id || "";
+};
+
+export const matchAccountByHint = (
+  accounts: SmartAccount[],
+  hint: string | null | undefined,
+): string => {
+  if (!hint) return "";
+  const needle = normalizeText(hint);
+  const typeAliases: Record<string, string> = {
+    corrente: "checking",
+    "conta corrente": "checking",
+    poupanca: "savings",
+    dinheiro: "cash",
+    carteira: "cash",
+    investimento: "investment",
+    cartao: "credit_card",
+    "cartao de credito": "credit_card",
+  };
+
+  const ranked = accounts
+    .map((account) => {
+      const name = normalizeText(account.name);
+      const institution = normalizeText(account.institution || "");
+      let score = 0;
+      if (name === needle) score = 100;
+      else if (institution && institution === needle) score = 95;
+      else if (name.includes(needle) || needle.includes(name)) score = 80;
+      else if (institution && (institution.includes(needle) || needle.includes(institution))) score = 70;
+      else if (typeAliases[needle] && account.type === typeAliases[needle]) score = 20;
+      return { id: account.id, name, score };
+    })
+    .filter((match) => match.score > 0)
+    .sort((left, right) => right.score - left.score || left.name.localeCompare(right.name));
+
+  if (!ranked.length) return "";
+  if (ranked[0].score === 20 && ranked.filter((match) => match.score === 20).length > 1) return "";
+  return ranked[0].id;
 };
