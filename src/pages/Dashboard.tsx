@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, CreditCard, Layers3, Plus, ShoppingCart, WalletCards } from "lucide-react";
+import { ArrowRight, CreditCard, Layers3, Plus, ShoppingCart, Wallet, WalletCards } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 import { AddCardDialog } from "@/components/AddCardDialog";
@@ -49,6 +49,12 @@ const BANK_CHART_COLORS: Record<string, string> = {
 
 const FALLBACK_CHART_COLORS = ["#0F766E", "#2563EB", "#D97706", "#DB2777", "#7C3AED"];
 
+const formatCardMonth = (value: string) => {
+  const [year, month] = value.split("-").map(Number);
+  if (!year || !month) return value;
+  return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date(year, month - 1, 1));
+};
+
 interface DashboardProps {
   initialUserId?: string;
 }
@@ -60,7 +66,31 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
   const [month, setMonth] = useState(getCurrentMonth());
   const [totals, setTotals] = useState<Record<string, CardTotal>>({});
   const [loading, setLoading] = useState(true);
+  const [openingCardId, setOpeningCardId] = useState<string | null>(null);
+  const navigationTimerRef = useRef<number | null>(null);
   const headerProfile = useUserHeaderProfile(userId);
+
+  useEffect(() => () => {
+    if (navigationTimerRef.current !== null) window.clearTimeout(navigationTimerRef.current);
+  }, []);
+
+  const openCard = (card: CardItem) => {
+    if (openingCardId) return;
+
+    setOpeningCardId(card.id);
+    const targetMonth = getCycleMonthForDueDay({
+      baseMonth: month,
+      dueDay: card.default_due_day,
+      onlyShiftCurrentMonth: true,
+    });
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+    navigationTimerRef.current = window.setTimeout(() => {
+      navigate(`/cartao/${card.id}?mes=${targetMonth}`, {
+        state: { initialUserId: userId, initialCard: card, initialCards: cards },
+      });
+    }, reduceMotion ? 0 : 180);
+  };
 
   useEffect(() => {
     if (initialUserId) {
@@ -250,29 +280,71 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
         {!loading && cards.length > 0 && (
           <section className="space-y-3">
             <div className="flex items-end justify-between gap-3"><div><h2 className="font-heading text-xl font-bold">Seus cartões</h2><p className="text-xs text-muted-foreground">Abra um cartão para ver pessoas, parcelas e compras.</p></div><span className="text-xs text-muted-foreground">{cards.length} cadastrados</span></div>
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2">
               {cards.map((card, index) => {
                 const total = totals[card.id]?.total || 0;
                 const count = totals[card.id]?.count || 0;
                 const percentage = grandTotal > 0 ? (total / grandTotal) * 100 : 0;
                 const color = BANK_CHART_COLORS[card.brand || ""] || FALLBACK_CHART_COLORS[index % FALLBACK_CHART_COLORS.length];
+                const isOpening = openingCardId === card.id;
                 return (
                   <button
                     key={card.id}
                     type="button"
-                    onClick={() => navigate(`/cartao/${card.id}?mes=${getCycleMonthForDueDay({ baseMonth: month, dueDay: card.default_due_day, onlyShiftCurrentMonth: true })}`, { state: { initialUserId: userId, initialCard: card, initialCards: cards } })}
-                    className="group rounded-2xl border border-border/70 bg-card p-4 text-left shadow-card transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-elevated"
+                    onClick={() => openCard(card)}
+                    aria-label={`Abrir o cartão ${card.name}`}
+                    aria-busy={isOpening}
+                    className={cn(
+                      "group relative isolate flex min-h-[205px] touch-manipulation overflow-hidden rounded-[1.6rem] border border-white/10 bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-950 p-5 text-left text-white shadow-[0_14px_34px_-18px_rgba(2,44,34,0.9)] outline-none transition-all duration-300 ease-out hover:z-10 hover:-translate-y-2 hover:scale-[1.015] hover:shadow-[0_24px_46px_-18px_rgba(2,44,34,0.9)] focus-visible:z-10 focus-visible:-translate-y-1 focus-visible:ring-4 focus-visible:ring-primary/30 active:scale-[0.985] motion-reduce:transform-none motion-reduce:transition-none sm:min-h-[220px]",
+                      isOpening && "z-20 -translate-y-3 scale-[1.025] ring-4 ring-primary/25 shadow-[0_28px_52px_-16px_rgba(2,44,34,0.95)]",
+                    )}
                   >
-                    <div className="flex items-center gap-3"><BankLogo brand={card.brand} size={48} /><div className="min-w-0 flex-1"><h3 className="truncate font-heading text-lg font-bold">{card.name}</h3><p className="text-xs text-muted-foreground">{count > 0 ? `${count} ${count === 1 ? "parcela" : "parcelas"} no mês` : "Sem valores no mês"}</p></div><ArrowRight className="h-4 w-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-primary" /></div>
-                    <div className="mt-4 flex items-end justify-between gap-3"><div><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Total</p><p className={cn("mt-1 text-xl font-bold", total > 0 ? "text-foreground" : "text-muted-foreground")}>{formatCurrency(total)}</p></div><span className="text-xs font-semibold" style={{ color }}>{percentage.toFixed(0)}% do mês</span></div>
-                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full transition-all" style={{ width: `${percentage}%`, backgroundColor: color }} /></div>
+                    <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1.5" style={{ backgroundColor: color }} />
+                    <span aria-hidden="true" className="absolute -right-14 -top-16 h-48 w-48 rounded-full opacity-25 blur-2xl transition-transform duration-500 group-hover:scale-125" style={{ backgroundColor: color }} />
+                    <span aria-hidden="true" className="absolute -bottom-24 -left-16 h-48 w-48 rounded-full bg-white/5" />
+
+                    <div className="relative z-10 flex w-full flex-col">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-2.5">
+                          <span className="flex h-11 w-14 items-center justify-center rounded-xl border border-white/15 bg-white/10 shadow-inner backdrop-blur-sm">
+                            <Wallet className="h-6 w-6 text-white/90" aria-hidden="true" />
+                          </span>
+                          <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/55">Minha carteira</span>
+                        </div>
+                        <span className="rounded-xl bg-white/95 p-1.5 shadow-sm">
+                          <BankLogo brand={card.brand} size={38} />
+                        </span>
+                      </div>
+
+                      <div className="mt-5">
+                        <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/55">Fatura de {formatCardMonth(month)}</p>
+                        <p className={cn("mt-1 font-heading text-2xl font-bold tracking-tight sm:text-[1.7rem]", total > 0 ? "text-white" : "text-white/60")}>{formatCurrency(total)}</p>
+                      </div>
+
+                      <div className="mt-auto flex items-end justify-between gap-4 pt-5">
+                        <div className="min-w-0">
+                          <h3 className="truncate font-heading text-lg font-bold text-white">{card.name}</h3>
+                          <p className="mt-0.5 text-xs text-white/60">{count > 0 ? `${count} ${count === 1 ? "parcela" : "parcelas"} no mês` : "Sem valores no mês"}</p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className="hidden text-right text-[11px] font-semibold text-white/70 sm:block">{percentage.toFixed(0)}% do total</span>
+                          <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/10 transition-all duration-300 group-hover:translate-x-1 group-hover:bg-white group-hover:text-slate-950">
+                            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 h-1 overflow-hidden rounded-full bg-white/10">
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${percentage}%`, backgroundColor: color }} />
+                      </div>
+                    </div>
                   </button>
                 );
               })}
               <AddCardDialog
                 userId={userId}
                 onCardAdded={fetchData}
-                trigger={<button type="button" className="flex min-h-40 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/15 p-5 text-center transition hover:border-primary/40 hover:bg-primary/5"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><Plus className="h-5 w-5" /></div><p className="mt-3 text-sm font-semibold">Adicionar outro cartão</p><p className="mt-1 text-xs text-muted-foreground">Nubank, Amazon Prime, Mercado Pago e outros</p></button>}
+                trigger={<button type="button" className="group flex min-h-[205px] touch-manipulation flex-col items-center justify-center rounded-[1.6rem] border border-dashed border-border bg-muted/15 p-5 text-center outline-none transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 hover:bg-primary/5 hover:shadow-card focus-visible:ring-4 focus-visible:ring-primary/20 active:scale-[0.985] motion-reduce:transform-none sm:min-h-[220px]"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary transition-transform duration-300 group-hover:scale-110"><Plus className="h-5 w-5" /></div><p className="mt-3 text-sm font-semibold">Adicionar outro cartão</p><p className="mt-1 text-xs text-muted-foreground">Nubank, Amazon Prime, Mercado Pago e outros</p></button>}
               />
             </div>
           </section>
