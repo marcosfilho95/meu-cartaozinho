@@ -32,6 +32,7 @@ import { getMonthlySpendingGoal } from "@/lib/financeBudget";
 import { buildFinancialPlan, fetchFinancialRuleVersions, type FinancialRuleVersion } from "@/lib/financialRules";
 
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
+import { FinanceSyncLoader } from "@/components/finance/FinanceSyncLoader";
 import { SmartAddDialog } from "@/components/finance/SmartAddDialog";
 import { MonthNavigator } from "@/components/MonthNavigator";
 import { Badge } from "@/components/ui/badge";
@@ -39,7 +40,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/constants";
@@ -267,7 +267,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       </div>
 
       {loading ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-32 rounded-2xl" />)}</div>
+        <FinanceSyncLoader monthLabel={monthTitle(referenceMonth)} />
       ) : !summary.hasData ? (
         <Card className="border-primary/20 bg-gradient-to-br from-primary/10 via-card to-card shadow-elevated"><CardContent className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between"><div><Badge variant="outline">{monthTitle(referenceMonth)}</Badge><h2 className="mt-3 font-heading text-xl font-bold">Este mês ainda está em branco</h2><p className="mt-1 max-w-xl text-sm text-muted-foreground">Revise o mês para incluir renda, faturas, gastos fixos e valores destinados aos seus planos.</p></div><Button size="lg" onClick={() => navigate(`/financas/fechamento?mes=${referenceMonth}`)}>Começar revisão <ArrowRight className="ml-2 h-4 w-4" /></Button></CardContent></Card>
       ) : (
@@ -294,6 +294,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
         </button>
       )}
 
+      {!loading && (
       <section className="space-y-3">
         <div className="flex flex-col gap-3 px-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -384,6 +385,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
           </Card>
         </div>
       </section>
+      )}
 
       <AddTransactionDialog open={manualOpen} onOpenChange={setManualOpen} userId={userId} defaultDate={`${referenceMonth}-01`} onSaved={load} />
       <SmartAddDialog open={smartOpen} onOpenChange={setSmartOpen} userId={userId} />

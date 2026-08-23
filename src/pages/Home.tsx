@@ -4,10 +4,10 @@ import { ArrowUpRight, CreditCard, LineChart as LineChartIcon, PiggyBank, Plus, 
 import { Bar, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { AppHeader } from "@/components/AppHeader";
+import { FinanceSyncLoader } from "@/components/finance/FinanceSyncLoader";
 import { MonthNavigator } from "@/components/MonthNavigator";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/constants";
@@ -150,7 +150,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
         {error && <Card className="border-destructive/30 bg-destructive/5"><CardContent className="flex flex-wrap items-center justify-between gap-3 p-4"><p className="text-sm text-destructive">{error}</p><Button variant="outline" size="sm" onClick={() => void load()}>Tentar novamente</Button></CardContent></Card>}
 
         {loading ? (
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-28 rounded-2xl" />)}</section>
+          <FinanceSyncLoader monthLabel={monthTitle(selectedMonth)} />
         ) : !hasMonthData ? (
           <Card className="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/10 via-card to-card shadow-elevated">
             <CardContent className="flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
@@ -164,7 +164,9 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
           </section>
         )}
 
-        <section className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
+        {!loading && (
+          <>
+          <section className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
           <Card className="border-border/70 shadow-card">
             <CardContent className="p-5">
               <div className="flex items-start justify-between gap-4">
@@ -216,6 +218,8 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
         <Card className="border-border/70 shadow-card"><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><PiggyBank className="h-5 w-5" /></div><div><h2 className="font-heading font-bold">Seus planos</h2><p className="text-xs text-muted-foreground">{data.netWorth.goals > 0 ? `${formatCurrency(data.netWorth.goals)} já guardados em cofrinhos.` : "Crie uma viagem, reserva ou compra futura e acompanhe o progresso."}</p></div></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => navigate("/financas/cofrinhos")}><PiggyBank className="mr-2 h-4 w-4" /> Ver planos</Button><Button onClick={() => navigate(`/financas/fechamento?mes=${selectedMonth}`)}><Plus className="mr-2 h-4 w-4" /> Revisar mês</Button></div></CardContent></Card>
 
         <p className="pb-3 text-center text-[11px] text-muted-foreground">Patrimônio estimado: <span className={cn("font-semibold", data.netWorth.total >= 0 ? "text-foreground" : "text-destructive")}>{formatCurrency(data.netWorth.total)}</span></p>
+          </>
+        )}
       </main>
     </div>
   );

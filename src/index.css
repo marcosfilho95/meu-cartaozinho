@@ -298,11 +298,55 @@
   }
 }
 
+@keyframes finance-sync-card {
+  0%, 100% {
+    transform: translateY(0) rotate(-1deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(1deg);
+  }
+}
+
+@keyframes finance-sync-shimmer {
+  0% {
+    transform: translateX(-30%) skewX(-12deg);
+  }
+  70%, 100% {
+    transform: translateX(500%) skewX(-12deg);
+  }
+}
+
+@keyframes finance-sync-glow {
+  0%, 100% {
+    opacity: 0.45;
+    transform: scaleX(0.86);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scaleX(1);
+  }
+}
+
+.finance-sync-card {
+  animation: finance-sync-card 2.4s ease-in-out infinite;
+}
+
+.finance-sync-shimmer {
+  animation: finance-sync-shimmer 2.1s ease-in-out infinite;
+}
+
+.finance-sync-glow {
+  animation: finance-sync-glow 2.4s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .finance-tab-indicator-pop,
   .finance-page-enter,
   .finance-page-enter-right,
-  .finance-page-enter-left {
+  .finance-page-enter-left,
+  .finance-sync-card,
+  .finance-sync-shimmer,
+  .finance-sync-glow {
     animation: none !important;
   }
 }
