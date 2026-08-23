@@ -232,8 +232,6 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
       const goal = goals.find((g) => g.id === goalId);
       if (!goal) throw new Error("Plano não encontrado.");
       const finalTarget = Number(goal.target_amount || 0);
-      const remaining = Math.max(finalTarget - Number(goal.current_amount), 0);
-      if (finalTarget > 0 && amount > remaining) throw new Error(`O objetivo final comporta mais ${formatCurrency(remaining)}.`);
 
       const rpcResult = await (supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }>)("reserve_goal_funds", {
         p_goal_id: goalId,
@@ -616,7 +614,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
             const target = calculateGoalTarget(Number(goal.target_amount || 0), projectionVersion, averageMonthlyExpenses);
             const hasFinalTarget = target > 0;
             const progress = hasFinalTarget ? Math.min((current / target) * 100, 100) : 0;
-            const isCompleted = hasFinalTarget && progress >= 100;
+            const targetReached = hasFinalTarget && current >= target;
             const isExpanded = expandedGoalId === goal.id;
             const currentRule = activeFinancialRules.find((rule) => rule.goal_id === goal.id) || null;
             const suggested = calculateSuggestedContribution(currentRule, { monthlyIncome, monthlyAvailable: monthlySurplus });
@@ -652,7 +650,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
             return (
               <Card
                 key={goal.id}
-                className={cn("overflow-hidden border-0 shadow-card transition-all", isCompleted && "ring-2 ring-success/30")}
+                className={cn("overflow-hidden border-0 shadow-card transition-all", targetReached && "ring-2 ring-success/30")}
               >
                 <CardContent className="p-0">
                   <div className="space-y-3 p-4">
@@ -660,8 +658,8 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <h3 className="truncate font-heading text-base font-bold">{goal.name}</h3>
-                          {isCompleted && (
-                            <Badge className="border-success/30 bg-success/15 text-[10px] text-success">Concluída</Badge>
+                          {targetReached && (
+                            <Badge className="border-success/30 bg-success/15 text-[10px] text-success">Meta atingida</Badge>
                           )}
                         </div>
                         <p className="mt-0.5 text-[11px] text-muted-foreground">
@@ -702,15 +700,19 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                             <div
                               className={cn(
                                 "h-full rounded-full transition-all duration-700 ease-out",
-                                isCompleted ? "bg-gradient-to-r from-success to-success/80" : "bg-gradient-to-r from-primary to-primary/80",
+                                targetReached ? "bg-gradient-to-r from-success to-success/80" : "bg-gradient-to-r from-primary to-primary/80",
                               )}
                               style={{ width: `${progress}%` }}
                             />
                           </div>
                           <div className="mt-1 flex items-center justify-between">
                             <span className="text-[11px] font-bold text-primary">{progress.toFixed(0)}%</span>
-                            <span className="text-[11px] text-muted-foreground">
-                              Falta {formatCurrency(Math.max(target - current, 0))}
+                            <span className={cn("text-[11px]", targetReached ? "font-semibold text-success" : "text-muted-foreground")}>
+                              {current > target
+                                ? `Meta superada em ${formatCurrency(current - target)}`
+                                : targetReached
+                                  ? "Você atingiu a meta e pode continuar destinando"
+                                  : `Falta ${formatCurrency(target - current)}`}
                             </span>
                           </div>
                         </>
@@ -771,7 +773,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                       </div>
                     )}
 
-                    {hasFinalTarget && contributionStats.averageMonthly <= 0 && !isCompleted && (
+                    {hasFinalTarget && contributionStats.averageMonthly <= 0 && !targetReached && (
                       <p className="rounded-xl border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
                         Faça seus primeiros aportes para calcular uma previsão.
                       </p>
@@ -783,7 +785,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                       </p>
                     )}
 
-                    {!isCompleted && (
+                    {(
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
                         <Button
                           size="sm"
@@ -793,7 +795,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                             setContributionAmount("");
                           }}
                         >
-                          <ArrowUpRight className="h-3.5 w-3.5" /> Informar aporte do mês
+                          <ArrowUpRight className="h-3.5 w-3.5" /> {targetReached ? "Adicionar mais" : "Informar aporte do mês"}
                         </Button>
                         <Button
                           variant="outline"
@@ -834,40 +836,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                       </div>
                     )}
 
-                    {isCompleted && (
-                      <div className="grid gap-2 sm:grid-cols-3">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-9 gap-2 rounded-xl text-xs"
-                          onClick={() => { setEditingGoal(goal); setGoalDialogOpen(true); }}
-                        >
-                          <Settings2 className="h-3.5 w-3.5" /> Redistribuir percentual
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-9 gap-2 rounded-xl text-xs"
-                          onClick={() => setExpandedGoalId(isExpanded ? null : goal.id)}
-                        >
-                          {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />} Histórico
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-9 gap-2 rounded-xl text-xs"
-                          onClick={() => {
-                            setWithdrawGoal(goal);
-                            setWithdrawAmount("");
-                          }}
-                          disabled={current <= 0}
-                        >
-                          <ArrowDownLeft className="h-3.5 w-3.5" /> Retirar
-                        </Button>
-                      </div>
-                    )}
-
-                    {isContributionOpen && !isCompleted && (
+                    {isContributionOpen && (
                       <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
                         <Label className="text-[11px] font-semibold text-foreground">
                           Quanto você realmente guardou em {referenceLabel}?
