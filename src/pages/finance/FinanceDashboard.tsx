@@ -21,6 +21,7 @@ import {
   Line,
   Pie,
   PieChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -56,7 +57,7 @@ import {
 } from "@/lib/financeInsights";
 import { calculateReserveMovement, getTransactionReferenceMonth, type GoalMovement } from "@/lib/financeOverview";
 import { type PlanningGoal } from "@/lib/financePlanning";
-import { addMonthsToKey, fetchFinanceTransactions, getLastMonthKeys, getMonthLabel, isBankCategory, monthKey, resolveBankCategoryColor, type FinanceTx } from "@/lib/financeShared";
+import { addMonthsToKey, fetchFinanceTransactions, getLastMonthKeys, isBankCategory, monthKey, resolveBankCategoryColor, type FinanceTx } from "@/lib/financeShared";
 import { getErrorMessage, untypedSupabase } from "@/lib/supabaseUntyped";
 import { cn } from "@/lib/utils";
 
@@ -156,7 +157,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   }, [referenceMonth]);
   const evolution = useMemo(() => historyKeys.map((key) => {
     const item = summarizeMonth(transactions, key);
-    return { key, month: getMonthLabel(key), receitas: item.income, despesas: -item.expenses, resultado: item.result, economia: item.savingsRate };
+    return { key, month: `${key.slice(5, 7)}/${key.slice(2, 4)}`, receitas: item.income, despesas: -item.expenses, resultado: item.result, economia: item.savingsRate };
   }), [historyKeys, transactions]);
 
   const categoryDistribution = useMemo(() => groupSmallSlices(
@@ -279,7 +280,28 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
         <Card className="border-border/70 shadow-card">
           <CardContent className="h-full min-h-64 p-4">
             <div className="flex items-start justify-between gap-2"><div><h2 className="font-heading font-bold">Evolução financeira</h2><p className="mt-0.5 text-[11px] text-muted-foreground">Últimos seis meses</p></div><BarChart3 className="h-4 w-4 shrink-0 text-primary" /></div>
-            <div className="mt-3 h-44"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={evolution} margin={{ top: 6, left: -30, right: 0, bottom: 0 }}><CartesianGrid vertical={false} stroke="hsl(var(--border))" /><XAxis dataKey="month" axisLine={false} tickLine={false} fontSize={9} /><YAxis axisLine={false} tickLine={false} fontSize={8} tickFormatter={(value) => `${Math.round(value / 1000)}k`} /><Tooltip formatter={(value: number, name: string) => [formatCurrency(Math.abs(value)), name]} contentStyle={chartTooltipStyle} /><Bar dataKey="receitas" name="Receitas" fill="hsl(var(--success))" radius={[3, 3, 0, 0]} /><Bar dataKey="despesas" name="Despesas" fill="hsl(var(--destructive))" fillOpacity={0.72} radius={[0, 0, 3, 3]} /><Line type="monotone" dataKey="resultado" name="Resultado" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} /></ComposedChart></ResponsiveContainer></div>
+            <div className="mt-3 h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={evolution} stackOffset="sign" margin={{ top: 6, left: -28, right: 4, bottom: 24 }}>
+                  <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.75} />
+                  <ReferenceLine y={0} stroke="hsl(var(--foreground))" strokeOpacity={0.25} />
+                  <XAxis
+                    dataKey="month"
+                    axisLine={false}
+                    tickLine={false}
+                    fontSize={9}
+                    angle={-42}
+                    textAnchor="end"
+                    height={38}
+                  />
+                  <YAxis axisLine={false} tickLine={false} fontSize={8} tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
+                  <Tooltip formatter={(value: number, name: string) => [formatCurrency(Math.abs(value)), name]} contentStyle={chartTooltipStyle} />
+                  <Bar dataKey="receitas" name="Receitas" stackId="movimento" barSize={24} fill="hsl(var(--success))" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="despesas" name="Despesas" stackId="movimento" barSize={24} fill="hsl(var(--destructive))" fillOpacity={0.78} radius={[0, 0, 4, 4]} />
+                  <Line type="monotone" dataKey="resultado" name="Resultado" stroke="hsl(var(--primary))" strokeWidth={2.25} dot={false} activeDot={{ r: 4 }} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
           </CardContent>
         </Card>
 
@@ -295,8 +317,8 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
         <Card className="border-border/70 shadow-card">
           <CardContent className="flex h-full min-h-64 flex-col p-4">
             <div className="flex items-start justify-between gap-2"><div><h2 className="font-heading font-bold">Detalhe dos gastos</h2><p className="mt-0.5 text-[11px] text-muted-foreground">Por cartão</p></div><CreditCard className="h-4 w-4 shrink-0 text-primary" /></div>
-            {cardSpending.length ? <div className="mt-3 space-y-3">{cardSpending.slice(0, 3).map((item) => { const share = cardSpendingTotal > 0 ? item.value / cardSpendingTotal * 100 : 0; return <div key={item.name}><div className="flex items-center justify-between gap-2 text-xs"><span className="truncate font-medium">{item.name}</span><strong className="tabular-nums">{formatCurrency(item.value)}</strong></div><div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: item.color }} /></div></div>; })}</div> : <div className="my-auto text-center"><CreditCard className="mx-auto h-6 w-6 text-muted-foreground" /><p className="mt-2 text-xs text-muted-foreground">Nenhum gasto associado a cartão neste mês.</p></div>}
-            <div className="mt-auto flex items-end justify-between gap-2 pt-3"><div><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Total nos cartões</p><p className="mt-0.5 font-bold tabular-nums">{formatCurrency(cardSpendingTotal)}</p></div><Button variant="link" size="sm" className="h-auto px-0 text-xs" onClick={() => navigate("/financas/transacoes")}>Ver todos <ArrowRight className="ml-1 h-3.5 w-3.5" /></Button></div>
+            {cardSpending.length ? <div className="mt-3 space-y-3">{cardSpending.map((item) => { const share = cardSpendingTotal > 0 ? item.value / cardSpendingTotal * 100 : 0; return <div key={item.name}><div className="flex items-center justify-between gap-2 text-xs"><span className="truncate font-medium">{item.name}</span><strong className="tabular-nums">{formatCurrency(item.value)}</strong></div><div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: item.color }} /></div></div>; })}</div> : <div className="my-auto text-center"><CreditCard className="mx-auto h-6 w-6 text-muted-foreground" /><p className="mt-2 text-xs text-muted-foreground">Nenhum gasto associado a cartão neste mês.</p></div>}
+            <div className="mt-auto flex items-end justify-between gap-2 border-t border-border/60 pt-3"><div><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Total nos cartões</p><p className="mt-0.5 font-bold tabular-nums">{formatCurrency(cardSpendingTotal)}</p></div><Button variant="link" size="sm" className="h-auto px-0 text-xs" onClick={() => navigate("/financas/transacoes")}>Abrir lançamentos <ArrowRight className="ml-1 h-3.5 w-3.5" /></Button></div>
           </CardContent>
         </Card>
       </section>
