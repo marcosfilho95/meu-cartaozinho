@@ -4,11 +4,14 @@ import {
   ArrowRight,
   BarChart3,
   CircleDollarSign,
+  Lightbulb,
   ListChecks,
   PiggyBank,
   Plus,
   Sparkles,
   Target,
+  ThumbsDown,
+  ThumbsUp,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
@@ -84,10 +87,28 @@ const analysisPeriodLabels: Record<AnalysisPeriod, string> = {
   all: "Todo o período",
 };
 
-const insightToneStyles: Record<Insight["tone"], string> = {
-  positive: "border-success/25 bg-success/5 text-success",
-  neutral: "border-border/70 bg-card text-foreground",
-  attention: "border-warning/35 bg-warning/5 text-foreground",
+const insightTonePresentation: Record<Insight["tone"], { icon: typeof ThumbsUp; label: string; card: string; badge: string; labelStyle: string }> = {
+  positive: {
+    icon: ThumbsUp,
+    label: "Bom resultado",
+    card: "border-success/30 bg-success/5",
+    badge: "bg-success/12 text-success",
+    labelStyle: "text-success",
+  },
+  neutral: {
+    icon: Lightbulb,
+    label: "Para acompanhar",
+    card: "border-border/70 bg-card",
+    badge: "bg-primary/10 text-primary",
+    labelStyle: "text-primary",
+  },
+  attention: {
+    icon: ThumbsDown,
+    label: "Ponto para melhorar",
+    card: "border-destructive/35 bg-destructive/5",
+    badge: "bg-destructive/12 text-destructive",
+    labelStyle: "text-destructive",
+  },
 };
 
 const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
@@ -369,7 +390,23 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
             </DialogHeader>
 
             <div className="mt-5 grid gap-2 sm:grid-cols-2">
-              {insights.slice(0, 4).map((insight) => <div key={insight.id} className={cn("rounded-2xl border p-4 text-sm leading-relaxed shadow-sm", insightToneStyles[insight.tone])}>{insight.text}</div>)}
+              {insights.slice(0, 4).map((insight) => {
+                const presentation = insightTonePresentation[insight.tone];
+                const InsightIcon = presentation.icon;
+                return (
+                  <div key={insight.id} className={cn("rounded-2xl border p-4 shadow-sm", presentation.card)}>
+                    <div className="flex items-start gap-3">
+                      <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl", presentation.badge)}>
+                        <InsightIcon className="h-4 w-4" aria-hidden="true" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className={cn("text-[10px] font-bold uppercase tracking-[0.14em]", presentation.labelStyle)}>{presentation.label}</p>
+                        <p className="mt-1.5 text-sm leading-relaxed text-foreground">{insight.text}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             {spendingGoal > 0 && (
