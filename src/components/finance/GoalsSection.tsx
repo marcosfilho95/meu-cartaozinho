@@ -57,6 +57,7 @@ import {
   ChevronDown,
   ChevronUp,
   Loader2,
+  Pencil,
   PiggyBank,
   Plus,
   Settings2,
@@ -135,6 +136,13 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
   const [withdrawGoal, setWithdrawGoal] = useState<GoalItem | null>(null);
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [withdrawing, setWithdrawing] = useState(false);
+  const [editingTx, setEditingTx] = useState<GoalTx | null>(null);
+  const [editTxAmount, setEditTxAmount] = useState("");
+  const [editTxMonth, setEditTxMonth] = useState("");
+  const [editTxDescription, setEditTxDescription] = useState("");
+  const [savingTx, setSavingTx] = useState(false);
+  const [txToDelete, setTxToDelete] = useState<GoalTx | null>(null);
+  const [deletingTxId, setDeletingTxId] = useState<string | null>(null);
 
   const totalReserved = useMemo(
     () => goals.reduce((sum, g) => sum + Number(g.current_amount || 0), 0),
@@ -379,6 +387,75 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
       toast.error(getErrorMessage(error, "Erro ao retirar."));
     } finally {
       setWithdrawing(false);
+    }
+  };
+
+  const openTransactionEditor = (tx: GoalTx) => {
+    setEditingTx(tx);
+    setEditTxAmount(Number(tx.amount).toFixed(2).replace(".", ","));
+    setEditTxMonth(tx.ref_month || tx.created_at.slice(0, 7));
+    setEditTxDescription(tx.description || "");
+  };
+
+  const handleUpdateTransaction = async () => {
+    if (!editingTx) return;
+    const amount = Number(editTxAmount.replace(/\./g, "").replace(",", "."));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Informe um valor válido.");
+      return;
+    }
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(editTxMonth)) {
+      toast.error("Informe uma competência válida.");
+      return;
+    }
+
+    setSavingTx(true);
+    try {
+      const description = editTxDescription.trim() || `${editingTx.type === "deposit" ? "Aporte realizado" : "Retirada realizada"} em ${monthTitle(editTxMonth)}`;
+      const result = await (supabase.rpc as unknown as (
+        fn: string,
+        args: Record<string, unknown>,
+      ) => Promise<{ error: { message: string } | null }>)('update_goal_transaction', {
+        p_transaction_id: editingTx.id,
+        p_amount: amount,
+        p_ref_month: editTxMonth,
+        p_description: description,
+      });
+      if (result.error) throw result.error;
+
+      setGoalTxs((current) => current.map((tx) => tx.id === editingTx.id
+        ? { ...tx, amount, ref_month: editTxMonth, description }
+        : tx));
+      setEditingTx(null);
+      toast.success("Movimentação atualizada. Os saldos foram recalculados.");
+      onReload();
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Erro ao atualizar a movimentação."));
+    } finally {
+      setSavingTx(false);
+    }
+  };
+
+  const confirmDeleteTransaction = async () => {
+    if (!txToDelete) return;
+    setDeletingTxId(txToDelete.id);
+    try {
+      const result = await (supabase.rpc as unknown as (
+        fn: string,
+        args: Record<string, unknown>,
+      ) => Promise<{ error: { message: string } | null }>)('delete_goal_transaction', {
+        p_transaction_id: txToDelete.id,
+      });
+      if (result.error) throw result.error;
+
+      setGoalTxs((current) => current.filter((tx) => tx.id !== txToDelete.id));
+      setTxToDelete(null);
+      toast.success("Movimentação excluída. Os saldos foram recalculados.");
+      onReload();
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Erro ao excluir a movimentação."));
+    } finally {
+      setDeletingTxId(null);
     }
   };
 
@@ -744,14 +821,36 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                     )}
 
                     {isCompleted && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-9 w-full gap-2 rounded-xl text-xs"
-                        onClick={() => { setEditingGoal(goal); setGoalDialogOpen(true); }}
-                      >
-                        <Settings2 className="h-3.5 w-3.5" /> Meta concluída: redistribuir o percentual
-                      </Button>
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 gap-2 rounded-xl text-xs"
+                          onClick={() => { setEditingGoal(goal); setGoalDialogOpen(true); }}
+                        >
+                          <Settings2 className="h-3.5 w-3.5" /> Redistribuir percentual
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 gap-2 rounded-xl text-xs"
+                          onClick={() => setExpandedGoalId(isExpanded ? null : goal.id)}
+                        >
+                          {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />} Histórico
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 gap-2 rounded-xl text-xs"
+                          onClick={() => {
+                            setWithdrawGoal(goal);
+                            setWithdrawAmount("");
+                          }}
+                          disabled={current <= 0}
+                        >
+                          <ArrowDownLeft className="h-3.5 w-3.5" /> Retirar
+                        </Button>
+                      </div>
                     )}
 
                     {isContributionOpen && !isCompleted && (
@@ -801,8 +900,8 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                       ) : (
                         <div className="space-y-1.5">
                           {goalTxs.map((tx) => (
-                            <div key={tx.id} className="flex items-center justify-between rounded-lg bg-background px-3 py-2">
-                              <div className="flex items-center gap-2">
+                            <div key={tx.id} className="flex flex-col gap-2 rounded-lg bg-background px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="flex min-w-0 items-center gap-2">
                                 <div
                                   className={cn(
                                     "flex h-6 w-6 items-center justify-center rounded-full",
@@ -811,8 +910,8 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                                 >
                                   {tx.type === "deposit" ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}
                                 </div>
-                                <div>
-                                  <p className="text-xs font-medium">{tx.description || (tx.type === "deposit" ? "Depósito" : "Retirada")}</p>
+                                <div className="min-w-0">
+                                  <p className="truncate text-xs font-medium">{tx.description || (tx.type === "deposit" ? "Depósito" : "Retirada")}</p>
                                   <p className="text-[10px] text-muted-foreground">
                                     {tx.ref_month ? `Competência: ${monthTitle(tx.ref_month)}` : new Date(tx.created_at).toLocaleDateString("pt-BR", {
                                       day: "2-digit",
@@ -822,10 +921,37 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                                   </p>
                                 </div>
                               </div>
-                              <p className={cn("text-sm font-bold", tx.type === "deposit" ? "text-success" : "text-destructive")}>
-                                {tx.type === "deposit" ? "+" : "-"}
-                                {formatCurrency(Number(tx.amount))}
-                              </p>
+                              <div className="flex items-center justify-between gap-2 sm:justify-end">
+                                <p className={cn("mr-1 text-sm font-bold", tx.type === "deposit" ? "text-success" : "text-destructive")}>
+                                  {tx.type === "deposit" ? "+" : "-"}
+                                  {formatCurrency(Number(tx.amount))}
+                                </p>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 gap-1 px-2 text-[10px] text-muted-foreground hover:text-primary"
+                                  onClick={() => openTransactionEditor(tx)}
+                                  aria-label="Editar movimentação"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                  Editar
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 gap-1 px-2 text-[10px] text-muted-foreground hover:text-destructive"
+                                  onClick={() => setTxToDelete(tx)}
+                                  disabled={deletingTxId === tx.id}
+                                  aria-label="Excluir movimentação"
+                                >
+                                  {deletingTxId === tx.id
+                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    : <Trash2 className="h-3.5 w-3.5" />}
+                                  Excluir
+                                </Button>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -911,6 +1037,84 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!editingTx} onOpenChange={(open) => !open && setEditingTx(null)}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Editar movimentação</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="rounded-xl border border-primary/15 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+              O saldo do plano e, quando houver vínculo, o da conta de origem serão corrigidos automaticamente.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="edit-goal-tx-amount" className="text-xs text-muted-foreground">Valor</Label>
+                <div className="relative mt-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">R$</span>
+                  <Input
+                    id="edit-goal-tx-amount"
+                    type="text"
+                    inputMode="decimal"
+                    value={editTxAmount}
+                    onChange={(event) => setEditTxAmount(event.target.value)}
+                    className="pl-10 text-right font-bold"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="edit-goal-tx-month" className="text-xs text-muted-foreground">Competência</Label>
+                <Input
+                  id="edit-goal-tx-month"
+                  type="month"
+                  value={editTxMonth}
+                  onChange={(event) => setEditTxMonth(event.target.value)}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="edit-goal-tx-description" className="text-xs text-muted-foreground">Descrição</Label>
+              <Input
+                id="edit-goal-tx-description"
+                value={editTxDescription}
+                onChange={(event) => setEditTxDescription(event.target.value)}
+                placeholder="Ex.: Aporte de agosto"
+                className="mt-1"
+              />
+            </div>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button variant="outline" onClick={() => setEditingTx(null)} disabled={savingTx}>Cancelar</Button>
+              <Button className="gradient-primary text-primary-foreground" onClick={() => void handleUpdateTransaction()} disabled={savingTx}>
+                {savingTx ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Pencil className="mr-2 h-4 w-4" />}
+                Salvar alteração
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!txToDelete} onOpenChange={(open) => !open && setTxToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir esta movimentação?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O registro de <strong>{txToDelete ? formatCurrency(Number(txToDelete.amount)) : ""}</strong> será removido. O saldo do plano e, quando houver vínculo, o da conta de origem serão ajustados automaticamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={!!deletingTxId}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => void confirmDeleteTransaction()}
+              disabled={!!deletingTxId}
+            >
+              {deletingTxId ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Excluir movimentação
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 };
