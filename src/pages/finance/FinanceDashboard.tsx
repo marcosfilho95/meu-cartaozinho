@@ -112,7 +112,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       const [accountsRes, goalsRes, goalTxRes, budgetsRes, loadedTransactions] = await Promise.all([
         supabase.from("accounts").select("id, name, type, current_balance").eq("user_id", userId).eq("is_active", true).order("name"),
         supabase.from("goals").select("*").eq("user_id", userId).order("created_at"),
-        untypedSupabase.from("goal_transactions").select("amount, type, ref_month, created_at").eq("user_id", userId).limit(1000),
+        untypedSupabase.from("goal_transactions").select("amount, type, created_at").eq("user_id", userId).limit(1000),
         supabase.from("budgets").select("limit_amount").eq("user_id", userId).eq("ref_month", referenceMonth),
         fetchFinanceTransactions(userId, 24),
       ]);

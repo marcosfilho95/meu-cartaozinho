@@ -90,7 +90,7 @@ const MonthlyClosingPage: React.FC<MonthlyClosingPageProps> = ({ userId }) => {
         fetchFinanceTransactions(userId, 24),
         fetchExpectedBillsForMonth(userId, refMonth),
         supabase.from("goals").select("*").eq("user_id", userId).order("created_at"),
-        untypedSupabase.from("goal_transactions").select("amount, type, ref_month, created_at").eq("user_id", userId).limit(1000),
+        untypedSupabase.from("goal_transactions").select("amount, type, created_at").eq("user_id", userId).limit(1000),
         supabase.from("budgets").select("limit_amount").eq("user_id", userId).eq("ref_month", refMonth),
       ]);
       if (goalsRes.error) throw goalsRes.error;

@@ -39,7 +39,7 @@ const CofrinhosPage: React.FC<CofrinhosPageProps> = ({ userId }) => {
         fetchFinanceTransactions(userId, 3),
         untypedSupabase
           .from("goal_transactions")
-          .select("amount, type, ref_month, created_at")
+          .select("amount, type, created_at")
           .eq("user_id", userId)
           .limit(1000),
       ]);

@@ -30,7 +30,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userId }) => {
       fetchFinanceTransactions(userId, 12),
       untypedSupabase
         .from("goal_transactions")
-        .select("amount, type, ref_month, created_at")
+        .select("amount, type, created_at")
         .eq("user_id", userId)
         .limit(1000),
     ])
