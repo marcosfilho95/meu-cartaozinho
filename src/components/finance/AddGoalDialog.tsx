@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { createFinancialRuleVersion, getGoalPercentageTotal, type FinancialRuleBase, type FinancialRuleValueType, type FinancialRuleVersion } from "@/lib/financialRules";
 import { monthTitle } from "@/lib/financeInsights";
+import { createGoalProjectionVersion } from "@/lib/goalProjections";
 
 interface EditableGoal { id: string; name: string; goal_type?: string; priority?: number }
 interface AddGoalDialogProps {
@@ -89,6 +90,18 @@ export const AddGoalDialog: React.FC<AddGoalDialogProps> = ({ open, onOpenChange
         type = goalType;
       }
       await createFinancialRuleVersion({ user_id: userId, rule_key: `goal:${goalId}`, rule_type: type, effective_month: refMonth, value_type: valueType, value: ruleValue, calculation_base: valueType === "fixed" ? "total_income" : calculationBase, goal_id: goalId, priority });
+      if (createdGoalId) {
+        await createGoalProjectionVersion({
+          user_id: userId,
+          goal_id: createdGoalId,
+          effective_month: refMonth,
+          target_mode: "fixed",
+          target_amount: target,
+          emergency_months: null,
+          yield_type: "none",
+          yield_rate_percent: 0,
+        });
+      }
       toast.success(editing
         ? `Meta planejada atualizada em ${monthTitle(refMonth)}. O saldo só muda ao registrar um aporte.`
         : `Plano criado para ${monthTitle(refMonth)}. Registre um aporte quando guardar o dinheiro.`);

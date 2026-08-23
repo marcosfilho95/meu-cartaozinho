@@ -31,17 +31,29 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/constants";
+import { monthTitle } from "@/lib/financeInsights";
 import { type PlanningGoal } from "@/lib/financePlanning";
 import { resolveFinancialRules, type FinancialRuleVersion } from "@/lib/financialRules";
 import {
   calculateAvailableForContributions,
   calculateMonthlyGoalAchievement,
   calculateSuggestedContribution,
+  type GoalContributionMovement,
 } from "@/lib/goalContributions";
+import {
+  calculateContributionStats,
+  calculateGoalTarget,
+  getEffectiveAnnualRate,
+  projectGoalCompletion,
+  resolveGoalProjectionVersions,
+  type GoalProjectionVersion,
+  type ReferenceRate,
+} from "@/lib/goalProjections";
 import { getErrorMessage } from "@/lib/supabaseUntyped";
 import {
   ArrowDownLeft,
   ArrowUpRight,
+  CalendarClock,
   ChevronDown,
   ChevronUp,
   Loader2,
@@ -53,6 +65,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { AddGoalDialog } from "./AddGoalDialog";
+import { GoalProjectionDialog } from "./GoalProjectionDialog";
 
 type GoalItem = PlanningGoal & { id: string; goal_type?: string; priority?: number };
 type GoalAccount = {
@@ -70,6 +83,10 @@ interface GoalsSectionProps {
   monthlyIncome: number;
   allocatedThisMonth: number;
   realizedByGoal: Record<string, number>;
+  goalMovements: GoalContributionMovement[];
+  projectionVersions: GoalProjectionVersion[];
+  referenceRates: ReferenceRate[];
+  averageMonthlyExpenses: number;
   refMonth: string;
   financialRules?: FinancialRuleVersion[];
   onReload: () => void;
@@ -93,6 +110,10 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
   monthlyIncome,
   allocatedThisMonth,
   realizedByGoal,
+  goalMovements,
+  projectionVersions,
+  referenceRates,
+  averageMonthlyExpenses,
   refMonth,
   financialRules = [],
   onReload,
@@ -104,6 +125,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
   const [saving, setSaving] = useState(false);
   const [contributionGoalId, setContributionGoalId] = useState<string | null>(null);
   const [contributionAmount, setContributionAmount] = useState("");
+  const [projectionGoal, setProjectionGoal] = useState<GoalItem | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [expandedGoalId, setExpandedGoalId] = useState<string | null>(null);
   const [goalTxs, setGoalTxs] = useState<GoalTx[]>([]);
@@ -124,6 +146,10 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
   const activeFinancialRules = useMemo(
     () => resolveFinancialRules(financialRules, refMonth),
     [financialRules, refMonth],
+  );
+  const activeProjectionVersions = useMemo(
+    () => resolveGoalProjectionVersions(projectionVersions, refMonth),
+    [projectionVersions, refMonth],
   );
 
   useEffect(() => {
@@ -499,7 +525,8 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
         <div className="space-y-3">
           {visibleGoals.map((goal) => {
             const current = Number(goal.current_amount || 0);
-            const target = Number(goal.target_amount || 1);
+            const projectionVersion = activeProjectionVersions.get(goal.id) || null;
+            const target = Math.max(calculateGoalTarget(Number(goal.target_amount || 0), projectionVersion, averageMonthlyExpenses), 1);
             const progress = Math.min((current / target) * 100, 100);
             const isCompleted = progress >= 100;
             const isExpanded = expandedGoalId === goal.id;
@@ -508,6 +535,25 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
             const actualThisMonth = Number(realizedByGoal[goal.id] || 0);
             const monthlyAchievement = calculateMonthlyGoalAchievement(suggested, actualThisMonth);
             const difference = actualThisMonth - suggested;
+            const contributionStats = calculateContributionStats(goalMovements, goal.id, refMonth);
+            const annualRate = getEffectiveAnnualRate(projectionVersion, referenceRates);
+            const noYieldProjection = projectGoalCompletion({
+              currentAmount: current,
+              targetAmount: target,
+              monthlyContribution: contributionStats.averageMonthly,
+              refMonth,
+            });
+            const yieldProjection = annualRate > 0 ? projectGoalCompletion({
+              currentAmount: current,
+              targetAmount: target,
+              monthlyContribution: contributionStats.averageMonthly,
+              annualRate,
+              refMonth,
+            }) : null;
+            const referenceRate = projectionVersion?.yield_type === "cdi" || projectionVersion?.yield_type === "selic"
+              ? referenceRates.find((rate) => rate.rate_key === projectionVersion.yield_type)
+              : null;
+            const monthsCovered = averageMonthlyExpenses > 0 ? current / averageMonthlyExpenses : 0;
             const isContributionOpen = contributionGoalId === goal.id;
             const ruleLabel = !currentRule
               ? "Meta mensal não definida"
@@ -543,52 +589,12 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                         <Button
                           variant="ghost"
                           size="icon"
-                          aria-label={`Ajustar regra de ${goal.name}`}
-                          className="h-8 w-8 text-muted-foreground hover:text-primary"
-                          onClick={() => { setEditingGoal(goal); setGoalDialogOpen(true); }}
-                        >
-                          <Settings2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                          onClick={() => setExpandedGoalId(isExpanded ? null : goal.id)}
-                        >
-                          {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
                           className="h-8 w-8 text-muted-foreground hover:text-destructive"
                           onClick={() => setGoalToDelete(goal)}
                           disabled={deletingId === goal.id}
                         >
                           {deletingId === goal.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                         </Button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 rounded-xl border border-border/70 bg-muted/25 p-3 sm:grid-cols-4">
-                      <div>
-                        <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Planejado</p>
-                        <p className="mt-1 text-xs font-bold text-foreground">{formatCurrency(suggested)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Guardado no mês</p>
-                        <p className="mt-1 text-xs font-bold text-success">{formatCurrency(actualThisMonth)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Diferença</p>
-                        <p className={cn("mt-1 text-xs font-bold", difference >= 0 ? "text-success" : "text-destructive")}>
-                          {difference > 0 ? "+" : ""}{formatCurrency(difference)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Meta mensal</p>
-                        <p className={cn("mt-1 text-xs font-bold", monthlyAchievement >= 100 ? "text-success" : "text-primary")}>
-                          {monthlyAchievement.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% atingida
-                        </p>
                       </div>
                     </div>
 
@@ -615,11 +621,73 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                       </div>
                     </div>
 
+                    <div className="grid grid-cols-2 gap-2 rounded-xl border border-border/70 bg-muted/25 p-3 sm:grid-cols-3">
+                      <div>
+                        <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Sugestão do mês</p>
+                        <p className="mt-1 text-xs font-bold text-foreground">{formatCurrency(suggested)}</p>
+                        <p className="mt-0.5 text-[9px] text-muted-foreground">{ruleLabel}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Guardado no mês</p>
+                        <p className="mt-1 text-xs font-bold text-success">{formatCurrency(actualThisMonth)}</p>
+                        <p className={cn("mt-0.5 text-[9px]", difference >= 0 ? "text-success" : "text-destructive")}>
+                          {difference > 0 ? "+" : ""}{formatCurrency(difference)} vs. planejado
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Meta mensal atingida</p>
+                        <p className={cn("mt-1 text-xs font-bold", monthlyAchievement >= 100 ? "text-success" : "text-primary")}>
+                          {monthlyAchievement.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Média de aportes</p>
+                        <p className="mt-1 text-xs font-bold text-foreground">{formatCurrency(contributionStats.averageMonthly)}/mês</p>
+                        <p className="mt-0.5 text-[9px] text-muted-foreground">{contributionStats.monthsObserved || 0} mês(es) observado(s)</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Previsão sem rendimento</p>
+                        <p className="mt-1 text-xs font-bold text-foreground">
+                          {noYieldProjection.completionMonth ? monthTitle(noYieldProjection.completionMonth) : "Ainda sem previsão"}
+                        </p>
+                        {noYieldProjection.months !== null && <p className="mt-0.5 text-[9px] text-muted-foreground">{noYieldProjection.months} meses restantes</p>}
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Rentabilidade</p>
+                        <p className="mt-1 text-xs font-bold text-foreground">
+                          {!projectionVersion || projectionVersion.yield_type === "none"
+                            ? "Sem rendimento"
+                            : projectionVersion.yield_type === "manual"
+                              ? `${annualRate.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}% a.a.`
+                              : `${Number(projectionVersion.yield_rate_percent).toLocaleString("pt-BR")}% do ${projectionVersion.yield_type.toUpperCase()}`}
+                        </p>
+                        {yieldProjection?.completionMonth && <p className="mt-0.5 text-[9px] text-success">Com rendimento: {monthTitle(yieldProjection.completionMonth)}</p>}
+                      </div>
+                    </div>
+
+                    {projectionVersion?.target_mode === "emergency_months" && (
+                      <div className="rounded-xl border border-primary/15 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+                        Sua reserva cobre <strong className="text-primary">{monthsCovered.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mês(es)</strong> de um objetivo de <strong className="text-foreground">{Number(projectionVersion.emergency_months || 0).toLocaleString("pt-BR")} meses</strong>.
+                      </div>
+                    )}
+
+                    {contributionStats.averageMonthly <= 0 && !isCompleted && (
+                      <p className="rounded-xl border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+                        Faça seus primeiros aportes para calcular uma previsão.
+                      </p>
+                    )}
+
+                    {yieldProjection && (
+                      <p className="text-[10px] leading-relaxed text-muted-foreground">
+                        Estimativa baseada na taxa atual. Taxas futuras podem mudar.{referenceRate?.is_approximation ? " O CDI exibido é uma aproximação identificada." : ""}
+                      </p>
+                    )}
+
                     {!isCompleted && (
-                      <div className="flex gap-2">
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
                         <Button
                           size="sm"
-                          className="gradient-primary h-9 flex-1 gap-1.5 rounded-xl text-xs text-primary-foreground"
+                          className="gradient-primary h-9 gap-1.5 rounded-xl text-[11px] text-primary-foreground sm:col-span-1"
                           onClick={() => {
                             setContributionGoalId(isContributionOpen ? null : goal.id);
                             setContributionAmount("");
@@ -630,7 +698,31 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-9 gap-1.5 rounded-xl text-xs"
+                          className="h-9 gap-1.5 rounded-xl text-[11px]"
+                          onClick={() => { setEditingGoal(goal); setGoalDialogOpen(true); }}
+                        >
+                          <Settings2 className="h-3.5 w-3.5" /> Alterar meta mensal
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 gap-1.5 rounded-xl text-[11px]"
+                          onClick={() => setProjectionGoal(goal)}
+                        >
+                          <CalendarClock className="h-3.5 w-3.5" /> Meta final e rendimento
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 gap-1.5 rounded-xl text-[11px]"
+                          onClick={() => setExpandedGoalId(isExpanded ? null : goal.id)}
+                        >
+                          {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />} Histórico
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 gap-1.5 rounded-xl text-[11px]"
                           onClick={() => {
                             setWithdrawGoal(goal);
                             setWithdrawAmount("");
@@ -640,6 +732,17 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                           <ArrowDownLeft className="h-3.5 w-3.5" /> Retirar
                         </Button>
                       </div>
+                    )}
+
+                    {isCompleted && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-9 w-full gap-2 rounded-xl text-xs"
+                        onClick={() => { setEditingGoal(goal); setGoalDialogOpen(true); }}
+                      >
+                        <Settings2 className="h-3.5 w-3.5" /> Meta concluída: redistribuir o percentual
+                      </Button>
                     )}
 
                     {isContributionOpen && !isCompleted && (
@@ -702,7 +805,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                                 <div>
                                   <p className="text-xs font-medium">{tx.description || (tx.type === "deposit" ? "Depósito" : "Retirada")}</p>
                                   <p className="text-[10px] text-muted-foreground">
-                                    {new Date(tx.created_at).toLocaleDateString("pt-BR", {
+                                    {tx.ref_month ? `Competência: ${monthTitle(tx.ref_month)}` : new Date(tx.created_at).toLocaleDateString("pt-BR", {
                                       day: "2-digit",
                                       month: "short",
                                       year: "numeric",
@@ -736,6 +839,18 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
         currentRule={editingGoal ? resolveFinancialRules(financialRules, refMonth).find((rule) => rule.goal_id === editingGoal.id) || null : null}
         financialRules={financialRules}
         onCreated={onReload}
+      />
+
+      <GoalProjectionDialog
+        open={!!projectionGoal}
+        onOpenChange={(open) => !open && setProjectionGoal(null)}
+        userId={userId}
+        refMonth={refMonth}
+        goal={projectionGoal}
+        currentVersion={projectionGoal ? activeProjectionVersions.get(projectionGoal.id) || null : null}
+        averageMonthlyExpenses={averageMonthlyExpenses}
+        referenceRates={referenceRates}
+        onSaved={onReload}
       />
 
       <AlertDialog open={!!goalToDelete} onOpenChange={(open) => !open && setGoalToDelete(null)}>
