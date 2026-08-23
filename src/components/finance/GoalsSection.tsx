@@ -65,6 +65,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { AddGoalDialog } from "./AddGoalDialog";
+import { GoalAllocationChart } from "./GoalAllocationChart";
 import { GoalProjectionDialog } from "./GoalProjectionDialog";
 
 type GoalItem = PlanningGoal & { id: string; goal_type?: string; priority?: number };
@@ -421,6 +422,14 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
           </CardContent>
         </Card>
       </div>
+
+      <GoalAllocationChart
+        goals={visibleGoals}
+        activeRules={activeFinancialRules}
+        monthlyIncome={monthlyIncome}
+        monthlyAvailable={monthlySurplus}
+        referenceLabel={referenceLabel}
+      />
 
       <Card className="overflow-hidden border-0 shadow-elevated" data-allocate>
         <div className="gradient-primary px-4 py-3">
