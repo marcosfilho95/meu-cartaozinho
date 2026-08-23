@@ -50,6 +50,15 @@ describe("goal projections", () => {
     expect(withYield.months!).toBeLessThan(withoutYield.months!);
   });
 
+  it("does not create a completion forecast for an open-ended destination", () => {
+    expect(projectGoalCompletion({
+      currentAmount: 600,
+      targetAmount: 0,
+      monthlyContribution: 100,
+      refMonth: "2026-08",
+    })).toEqual({ months: null, completionMonth: null, projectedBalance: 600 });
+  });
+
   it("calculates emergency target and indexed rates without changing real balance", () => {
     expect(calculateGoalTarget(10_000, version({ target_mode: "emergency_months", emergency_months: 9 }), 7_000)).toBe(63_000);
     expect(getEffectiveAnnualRate(version({ yield_type: "cdi", yield_rate_percent: 102 }), [{ rate_key: "cdi", annual_rate: 13.9, as_of_date: "2026-08-23", source: "test", is_approximation: true, updated_at: "2026-08-23T10:00:00Z" }])).toBeCloseTo(14.178);

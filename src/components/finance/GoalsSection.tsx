@@ -231,8 +231,9 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
     try {
       const goal = goals.find((g) => g.id === goalId);
       if (!goal) throw new Error("Plano não encontrado.");
-      const remaining = Math.max(Number(goal.target_amount) - Number(goal.current_amount), 0);
-      if (amount > remaining) throw new Error(`O objetivo final comporta mais ${formatCurrency(remaining)}.`);
+      const finalTarget = Number(goal.target_amount || 0);
+      const remaining = Math.max(finalTarget - Number(goal.current_amount), 0);
+      if (finalTarget > 0 && amount > remaining) throw new Error(`O objetivo final comporta mais ${formatCurrency(remaining)}.`);
 
       const rpcResult = await (supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }>)("reserve_goal_funds", {
         p_goal_id: goalId,
@@ -248,7 +249,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
           .from("goals")
           .update({
             current_amount: Number(goal.current_amount || 0) + amount,
-            is_completed: Number(goal.current_amount || 0) + amount >= Number(goal.target_amount),
+            is_completed: finalTarget > 0 && Number(goal.current_amount || 0) + amount >= finalTarget,
           })
           .eq("id", goalId);
         if (gErr) throw gErr;
@@ -612,9 +613,10 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
           {visibleGoals.map((goal) => {
             const current = Number(goal.current_amount || 0);
             const projectionVersion = activeProjectionVersions.get(goal.id) || null;
-            const target = Math.max(calculateGoalTarget(Number(goal.target_amount || 0), projectionVersion, averageMonthlyExpenses), 1);
-            const progress = Math.min((current / target) * 100, 100);
-            const isCompleted = progress >= 100;
+            const target = calculateGoalTarget(Number(goal.target_amount || 0), projectionVersion, averageMonthlyExpenses);
+            const hasFinalTarget = target > 0;
+            const progress = hasFinalTarget ? Math.min((current / target) * 100, 100) : 0;
+            const isCompleted = hasFinalTarget && progress >= 100;
             const isExpanded = expandedGoalId === goal.id;
             const currentRule = activeFinancialRules.find((rule) => rule.goal_id === goal.id) || null;
             const suggested = calculateSuggestedContribution(currentRule, { monthlyIncome, monthlyAvailable: monthlySurplus });
@@ -688,26 +690,38 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Total acumulado do plano</p>
                       <div className="mb-1.5 flex items-end justify-between">
                         <span className="font-heading text-xl font-extrabold text-primary">{formatCurrency(current)}</span>
-                        <span className="text-xs text-muted-foreground">de {formatCurrency(target)}</span>
+                        {hasFinalTarget ? (
+                          <span className="text-xs text-muted-foreground">de {formatCurrency(target)}</span>
+                        ) : (
+                          <Badge variant="outline" className="border-primary/20 bg-primary/5 text-[10px] text-primary">Destino contínuo</Badge>
+                        )}
                       </div>
-                      <div className="relative h-3 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className={cn(
-                            "h-full rounded-full transition-all duration-700 ease-out",
-                            isCompleted ? "bg-gradient-to-r from-success to-success/80" : "bg-gradient-to-r from-primary to-primary/80",
-                          )}
-                          style={{ width: `${progress}%` }}
-                        />
-                      </div>
-                      <div className="mt-1 flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-primary">{progress.toFixed(0)}%</span>
-                        <span className="text-[11px] text-muted-foreground">
-                          Falta {formatCurrency(Math.max(target - current, 0))}
-                        </span>
-                      </div>
+                      {hasFinalTarget ? (
+                        <>
+                          <div className="relative h-3 overflow-hidden rounded-full bg-muted">
+                            <div
+                              className={cn(
+                                "h-full rounded-full transition-all duration-700 ease-out",
+                                isCompleted ? "bg-gradient-to-r from-success to-success/80" : "bg-gradient-to-r from-primary to-primary/80",
+                              )}
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                          <div className="mt-1 flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-primary">{progress.toFixed(0)}%</span>
+                            <span className="text-[11px] text-muted-foreground">
+                              Falta {formatCurrency(Math.max(target - current, 0))}
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="rounded-lg bg-primary/5 px-3 py-2 text-[11px] text-muted-foreground">
+                          Sem valor final: acompanhe apenas quanto você separou e destinou ao longo do tempo.
+                        </p>
+                      )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 rounded-xl border border-border/70 bg-muted/25 p-3 sm:grid-cols-3">
+                    <div className={cn("grid grid-cols-2 gap-2 rounded-xl border border-border/70 bg-muted/25 p-3", hasFinalTarget ? "sm:grid-cols-3" : "sm:grid-cols-4")}>
                       <div>
                         <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Sugestão do mês</p>
                         <p className="mt-1 text-xs font-bold text-foreground">{formatCurrency(suggested)}</p>
@@ -731,14 +745,14 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                         <p className="mt-1 text-xs font-bold text-foreground">{formatCurrency(contributionStats.averageMonthly)}/mês</p>
                         <p className="mt-0.5 text-[9px] text-muted-foreground">{contributionStats.monthsObserved || 0} mês(es) observado(s)</p>
                       </div>
-                      <div>
+                      {hasFinalTarget && <div>
                         <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Previsão sem rendimento</p>
                         <p className="mt-1 text-xs font-bold text-foreground">
                           {noYieldProjection.completionMonth ? monthTitle(noYieldProjection.completionMonth) : "Ainda sem previsão"}
                         </p>
                         {noYieldProjection.months !== null && <p className="mt-0.5 text-[9px] text-muted-foreground">{noYieldProjection.months} meses restantes</p>}
-                      </div>
-                      <div>
+                      </div>}
+                      {hasFinalTarget && <div>
                         <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Rentabilidade</p>
                         <p className="mt-1 text-xs font-bold text-foreground">
                           {!projectionVersion || projectionVersion.yield_type === "none"
@@ -748,7 +762,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                               : `${Number(projectionVersion.yield_rate_percent).toLocaleString("pt-BR")}% do ${projectionVersion.yield_type.toUpperCase()}`}
                         </p>
                         {yieldProjection?.completionMonth && <p className="mt-0.5 text-[9px] text-success">Com rendimento: {monthTitle(yieldProjection.completionMonth)}</p>}
-                      </div>
+                      </div>}
                     </div>
 
                     {projectionVersion?.target_mode === "emergency_months" && (
@@ -757,13 +771,13 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                       </div>
                     )}
 
-                    {contributionStats.averageMonthly <= 0 && !isCompleted && (
+                    {hasFinalTarget && contributionStats.averageMonthly <= 0 && !isCompleted && (
                       <p className="rounded-xl border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
                         Faça seus primeiros aportes para calcular uma previsão.
                       </p>
                     )}
 
-                    {yieldProjection && (
+                    {hasFinalTarget && yieldProjection && (
                       <p className="text-[10px] leading-relaxed text-muted-foreground">
                         Estimativa baseada na taxa atual. Taxas futuras podem mudar.{referenceRate?.is_approximation ? " O CDI exibido é uma aproximação identificada." : ""}
                       </p>
@@ -795,7 +809,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                           className="h-9 gap-1.5 rounded-xl text-[11px]"
                           onClick={() => setProjectionGoal(goal)}
                         >
-                          <CalendarClock className="h-3.5 w-3.5" /> Meta final e rendimento
+                          <CalendarClock className="h-3.5 w-3.5" /> {hasFinalTarget ? "Meta final e rendimento" : "Definir objetivo final"}
                         </Button>
                         <Button
                           variant="outline"

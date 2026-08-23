@@ -110,6 +110,15 @@ describe("financeInsights", () => {
     expect(projection.estimatedMonth).toBe("2027-02");
   });
 
+  it("mantém destinos contínuos sem inventar meta final ou previsão", () => {
+    const projection = projectGoal({ id: "donation", name: "Doações", target_amount: 0, current_amount: 600 }, 100, "2026-08");
+    expect(projection.saved).toBe(600);
+    expect(projection.target).toBe(0);
+    expect(projection.progress).toBe(0);
+    expect(projection.monthsToFinish).toBeNull();
+    expect(projection.estimatedMonth).toBeNull();
+  });
+
   it("não inventa orientação quando ainda não existem dados", () => {
     const summary = summarizeMonth([], "2026-08");
     const insights = buildInsights({ refMonth: "2026-08", summary, comparison: compareMonths([], "2026-08") });

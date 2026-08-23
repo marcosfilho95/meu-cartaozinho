@@ -221,7 +221,9 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     if (months.length === 0) return 0;
     return months.reduce((sum, key) => sum + Math.max(calculateReserveMovement(goalMovements, key).net, 0), 0) / months.length;
   }, [analysisMonthKeys, goalMovements]);
-  const activeGoals = goals.filter((goal) => !goal.is_completed && Number(goal.target_amount) > Number(goal.current_amount));
+  const activeGoals = goals.filter((goal) => !goal.is_completed && (
+    Number(goal.target_amount) <= 0 || Number(goal.target_amount) > Number(goal.current_amount)
+  ));
   const goalProjections = useMemo(() => goals.map((goal) => projectGoal(
     goal,
     financialPlan.goalAmounts.has(goal.id)
@@ -355,15 +357,20 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
               <div className="flex items-start justify-between gap-2"><div><h3 className="font-heading font-bold">Planos e objetivos</h3><p className="mt-0.5 text-[11px] text-muted-foreground">Veja o progresso sem misturar com seus gastos</p></div><PiggyBank className="h-4 w-4 shrink-0 text-primary" /></div>
               {goalProjections.length ? (
                 <div className="mt-4 space-y-3">
-                  {goalProjections.slice(0, 3).map((goal) => (
+                  {goalProjections.slice(0, 3).map((goal) => goal.target > 0 ? (
                     <div key={goal.id}>
                       <div className="flex items-center justify-between gap-2 text-xs"><span className="truncate font-medium">{goal.name}</span><strong className="text-primary">{goal.progress.toFixed(0)}%</strong></div>
                       <Progress value={goal.progress} className="mt-1.5 h-2" />
                       <div className="mt-1 flex justify-between gap-2 text-[10px] text-muted-foreground"><span>{formatCurrency(goal.saved)} guardados</span><span>Faltam {formatCurrency(goal.missing)}</span></div>
                     </div>
+                  ) : (
+                    <div key={goal.id} className="rounded-xl border border-primary/15 bg-primary/5 px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-2 text-xs"><span className="truncate font-medium">{goal.name}</span><Badge variant="outline" className="text-[9px]">Contínuo</Badge></div>
+                      <p className="mt-1 text-[10px] text-muted-foreground"><strong className="text-primary">{formatCurrency(goal.saved)}</strong> separados até agora</p>
+                    </div>
                   ))}
                 </div>
-              ) : <div className="my-auto rounded-xl border border-dashed p-5 text-center"><p className="text-sm font-medium">Nenhum plano criado</p><p className="mt-1 text-xs text-muted-foreground">Crie um objetivo, defina o valor e acompanhe o progresso.</p></div>}
+              ) : <div className="my-auto rounded-xl border border-dashed p-5 text-center"><p className="text-sm font-medium">Nenhum plano criado</p><p className="mt-1 text-xs text-muted-foreground">Crie um objetivo ou um destino contínuo para organizar seu dinheiro.</p></div>}
               <Button className="mt-auto w-full" onClick={() => navigate("/financas/cofrinhos")}>{goalProjections.length ? "Organizar meus planos" : "Criar primeiro plano"}<ArrowRight className="ml-2 h-4 w-4" /></Button>
             </CardContent>
           </Card>

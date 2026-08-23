@@ -66,8 +66,11 @@ export const AddGoalDialog: React.FC<AddGoalDialogProps> = ({ open, onOpenChange
 
   const handleSave = async () => {
     if (!editing && !name.trim()) return void toast.error("Informe o nome do plano.");
-    const target = editing ? 0 : parseNumber(targetAmount);
-    if (!editing && (!target || target <= 0)) return void toast.error("Informe o valor total do objetivo.");
+    const hasTargetAmount = targetAmount.trim().length > 0;
+    const target = editing || !hasTargetAmount ? 0 : parseNumber(targetAmount);
+    if (!editing && hasTargetAmount && (!Number.isFinite(target) || target <= 0)) {
+      return void toast.error("Informe um valor total válido ou deixe o campo vazio.");
+    }
     const ruleValue = parseNumber(allocation);
     if (!Number.isFinite(ruleValue) || ruleValue < 0) return void toast.error("Informe uma regra mensal válida.");
     if (valueType === "percentage" && ruleValue > 100) return void toast.error("O percentual não pode passar de 100%.");
@@ -90,7 +93,7 @@ export const AddGoalDialog: React.FC<AddGoalDialogProps> = ({ open, onOpenChange
         type = goalType;
       }
       await createFinancialRuleVersion({ user_id: userId, rule_key: `goal:${goalId}`, rule_type: type, effective_month: refMonth, value_type: valueType, value: ruleValue, calculation_base: valueType === "fixed" ? "total_income" : calculationBase, goal_id: goalId, priority });
-      if (createdGoalId) {
+      if (createdGoalId && target > 0) {
         await createGoalProjectionVersion({
           user_id: userId,
           goal_id: createdGoalId,
@@ -104,7 +107,9 @@ export const AddGoalDialog: React.FC<AddGoalDialogProps> = ({ open, onOpenChange
       }
       toast.success(editing
         ? `Meta planejada atualizada em ${monthTitle(refMonth)}. O saldo só muda ao registrar um aporte.`
-        : `Plano criado para ${monthTitle(refMonth)}. Registre um aporte quando guardar o dinheiro.`);
+        : target > 0
+          ? `Plano criado para ${monthTitle(refMonth)}. Registre um aporte quando guardar o dinheiro.`
+          : `Destino contínuo criado para ${monthTitle(refMonth)}. Você pode separar valores sem uma meta final.`);
       onOpenChange(false);
       onCreated();
     } catch (error: unknown) {
@@ -119,7 +124,7 @@ export const AddGoalDialog: React.FC<AddGoalDialogProps> = ({ open, onOpenChange
       <div><Label className="text-xs text-muted-foreground">Comece com uma ideia</Label><div className="mt-1.5 flex flex-wrap gap-2">{GOAL_TEMPLATES.map((template) => <button key={template.label} type="button" onClick={() => { setName(template.name); setGoalType(template.type); setTargetAmount(template.target); setAllocation(template.allocation); setValueType("percentage"); }} className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs font-medium transition hover:border-primary hover:bg-primary/5"><Sparkles className="h-3 w-3 text-primary" /> {template.label}</button>)}</div></div>
       <div><Label className="text-xs text-muted-foreground">Nome do objetivo</Label><Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: Entrada do apartamento" className="mt-1" /></div>
       <div><Label className="text-xs text-muted-foreground">Tipo</Label><Select value={goalType} onValueChange={setGoalType}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{GOAL_TYPES.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
-      <div className="grid grid-cols-2 gap-3"><div><Label className="text-xs text-muted-foreground">Valor total do objetivo</Label><Input inputMode="decimal" value={targetAmount} onChange={(event) => setTargetAmount(event.target.value)} placeholder="Ex.: 10.000,00" className="mt-1" /></div><div><Label className="text-xs text-muted-foreground">Prazo (opcional)</Label><Input type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} className="mt-1" /></div></div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><div><Label className="text-xs text-muted-foreground">Valor total (opcional)</Label><Input inputMode="decimal" value={targetAmount} onChange={(event) => setTargetAmount(event.target.value)} placeholder="Sem valor final" className="mt-1" /><p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">Deixe vazio para destinos contínuos, como doações.</p></div><div><Label className="text-xs text-muted-foreground">Prazo (opcional)</Label><Input type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} className="mt-1" /></div></div>
     </>}
     <div><Label className="text-xs text-muted-foreground">Como calcular a meta planejada mensal?</Label><Select value={valueType} onValueChange={(value) => setValueType(value as FinancialRuleValueType)}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="percentage">Percentual (%)</SelectItem><SelectItem value="fixed">Valor fixo mensal</SelectItem></SelectContent></Select></div>
     <div><Label className="text-xs text-muted-foreground">{valueType === "percentage" ? "Percentual" : "Valor mensal"}</Label><div className="relative mt-1"><Input inputMode="decimal" value={allocation} onChange={(event) => setAllocation(event.target.value)} placeholder={valueType === "percentage" ? "Ex.: 5" : "Ex.: 500,00"} className={valueType === "percentage" ? "pr-9" : "pl-10"} />{valueType === "percentage" ? <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span> : <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>}</div></div>

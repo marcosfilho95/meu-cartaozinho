@@ -136,7 +136,10 @@ export const projectGoalCompletion = ({
   const target = Math.max(Number(targetAmount || 0), 0);
   let balance = Math.max(Number(currentAmount || 0), 0);
   const contribution = Math.max(Number(monthlyContribution || 0), 0);
-  if (target <= 0 || balance >= target) {
+  if (target <= 0) {
+    return { months: null, completionMonth: null, projectedBalance: roundMoney(balance) };
+  }
+  if (balance >= target) {
     return { months: 0, completionMonth: refMonth, projectedBalance: roundMoney(balance) };
   }
   if (contribution <= 0) return { months: null, completionMonth: null, projectedBalance: roundMoney(balance) };

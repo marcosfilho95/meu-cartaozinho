@@ -268,7 +268,8 @@ export const projectGoal = (
   const target = fromCents(toCents(goal.target_amount));
   const saved = fromCents(toCents(goal.current_amount));
   const missing = Math.max(target - saved, 0);
-  const monthsToFinish = missing <= 0 ? 0 : monthlyReserve > 0 ? Math.ceil(missing / monthlyReserve) : null;
+  const hasFinalTarget = target > 0;
+  const monthsToFinish = !hasFinalTarget ? null : missing <= 0 ? 0 : monthlyReserve > 0 ? Math.ceil(missing / monthlyReserve) : null;
   return {
     id: goal.id,
     name: goal.name,
@@ -277,7 +278,7 @@ export const projectGoal = (
     missing,
     progress: target > 0 ? Math.min((saved / target) * 100, 100) : 0,
     monthsToFinish,
-    estimatedMonth: monthsToFinish === null ? null : addMonthsToKey(baseMonth, monthsToFinish),
+    estimatedMonth: !hasFinalTarget || monthsToFinish === null ? null : addMonthsToKey(baseMonth, monthsToFinish),
   };
 };
 
