@@ -18,6 +18,7 @@ type QueryBuilder = PromiseLike<QueryResult> & {
 
 type UntypedSupabase = {
   from: (table: string) => QueryBuilder;
+  rpc: (fn: string, args?: Record<string, unknown>) => PromiseLike<QueryResult>;
 };
 
 export const untypedSupabase = supabase as unknown as UntypedSupabase;
