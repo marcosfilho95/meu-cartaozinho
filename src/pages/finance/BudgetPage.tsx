@@ -17,6 +17,12 @@ import {
 import { ensureDefaultCategories } from "@/lib/financeCategoryDefaults";
 import { shouldIncludeInRealizedCalculations } from "@/lib/financeRealization";
 import {
+  buildFinancialPlan,
+  createFinancialRuleVersion,
+  fetchFinancialRuleVersions,
+  type FinancialRuleVersion,
+} from "@/lib/financialRules";
+import {
   getBudgetCoverage,
   getCategoryCoverage,
   getCategoryDepth,
@@ -107,6 +113,7 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
   const loadRequestIdRef = useRef(0);
 
   const [budgets, setBudgets] = useState<BudgetRow[]>([]);
+  const [financialRules, setFinancialRules] = useState<FinancialRuleVersion[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [expenses, setExpenses] = useState<Record<string, number>>({});
   const [incomeTotal, setIncomeTotal] = useState(0);
@@ -143,7 +150,7 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
         // The budget can still load if category bootstrap is temporarily unavailable.
       }
 
-      const [budgetsRes, catsRes, txsAll] = await Promise.all([
+      const [budgetsRes, catsRes, txsAll, loadedRules] = await Promise.all([
         supabase
           .from("budgets")
           .select("id, category_id, limit_amount, alert_threshold_pct, ref_month, created_at")
@@ -156,6 +163,7 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
           .eq("user_id", userId)
           .order("name"),
         fetchFinanceTransactionsByMonth(userId, refMonth),
+        fetchFinancialRuleVersions(userId, refMonth),
       ]);
 
       if (budgetsRes.error) throw budgetsRes.error;
@@ -168,10 +176,11 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
 
       const loadedBudgets = (budgetsRes.data as BudgetRow[]) || [];
       setBudgets(loadedBudgets);
-      const loadedMainGoal = loadedBudgets.find((budget) => budget.category_id == null && Number(budget.limit_amount) > 0);
+      setFinancialRules(loadedRules);
+      const loadedMainGoal = loadedRules.find((rule) => rule.rule_key === "spending_limit");
       setGlobalGoalInput(
         loadedMainGoal
-          ? Number(loadedMainGoal.limit_amount).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          ? Number(loadedMainGoal.value).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
           : "",
       );
       setCategories((catsRes.data as Category[]) || []);
@@ -237,11 +246,6 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
       return true;
     });
   }, [budgets]);
-
-  const mainBudget = useMemo(
-    () => budgets.find((budget) => budget.category_id == null && Number(budget.limit_amount) > 0) || null,
-    [budgets],
-  );
 
   const categoryById = useMemo(
     () => new Map(categories.map((category) => [category.id, category])),
@@ -324,11 +328,16 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
     () => activeBudgets.reduce((sum, budget) => sum + Number(budget.limit_amount), 0),
     [activeBudgets],
   );
-  const totalPlanned = useMemo(() => getMonthlySpendingGoal(budgets), [budgets]);
   const totalSpent = useMemo(
     () => Object.values(expenses).reduce((sum, amount) => sum + Number(amount), 0),
     [expenses],
   );
+  const financialPlan = useMemo(
+    () => buildFinancialPlan(financialRules, refMonth, incomeTotal, getMonthlySpendingGoal(budgets)),
+    [budgets, financialRules, incomeTotal, refMonth],
+  );
+  const totalPlanned = financialPlan.spendingLimit;
+  const hasVersionedSpendingRule = Boolean(financialPlan.spendingRule);
   const totalRemaining = totalPlanned - totalSpent;
   const overallPct = totalPlanned > 0 ? (totalSpent / totalPlanned) * 100 : 0;
   const projectedBalance = incomeTotal - totalPlanned;
@@ -343,20 +352,18 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
 
     setSavingGoal(true);
     try {
-      const result = mainBudget
-        ? await supabase
-            .from("budgets")
-            .update({ limit_amount: amount })
-            .eq("id", mainBudget.id)
-            .eq("user_id", userId)
-        : await supabase.from("budgets").insert({
-            user_id: userId,
-            category_id: null,
-            ref_month: refMonth,
-            limit_amount: amount,
-          });
-      if (result.error) throw result.error;
-      toast.success(mainBudget ? "Meta mensal atualizada!" : "Meta mensal criada!");
+      await createFinancialRuleVersion({
+        user_id: userId,
+        rule_key: "spending_limit",
+        rule_type: "spending_limit",
+        effective_month: refMonth,
+        value_type: "fixed",
+        value: amount,
+        calculation_base: "total_income",
+        goal_id: null,
+        priority: 0,
+      });
+      toast.success(hasVersionedSpendingRule ? `Nova versão válida a partir de ${getMonthLabel(refMonth)}.` : "Meta mensal criada!");
       await loadData();
     } catch (error: any) {
       toast.error(error?.message || "Não foi possível salvar a meta mensal.");
@@ -663,7 +670,8 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
             </div>
             <h2 className="font-heading text-2xl font-extrabold">Quanto você quer gastar no máximo?</h2>
             <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-              Este é o limite de todas as suas despesas somadas em {getMonthLabel(refMonth)}.
+              Este é o limite de todas as suas despesas somadas. Ao alterar em {getMonthLabel(refMonth)},
+              a nova regra vale deste mês em diante e não modifica meses anteriores.
             </p>
             <div className="mt-4 flex flex-col gap-2 sm:flex-row">
               <div className="relative flex-1">
@@ -682,10 +690,10 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
                 />
               </div>
               <Button className="h-11 px-6" onClick={handleSaveGlobalGoal} disabled={savingGoal}>
-                {savingGoal ? <Loader2 className="h-4 w-4 animate-spin" /> : mainBudget ? "Atualizar meta" : "Criar meta"}
+                {savingGoal ? <Loader2 className="h-4 w-4 animate-spin" /> : hasVersionedSpendingRule ? "Salvar nova versão" : "Criar meta"}
               </Button>
             </div>
-            {!mainBudget && categoryTotalPlanned > 0 && (
+            {!hasVersionedSpendingRule && categoryTotalPlanned > 0 && (
               <p className="mt-2 text-xs text-muted-foreground">
                 Até você criar a meta total, o sistema continua usando a soma dos limites por categoria ({formatCurrency(categoryTotalPlanned)}).
               </p>

@@ -1,10 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Loader2, PiggyBank } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { untypedSupabase } from "@/lib/supabaseUntyped";
 import { GoalsSection } from "@/components/finance/GoalsSection";
+import { MonthNavigator } from "@/components/MonthNavigator";
+import { getMonthlySpendingGoal } from "@/lib/financeBudget";
+import { buildFinancialPlan, fetchFinancialRuleVersions, type FinancialRuleVersion } from "@/lib/financialRules";
 import { fetchFinanceTransactions, monthKey } from "@/lib/financeShared";
 import { getSavingsPlan, getTransactionsForMonth, type PlanningGoal } from "@/lib/financePlanning";
 import { calculateReserveMovement, type GoalMovement } from "@/lib/financeOverview";
@@ -23,13 +26,13 @@ const CofrinhosPage: React.FC<CofrinhosPageProps> = ({ userId }) => {
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
   const [allocated, setAllocated] = useState(0);
   const [surplus, setSurplus] = useState(0);
-
-  const refMonth = useMemo(() => monthKey(new Date()), []);
+  const [financialRules, setFinancialRules] = useState<FinancialRuleVersion[]>([]);
+  const [refMonth, setRefMonth] = useState(() => monthKey(new Date()));
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [goalsRes, accountsRes, transactions, goalTxRes] = await Promise.all([
+      const [goalsRes, accountsRes, transactions, goalTxRes, budgetsRes, loadedRules] = await Promise.all([
         supabase.from("goals").select("*").eq("user_id", userId).order("created_at"),
         supabase
           .from("accounts")
@@ -43,13 +46,15 @@ const CofrinhosPage: React.FC<CofrinhosPageProps> = ({ userId }) => {
           .select("amount, type, created_at")
           .eq("user_id", userId)
           .limit(1000),
+        supabase.from("budgets").select("category_id, limit_amount").eq("user_id", userId).eq("ref_month", refMonth),
+        fetchFinancialRuleVersions(userId, refMonth),
       ]);
 
       if (goalsRes.error) throw goalsRes.error;
       if (accountsRes.error) throw accountsRes.error;
+      if (budgetsRes.error) throw budgetsRes.error;
 
       const loadedGoals = (goalsRes.data || []) as GoalRow[];
-      setGoals(loadedGoals);
       setAccounts((accountsRes.data || []) as AccountRow[]);
 
       const monthTransactions = getTransactionsForMonth(transactions, refMonth);
@@ -59,7 +64,19 @@ const CofrinhosPage: React.FC<CofrinhosPageProps> = ({ userId }) => {
       const expenses = monthTransactions
         .filter((tx) => tx.type === "expense" && tx.status !== "canceled" && shouldIncludeInRealizedCalculations(tx))
         .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
-      const plan = getSavingsPlan({ income, expenses, goals: loadedGoals, refMonth });
+      const financialPlan = buildFinancialPlan(
+        loadedRules,
+        refMonth,
+        income,
+        getMonthlySpendingGoal(budgetsRes.data || []),
+      );
+      const plannedGoals = loadedGoals.map((goal) => ({
+        ...goal,
+        monthly_target: financialPlan.goalAmounts.get(goal.id) ?? Number(goal.monthly_target || 0),
+      }));
+      setGoals(plannedGoals);
+      setFinancialRules(loadedRules);
+      const plan = getSavingsPlan({ income, expenses, goals: plannedGoals, refMonth });
       setSurplus(plan.positiveSurplus);
 
       const reserveMovement = calculateReserveMovement((goalTxRes.data || []) as GoalMovement[], refMonth);
@@ -85,14 +102,16 @@ const CofrinhosPage: React.FC<CofrinhosPageProps> = ({ userId }) => {
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 px-4 pb-24">
-      <header className="flex items-center gap-2">
-        <PiggyBank className="h-5 w-5 text-primary" />
-        <div>
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2"><PiggyBank className="h-5 w-5 text-primary" />
+          <div>
           <h1 className="font-heading text-xl font-bold">Meus planos</h1>
           <p className="text-xs text-muted-foreground">
             Escolha um objetivo, guarde quando puder e acompanhe quanto falta.
           </p>
+          </div>
         </div>
+        <MonthNavigator currentMonth={refMonth} onMonthChange={setRefMonth} />
       </header>
 
       <GoalsSection
@@ -102,6 +121,7 @@ const CofrinhosPage: React.FC<CofrinhosPageProps> = ({ userId }) => {
         monthlySurplus={surplus}
         allocatedThisMonth={allocated}
         refMonth={refMonth}
+        financialRules={financialRules}
         onReload={loadData}
       />
     </div>

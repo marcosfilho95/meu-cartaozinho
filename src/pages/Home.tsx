@@ -19,6 +19,7 @@ import {
 import { ensureDefaultCategories } from "@/lib/financeCategoryDefaults";
 import { ensureDefaultAccounts } from "@/lib/financeDefaults";
 import { getMonthlySpendingGoal } from "@/lib/financeBudget";
+import { buildFinancialPlan, fetchFinancialRuleVersions } from "@/lib/financialRules";
 import { monthTitle, summarizeMonth, type MonthSummary } from "@/lib/financeInsights";
 import { calculateNetWorth, calculateReserveMovement, type GoalMovement } from "@/lib/financeOverview";
 import { fetchFinanceTransactions, getLastMonthKeys, monthKey, type FinanceTx } from "@/lib/financeShared";
@@ -63,13 +64,14 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
       await Promise.allSettled([ensureDefaultAccounts(userId), ensureDefaultCategories(userId)]);
       await syncCartaozinhoIncomeMonth(userId, selectedMonth);
 
-      const [accountsRes, goalsRes, goalTxRes, budgetsRes, transactions, cardTotals] = await Promise.all([
+      const [accountsRes, goalsRes, goalTxRes, budgetsRes, transactions, cardTotals, financialRules] = await Promise.all([
         supabase.from("accounts").select("type, current_balance, include_in_net_worth").eq("user_id", userId).eq("is_active", true),
         supabase.from("goals").select("current_amount").eq("user_id", userId),
         untypedSupabase.from("goal_transactions").select("amount, type, created_at").eq("user_id", userId).limit(1000),
         supabase.from("budgets").select("category_id, limit_amount").eq("user_id", userId).eq("ref_month", selectedMonth),
         fetchFinanceTransactions(userId, 24),
         fetchCartaozinhoMonthTotals(userId, [selectedMonth]),
+        fetchFinancialRuleVersions(userId, selectedMonth),
       ]);
 
       if (accountsRes.error) throw accountsRes.error;
@@ -78,13 +80,20 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
       if (budgetsRes.error) throw budgetsRes.error;
 
       const reserve = calculateReserveMovement((goalTxRes.data || []) as GoalMovement[], selectedMonth);
+      const monthSummary = summarizeMonth(transactions, selectedMonth);
+      const financialPlan = buildFinancialPlan(
+        financialRules,
+        selectedMonth,
+        monthSummary.income,
+        getMonthlySpendingGoal(budgetsRes.data || []),
+      );
       setData({
         transactions,
-        summary: summarizeMonth(transactions, selectedMonth),
+        summary: monthSummary,
         reserved: Math.max(reserve.net, 0),
         netWorth: calculateNetWorth(accountsRes.data || [], goalsRes.data || []),
         card: cardTotals[selectedMonth] || emptyCardTotal(selectedMonth),
-        spendingGoal: getMonthlySpendingGoal(budgetsRes.data || []),
+        spendingGoal: financialPlan.spendingLimit,
       });
     } catch (loadError) {
       console.error("Home load error", loadError);

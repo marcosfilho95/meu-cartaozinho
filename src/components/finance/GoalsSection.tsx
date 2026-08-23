@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/constants";
 import { getGoalMonthlyRequirement, type PlanningGoal } from "@/lib/financePlanning";
+import { resolveFinancialRules, type FinancialRuleVersion } from "@/lib/financialRules";
 import { getErrorMessage } from "@/lib/supabaseUntyped";
 import {
   ArrowDownLeft,
@@ -41,6 +42,7 @@ import {
   Loader2,
   PiggyBank,
   Plus,
+  Settings2,
   Target,
   Trash2,
   Wallet,
@@ -62,6 +64,7 @@ interface GoalsSectionProps {
   monthlySurplus: number;
   allocatedThisMonth: number;
   refMonth: string;
+  financialRules?: FinancialRuleVersion[];
   onReload: () => void;
 }
 
@@ -82,9 +85,11 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
   monthlySurplus,
   allocatedThisMonth,
   refMonth,
+  financialRules = [],
   onReload,
 }) => {
   const [goalDialogOpen, setGoalDialogOpen] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<GoalItem | null>(null);
   const [allocAmount, setAllocAmount] = useState("");
   const [selectedGoalId, setSelectedGoalId] = useState("");
   const [saving, setSaving] = useState(false);
@@ -434,7 +439,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
         <Button
           size="sm"
           className="gradient-primary h-9 gap-1.5 rounded-xl border border-primary/30 px-3 text-xs font-bold text-primary-foreground shadow-md shadow-primary/30 hover:brightness-105"
-          onClick={() => setGoalDialogOpen(true)}
+          onClick={() => { setEditingGoal(null); setGoalDialogOpen(true); }}
         >
           <Plus className="h-3.5 w-3.5" /> Novo plano
         </Button>
@@ -449,7 +454,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
             <Button
               size="sm"
               className="gradient-primary mt-4 gap-1.5 border border-primary/30 text-primary-foreground shadow-md shadow-primary/30 hover:brightness-105"
-              onClick={() => setGoalDialogOpen(true)}
+              onClick={() => { setEditingGoal(null); setGoalDialogOpen(true); }}
             >
               <Plus className="h-3.5 w-3.5" /> Criar primeiro plano
             </Button>
@@ -492,6 +497,15 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                         )}
                       </div>
                       <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Ajustar regra de ${goal.name}`}
+                          className="h-8 w-8 text-muted-foreground hover:text-primary"
+                          onClick={() => { setEditingGoal(goal); setGoalDialogOpen(true); }}
+                        >
+                          <Settings2 className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -614,7 +628,15 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
         </div>
       )}
 
-      <AddGoalDialog open={goalDialogOpen} onOpenChange={setGoalDialogOpen} userId={userId} onCreated={onReload} />
+      <AddGoalDialog
+        open={goalDialogOpen}
+        onOpenChange={(open) => { setGoalDialogOpen(open); if (!open) setEditingGoal(null); }}
+        userId={userId}
+        refMonth={refMonth}
+        goal={editingGoal}
+        currentRule={editingGoal ? resolveFinancialRules(financialRules, refMonth).find((rule) => rule.goal_id === editingGoal.id) || null : null}
+        onCreated={onReload}
+      />
 
       <AlertDialog open={!!goalToDelete} onOpenChange={(open) => !open && setGoalToDelete(null)}>
         <AlertDialogContent>

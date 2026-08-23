@@ -26,6 +26,7 @@ import {
 import { toast } from "sonner";
 import { shouldIncludeInRealizedCalculations } from "@/lib/financeRealization";
 import { getMonthlySpendingGoal } from "@/lib/financeBudget";
+import { buildFinancialPlan, fetchFinancialRuleVersions, type FinancialRuleVersion } from "@/lib/financialRules";
 
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
 import { SmartAddDialog } from "@/components/finance/SmartAddDialog";
@@ -96,7 +97,8 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const [transactions, setTransactions] = useState<FinanceTx[]>([]);
   const [goals, setGoals] = useState<DashboardGoal[]>([]);
   const [goalMovements, setGoalMovements] = useState<GoalMovement[]>([]);
-  const [spendingGoal, setSpendingGoal] = useState(0);
+  const [legacySpendingGoal, setLegacySpendingGoal] = useState(0);
+  const [financialRules, setFinancialRules] = useState<FinancialRuleVersion[]>([]);
   const [manualOpen, setManualOpen] = useState(false);
   const [smartOpen, setSmartOpen] = useState(false);
 
@@ -107,11 +109,12 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       const syncMonths = Array.from({ length: 6 }, (_, index) => addMonthsToKey(referenceMonth, -index));
       await syncCartaozinhoIncomeMonths(userId, syncMonths);
 
-      const [goalsRes, goalTxRes, budgetsRes, loadedTransactions] = await Promise.all([
+      const [goalsRes, goalTxRes, budgetsRes, loadedTransactions, loadedRules] = await Promise.all([
         supabase.from("goals").select("*").eq("user_id", userId).order("created_at"),
         untypedSupabase.from("goal_transactions").select("amount, type, created_at").eq("user_id", userId).limit(1000),
         supabase.from("budgets").select("category_id, limit_amount").eq("user_id", userId).eq("ref_month", referenceMonth),
         fetchAllFinanceTransactions(userId),
+        fetchFinancialRuleVersions(userId, referenceMonth),
       ]);
       if (goalsRes.error) throw goalsRes.error;
       if (goalTxRes.error) throw goalTxRes.error;
@@ -120,7 +123,8 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       setGoals((goalsRes.data || []) as DashboardGoal[]);
       setGoalMovements((goalTxRes.data || []) as GoalMovement[]);
       setTransactions(loadedTransactions);
-      setSpendingGoal(getMonthlySpendingGoal(budgetsRes.data || []));
+      setLegacySpendingGoal(getMonthlySpendingGoal(budgetsRes.data || []));
+      setFinancialRules(loadedRules);
     } catch (error) {
       toast.error(getErrorMessage(error, "Não foi possível carregar sua análise financeira."));
     } finally {
@@ -140,6 +144,11 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   }, [load, userId]);
 
   const summary = useMemo(() => summarizeMonth(transactions, referenceMonth), [referenceMonth, transactions]);
+  const financialPlan = useMemo(
+    () => buildFinancialPlan(financialRules, referenceMonth, summary.income, legacySpendingGoal),
+    [financialRules, legacySpendingGoal, referenceMonth, summary.income],
+  );
+  const spendingGoal = financialPlan.spendingLimit;
   const comparison = useMemo(() => compareMonths(transactions, referenceMonth), [referenceMonth, transactions]);
   const categoryTrends = useMemo(() => buildCategoryTrends(transactions, referenceMonth), [referenceMonth, transactions]);
   const reserveMovement = useMemo(() => calculateReserveMovement(goalMovements, referenceMonth), [goalMovements, referenceMonth]);
@@ -192,9 +201,11 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const activeGoals = goals.filter((goal) => !goal.is_completed && Number(goal.target_amount) > Number(goal.current_amount));
   const goalProjections = useMemo(() => goals.map((goal) => projectGoal(
     goal,
-    Number(goal.monthly_target || 0) || (activeGoals.length ? averageReserve / activeGoals.length : 0),
+    financialPlan.goalAmounts.has(goal.id)
+      ? financialPlan.goalAmounts.get(goal.id) || 0
+      : Number(goal.monthly_target || 0) || (activeGoals.length ? averageReserve / activeGoals.length : 0),
     referenceMonth,
-  )), [activeGoals.length, averageReserve, goals, referenceMonth]);
+  )), [activeGoals.length, averageReserve, financialPlan.goalAmounts, goals, referenceMonth]);
   const insights = useMemo(() => buildInsights({
     refMonth: referenceMonth,
     summary,
