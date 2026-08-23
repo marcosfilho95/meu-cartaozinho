@@ -1,10 +1,10 @@
 # Meu Cartaozinho
 
-Projeto simples que criei para minha noiva organizar contas de cartão de crédito, parcelas e faturas por mês.
+Criei o Meu Cartãozinho para organizar melhor minha vida financeira, acompanhar meus gastos e planejar meus objetivos com mais clareza.
 
 ## Objetivo
 
-A ideia é facilitar a visualização do que foi gasto, quanto falta pagar e como dividir melhor as contas.
+A ideia é funcionar como uma planilha financeira inteligente, com automações, comparações e gráficos que facilitam o controle do dinheiro. O projeto também pode ajudar outras pessoas que buscam mais organização, planejamento e qualidade de vida.
 
 ## Usar no celular como app (PWA)
 
