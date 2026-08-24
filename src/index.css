@@ -300,11 +300,24 @@
 
 @keyframes finance-sync-card {
   0%, 100% {
-    transform: translateY(0) rotate(-1deg);
+    transform: translateY(0);
   }
   50% {
-    transform: translateY(-8px) rotate(1deg);
+    transform: translateY(-3px);
   }
+}
+
+@keyframes finance-sync-track {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(420%);
+  }
+}
+
+.finance-sync-track {
+  animation: finance-sync-track 1.4s ease-in-out infinite;
 }
 
 @keyframes finance-sync-shimmer {
