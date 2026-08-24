@@ -408,35 +408,172 @@ export type Database = {
           },
         ]
       }
+      financial_reference_rates: {
+        Row: {
+          annual_rate: number
+          as_of_date: string
+          is_approximation: boolean
+          rate_key: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          annual_rate: number
+          as_of_date: string
+          is_approximation?: boolean
+          rate_key: string
+          source: string
+          updated_at?: string
+        }
+        Update: {
+          annual_rate?: number
+          as_of_date?: string
+          is_approximation?: boolean
+          rate_key?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      financial_rule_versions: {
+        Row: {
+          calculation_base: string
+          created_at: string
+          effective_month: string
+          goal_id: string | null
+          id: string
+          priority: number
+          rule_key: string
+          rule_type: string
+          user_id: string
+          value: number
+          value_type: string
+        }
+        Insert: {
+          calculation_base?: string
+          created_at?: string
+          effective_month: string
+          goal_id?: string | null
+          id?: string
+          priority?: number
+          rule_key: string
+          rule_type: string
+          user_id: string
+          value: number
+          value_type?: string
+        }
+        Update: {
+          calculation_base?: string
+          created_at?: string
+          effective_month?: string
+          goal_id?: string | null
+          id?: string
+          priority?: number
+          rule_key?: string
+          rule_type?: string
+          user_id?: string
+          value?: number
+          value_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_rule_versions_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      goal_projection_versions: {
+        Row: {
+          created_at: string
+          effective_month: string
+          emergency_months: number | null
+          goal_id: string
+          id: string
+          target_amount: number
+          target_mode: string
+          user_id: string
+          yield_rate_percent: number
+          yield_type: string
+        }
+        Insert: {
+          created_at?: string
+          effective_month: string
+          emergency_months?: number | null
+          goal_id: string
+          id?: string
+          target_amount?: number
+          target_mode?: string
+          user_id: string
+          yield_rate_percent?: number
+          yield_type?: string
+        }
+        Update: {
+          created_at?: string
+          effective_month?: string
+          emergency_months?: number | null
+          goal_id?: string
+          id?: string
+          target_amount?: number
+          target_mode?: string
+          user_id?: string
+          yield_rate_percent?: number
+          yield_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_projection_versions_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       goal_transactions: {
         Row: {
+          account_id: string | null
           amount: number
           created_at: string
           description: string | null
           goal_id: string
           id: string
+          ref_month: string | null
           type: string
           user_id: string
         }
         Insert: {
+          account_id?: string | null
           amount: number
           created_at?: string
           description?: string | null
           goal_id: string
           id?: string
+          ref_month?: string | null
           type?: string
           user_id: string
         }
         Update: {
+          account_id?: string | null
           amount?: number
           created_at?: string
           description?: string | null
           goal_id?: string
           id?: string
+          ref_month?: string | null
           type?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "goal_transactions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "goal_transactions_goal_id_fkey"
             columns: ["goal_id"]
@@ -451,9 +588,12 @@ export type Database = {
           created_at: string
           current_amount: number
           deadline: string | null
+          goal_type: string
           id: string
           is_completed: boolean
+          monthly_target: number
           name: string
+          priority: number
           target_amount: number
           updated_at: string
           user_id: string
@@ -462,9 +602,12 @@ export type Database = {
           created_at?: string
           current_amount?: number
           deadline?: string | null
+          goal_type?: string
           id?: string
           is_completed?: boolean
+          monthly_target?: number
           name: string
+          priority?: number
           target_amount: number
           updated_at?: string
           user_id: string
@@ -473,9 +616,12 @@ export type Database = {
           created_at?: string
           current_amount?: number
           deadline?: string | null
+          goal_type?: string
           id?: string
           is_completed?: boolean
+          monthly_target?: number
           name?: string
+          priority?: number
           target_amount?: number
           updated_at?: string
           user_id?: string
@@ -1179,6 +1325,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cache_financial_reference_rate: {
+        Args: {
+          p_annual_rate: number
+          p_as_of_date: string
+          p_is_approximation?: boolean
+          p_rate_key: string
+          p_source: string
+        }
+        Returns: undefined
+      }
       create_default_accounts_for_user: {
         Args: { p_user_id: string }
         Returns: undefined
@@ -1187,7 +1343,34 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: undefined
       }
+      delete_goal_transaction: {
+        Args: { p_transaction_id: string }
+        Returns: undefined
+      }
       is_username_available: { Args: { p_username: string }; Returns: boolean }
+      refresh_existing_cartaozinho_total: {
+        Args: { target_month: string; target_user_id: string }
+        Returns: undefined
+      }
+      reserve_goal_funds: {
+        Args: {
+          p_account_id: string
+          p_amount: number
+          p_description?: string
+          p_goal_id: string
+          p_ref_month: string
+        }
+        Returns: undefined
+      }
+      update_goal_transaction: {
+        Args: {
+          p_amount: number
+          p_description?: string
+          p_ref_month: string
+          p_transaction_id: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       account_scope: "personal" | "business"
