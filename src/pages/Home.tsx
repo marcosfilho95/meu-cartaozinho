@@ -23,6 +23,7 @@ import { buildFinancialPlan, fetchFinancialRuleVersions } from "@/lib/financialR
 import { monthTitle, summarizeMonth, type MonthSummary } from "@/lib/financeInsights";
 import { calculateNetWorth, calculateReserveMovement, type GoalMovement } from "@/lib/financeOverview";
 import { fetchFinanceTransactions, getLastMonthKeys, monthKey, type FinanceTx } from "@/lib/financeShared";
+import { getFinanceViewCache, setFinanceViewCache } from "@/lib/financeViewCache";
 import { getErrorMessage, untypedSupabase } from "@/lib/supabaseUntyped";
 import { cn } from "@/lib/utils";
 
