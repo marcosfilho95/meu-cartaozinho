@@ -107,7 +107,7 @@ async function callGateway(messages: any[]): Promise<ParsedTx[]> {
       model: "google/gemini-3-flash-preview",
       messages,
       response_format: { type: "json_object" },
-      temperature: 0.1,
+      temperature: 0,
     }),
   });
 
