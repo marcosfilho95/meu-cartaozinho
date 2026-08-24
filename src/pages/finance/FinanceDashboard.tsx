@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { shouldIncludeInRealizedCalculations } from "@/lib/financeRealization";
 import { getMonthlySpendingGoal } from "@/lib/financeBudget";
 import { buildFinancialPlan, fetchFinancialRuleVersions, type FinancialRuleVersion } from "@/lib/financialRules";
+import { getFinanceViewCache, setFinanceViewCache } from "@/lib/financeViewCache";
 
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
 import { FinanceSyncLoader } from "@/components/finance/FinanceSyncLoader";
