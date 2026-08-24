@@ -126,7 +126,18 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const [insightsOpen, setInsightsOpen] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    const cacheKey = `dashboard:${userId}:${referenceMonth}`;
+    const cached = getFinanceViewCache<DashboardCacheShape>(cacheKey);
+    if (cached) {
+      setGoals(cached.goals);
+      setGoalMovements(cached.goalMovements);
+      setTransactions(cached.transactions);
+      setLegacySpendingGoal(cached.legacySpendingGoal);
+      setFinancialRules(cached.financialRules);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     try {
       await Promise.allSettled([ensureDefaultAccounts(userId), ensureDefaultCategories(userId)]);
       const syncMonths = Array.from({ length: 6 }, (_, index) => addMonthsToKey(referenceMonth, -index));
