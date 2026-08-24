@@ -163,13 +163,21 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       if (goalTxRes.error) throw goalTxRes.error;
       if (budgetsRes.error) throw budgetsRes.error;
 
-      setGoals((goalsRes.data || []) as DashboardGoal[]);
-      setGoalMovements((goalTxRes.data || []) as GoalMovement[]);
-      setTransactions(loadedTransactions);
-      setLegacySpendingGoal(getMonthlySpendingGoal(budgetsRes.data || []));
-      setFinancialRules(loadedRules);
+      const next: DashboardCacheShape = {
+        transactions: loadedTransactions,
+        goals: (goalsRes.data || []) as DashboardGoal[],
+        goalMovements: (goalTxRes.data || []) as GoalMovement[],
+        legacySpendingGoal: getMonthlySpendingGoal(budgetsRes.data || []),
+        financialRules: loadedRules,
+      };
+      setGoals(next.goals);
+      setGoalMovements(next.goalMovements);
+      setTransactions(next.transactions);
+      setLegacySpendingGoal(next.legacySpendingGoal);
+      setFinancialRules(next.financialRules);
+      setFinanceViewCache(cacheKey, next);
     } catch (error) {
-      toast.error(getErrorMessage(error, "Não foi possível carregar sua análise financeira."));
+      if (!cached) toast.error(getErrorMessage(error, "Não foi possível carregar sua análise financeira."));
     } finally {
       setLoading(false);
     }
