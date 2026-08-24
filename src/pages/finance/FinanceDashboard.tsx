@@ -112,6 +112,14 @@ const insightTonePresentation: Record<Insight["tone"], { icon: typeof ThumbsUp; 
   },
 };
 
+type DashboardCacheShape = {
+  transactions: FinanceTx[];
+  goals: DashboardGoal[];
+  goalMovements: GoalMovement[];
+  legacySpendingGoal: number;
+  financialRules: FinancialRuleVersion[];
+};
+
 const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const navigate = useNavigate();
   const [referenceMonth, setReferenceMonth] = useState(() => monthKey(new Date()));
