@@ -95,17 +95,19 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
         monthSummary.income,
         getMonthlySpendingGoal(budgetsRes.data || []),
       );
-      setData({
+      const nextData: HomeData = {
         transactions,
         summary: monthSummary,
         reserved: Math.max(reserve.net, 0),
         netWorth: calculateNetWorth(accountsRes.data || [], goalsRes.data || []),
         card: cardTotals[selectedMonth] || emptyCardTotal(selectedMonth),
         spendingGoal: financialPlan.spendingLimit,
-      });
+      };
+      setData(nextData);
+      setFinanceViewCache(`home:${userId}:${selectedMonth}`, nextData);
     } catch (loadError) {
       console.error("Home load error", loadError);
-      setError(getErrorMessage(loadError, "Não foi possível carregar sua visão financeira."));
+      if (!cached) setError(getErrorMessage(loadError, "Não foi possível carregar sua visão financeira."));
     } finally {
       setLoading(false);
     }
