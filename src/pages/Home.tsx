@@ -58,7 +58,14 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
 
   const load = useCallback(async () => {
     if (!userId) return;
-    setLoading(true);
+    const cacheKey = `home:${userId}:${selectedMonth}`;
+    const cached = getFinanceViewCache<HomeData>(cacheKey);
+    if (cached) {
+      setData(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     setError(null);
     try {
       await Promise.allSettled([ensureDefaultAccounts(userId), ensureDefaultCategories(userId)]);
