@@ -359,6 +359,7 @@
   .finance-page-enter-left,
   .finance-sync-card,
   .finance-sync-shimmer,
+  .finance-sync-track,
   .finance-sync-glow {
     animation: none !important;
   }
