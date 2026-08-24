@@ -23,6 +23,7 @@ import { buildFinancialPlan, fetchFinancialRuleVersions } from "@/lib/financialR
 import { monthTitle, summarizeMonth, type MonthSummary } from "@/lib/financeInsights";
 import { calculateNetWorth, calculateReserveMovement, type GoalMovement } from "@/lib/financeOverview";
 import { fetchFinanceTransactions, getLastMonthKeys, monthKey, type FinanceTx } from "@/lib/financeShared";
+import { getFinanceViewCache, setFinanceViewCache } from "@/lib/financeViewCache";
 import { getErrorMessage, untypedSupabase } from "@/lib/supabaseUntyped";
 import { cn } from "@/lib/utils";
 
@@ -58,7 +59,14 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
 
   const load = useCallback(async () => {
     if (!userId) return;
-    setLoading(true);
+    const cacheKey = `home:${userId}:${selectedMonth}`;
+    const cached = getFinanceViewCache<HomeData>(cacheKey);
+    if (cached) {
+      setData(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     setError(null);
     try {
       await Promise.allSettled([ensureDefaultAccounts(userId), ensureDefaultCategories(userId)]);
@@ -87,17 +95,19 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
         monthSummary.income,
         getMonthlySpendingGoal(budgetsRes.data || []),
       );
-      setData({
+      const nextData: HomeData = {
         transactions,
         summary: monthSummary,
         reserved: Math.max(reserve.net, 0),
         netWorth: calculateNetWorth(accountsRes.data || [], goalsRes.data || []),
         card: cardTotals[selectedMonth] || emptyCardTotal(selectedMonth),
         spendingGoal: financialPlan.spendingLimit,
-      });
+      };
+      setData(nextData);
+      setFinanceViewCache(`home:${userId}:${selectedMonth}`, nextData);
     } catch (loadError) {
       console.error("Home load error", loadError);
-      setError(getErrorMessage(loadError, "Não foi possível carregar sua visão financeira."));
+      if (!cached) setError(getErrorMessage(loadError, "Não foi possível carregar sua visão financeira."));
     } finally {
       setLoading(false);
     }
