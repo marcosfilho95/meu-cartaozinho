@@ -62,6 +62,17 @@ Regras:
 - Se o print tiver somente o total da fatura, sem as compras detalhadas, retorne esse total como uma única despesa. Nunca retorne vazio quando houver um valor de fatura legível.
 - Frases curtas são válidas. Valor mais um contexto mínimo, como "Nubank maio 2800", já identifica uma transação e não deve ser descartado.
 - Não descarte uma transação apenas porque categoria, forma de pagamento ou dia estão ausentes. Campos desconhecidos podem ser null.
+
+Interpretação de linguagem natural (entrada digitada pelo usuário):
+- Uma frase pode conter várias transações separadas por "e", ",", ";" ou quebra de linha. Ex.: "mercado 120 e uber 23" => duas transações.
+- Valores abreviados: "2k" e "2 mil" = 2000; "1,5k" = 1500; "50 pila", "50 conto", "R$50", "50,00" e "50 reais" = 50. "3x de 90" = amount 90 com installments 3 (nunca multiplique).
+- Verbos definem o tipo: gastei, paguei, comprei, torrei => expense. recebi, caiu, entrou, ganhei, salário, freela, pagamento recebido de cliente => income. transferi, apliquei, guardei, investi, resgatei, mandei pra poupança => transfer.
+- Datas relativas em relação à data de hoje: "hoje", "ontem" (-1), "anteontem" (-2), "amanhã" (+1), "semana passada" (-7), "dia 12" (dia 12 do mês atual; se já passou muito, mantenha o mês atual), "segunda passada", "início/meio/fim do mês". Converta sempre para YYYY-MM-DD.
+- Nomes de mês por extenso ou abreviados (jan, fev, mar…) definem explicit_month. "maio" sem ano => ano atual.
+- Ignore emojis, gírias e ruídos. Corrija erros de digitação óbvios em estabelecimentos conhecidos ("ifod" => iFood, "amazom" => Amazon).
+- Estabelecimentos brasileiros conhecidos definem a categoria pelo ramo: iFood/Rappi => Delivery/Alimentação; Uber/99 => Uber e Táxi; Cobasi/Petz => Pet; Drogasil/Pague Menos/Raia => Saúde/Farmácia; Netflix/Spotify/Prime => Assinaturas; Renner/Riachuelo/Zara/Shein => Roupas; Enel/Cemig/Copel/Sabesp/Comgás => Contas de casa; posto/Shell/Ipiranga => Gasolina.
+- Se a mesma transação aparecer duas vezes no mesmo conteúdo (ex.: resumo e detalhe), retorne apenas uma.
+- Confidence alta (>=0,85) quando valor, descrição e tipo estiverem claros; abaixo de 0,5 quando você tiver que adivinhar o tipo.
 - Nunca invente ou altere valor, instituição ou data explicitamente informados.
 - Retorne "transactions": [] somente quando realmente não houver valor e movimentação financeira identificáveis.
 
