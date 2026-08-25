@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Baby,
   CarFront,
+  Coins,
   GraduationCap,
   HandHeart,
   Home,
@@ -9,7 +10,6 @@ import {
   Palmtree,
   PiggyBank,
   Plane,
-  ShieldCheck,
   Sparkles,
   TrendingUp,
 } from "lucide-react";

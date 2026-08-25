@@ -250,18 +250,62 @@ export const getTransactionFingerprint = async (input: {
     ].join("|"),
   );
 
+/**
+ * Chave estável de parcelamento: mesma compra parcelada aparece com datas
+ * diferentes em faturas de meses distintos, mas instituição + descrição +
+ * valor + posição do parcelamento (2/10, 3/10…) são idênticos.
+ */
+export const getInstallmentSignature = (input: {
+  institution?: string | null;
+  descriptionNormalized?: string | null;
+  amount: number | string;
+  installmentCurrent?: number | null;
+  installmentTotal?: number | null;
+}) => {
+  if (!input.installmentCurrent || !input.installmentTotal) return null;
+  const description = normalizeMerchantName(String(input.descriptionNormalized || ""));
+  if (!description) return null;
+  return [
+    String(input.institution || "UNKNOWN"),
+    description,
+    Math.abs(Number(input.amount) || 0).toFixed(2),
+    input.installmentCurrent,
+    input.installmentTotal,
+  ].join("|");
+};
+
 export const markDuplicates = (transactions: NormalizedTransaction[], existing: ExistingTransactionMatch[]) => {
   const externalIds = new Set(existing.map((tx) => tx.external_id).filter(Boolean));
   const fingerprints = new Set(existing.map((tx) => tx.fingerprint).filter(Boolean));
+  const installmentSignatures = new Set(
+    existing
+      .map((tx) => getInstallmentSignature({
+        institution: tx.institution,
+        descriptionNormalized: tx.description_normalized || tx.source,
+        amount: tx.amount,
+        installmentCurrent: tx.installment_current,
+        installmentTotal: tx.installment_total,
+      }))
+      .filter((sig): sig is string => Boolean(sig)),
+  );
 
   return transactions.map((tx) => {
+    const signature = getInstallmentSignature({
+      institution: tx.institution,
+      descriptionNormalized: tx.descriptionNormalized || tx.descriptionOriginal,
+      amount: tx.amount,
+      installmentCurrent: tx.installmentCurrent,
+      installmentTotal: tx.installmentTotal,
+    });
     const possibleDuplicate = Boolean(
       tx.possibleDuplicate
       || (tx.externalId && externalIds.has(tx.externalId))
-      || fingerprints.has(tx.fingerprint),
+      || fingerprints.has(tx.fingerprint)
+      || (signature && installmentSignatures.has(signature)),
     );
     if (tx.externalId) externalIds.add(tx.externalId);
     fingerprints.add(tx.fingerprint);
+    if (signature) installmentSignatures.add(signature);
     return { ...tx, possibleDuplicate };
   });
 };
