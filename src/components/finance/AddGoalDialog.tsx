@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { createFinancialRuleVersion, getGoalPercentageTotal, type FinancialRuleBase, type FinancialRuleValueType, type FinancialRuleVersion } from "@/lib/financialRules";
 import { monthTitle } from "@/lib/financeInsights";
 import { createGoalProjectionVersion } from "@/lib/goalProjections";
+import { getGoalIcon } from "./goalVisuals";
 
 interface EditableGoal { id: string; name: string; goal_type?: string; priority?: number }
 interface AddGoalDialogProps {
@@ -121,9 +122,15 @@ export const AddGoalDialog: React.FC<AddGoalDialogProps> = ({ open, onOpenChange
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-w-md rounded-2xl"><DialogHeader><DialogTitle className="font-heading">{editing ? `Regra de ${goal?.name}` : "Novo plano"}</DialogTitle></DialogHeader><div className="space-y-4">
     <div className="rounded-xl border border-primary/15 bg-primary/5 p-3 text-xs leading-relaxed text-muted-foreground">Esta é uma <strong className="text-foreground">meta planejada</strong> para <strong className="text-foreground">{monthTitle(refMonth)}</strong>. Ela calcula uma sugestão, mas não aumenta o saldo do plano. O saldo só muda quando você informar um aporte realizado.</div>
     {!editing && <>
-      <div><Label className="text-xs text-muted-foreground">Comece com uma ideia</Label><div className="mt-1.5 flex flex-wrap gap-2">{GOAL_TEMPLATES.map((template) => <button key={template.label} type="button" onClick={() => { setName(template.name); setGoalType(template.type); setTargetAmount(template.target); setAllocation(template.allocation); setValueType("percentage"); }} className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs font-medium transition hover:border-primary hover:bg-primary/5"><Sparkles className="h-3 w-3 text-primary" /> {template.label}</button>)}</div></div>
+      <div><Label className="text-xs text-muted-foreground">Comece com uma ideia</Label><div className="mt-1.5 flex flex-wrap gap-2">{GOAL_TEMPLATES.map((template) => {
+        const GoalIcon = getGoalIcon({ name: template.name, goal_type: template.type });
+        return <button key={template.label} type="button" onClick={() => { setName(template.name); setGoalType(template.type); setTargetAmount(template.target); setAllocation(template.allocation); setValueType("percentage"); }} className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium transition hover:border-primary hover:bg-primary/5"><GoalIcon className="h-3.5 w-3.5 text-primary" aria-hidden="true" /> {template.label}</button>;
+      })}</div></div>
       <div><Label className="text-xs text-muted-foreground">Nome do objetivo</Label><Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: Entrada do apartamento" className="mt-1" /></div>
-      <div><Label className="text-xs text-muted-foreground">Tipo</Label><Select value={goalType} onValueChange={setGoalType}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{GOAL_TYPES.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
+      <div><Label className="text-xs text-muted-foreground">Tipo</Label><Select value={goalType} onValueChange={setGoalType}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{GOAL_TYPES.map(([value, label]) => {
+        const GoalIcon = getGoalIcon({ name: label, goal_type: value });
+        return <SelectItem key={value} value={value}><span className="flex items-center gap-2"><GoalIcon className="h-3.5 w-3.5 text-primary" aria-hidden="true" />{label}</span></SelectItem>;
+      })}</SelectContent></Select></div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><div><Label className="text-xs text-muted-foreground">Valor total (opcional)</Label><Input inputMode="decimal" value={targetAmount} onChange={(event) => setTargetAmount(event.target.value)} placeholder="Sem valor final" className="mt-1" /><p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">Deixe vazio para destinos contínuos, como doações.</p></div><div><Label className="text-xs text-muted-foreground">Prazo (opcional)</Label><Input type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} className="mt-1" /></div></div>
     </>}
     <div><Label className="text-xs text-muted-foreground">Como calcular a meta planejada mensal?</Label><Select value={valueType} onValueChange={(value) => setValueType(value as FinancialRuleValueType)}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="percentage">Percentual (%)</SelectItem><SelectItem value="fixed">Valor fixo mensal</SelectItem></SelectContent></Select></div>
