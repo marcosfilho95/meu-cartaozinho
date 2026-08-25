@@ -27,7 +27,7 @@ type GoalRule = {
 };
 
 const iconsByType: Record<string, LucideIcon> = {
-  emergency: ShieldCheck,
+  emergency: Coins,
   savings: PiggyBank,
   investment: TrendingUp,
   pgbl: Landmark,
@@ -50,7 +50,7 @@ export const getGoalIcon = (goal: Pick<GoalIdentity, "name" | "goal_type">): Luc
   if (goal.goal_type && iconsByType[goal.goal_type]) return iconsByType[goal.goal_type];
 
   const name = normalize(goal.name);
-  if (/emerg|reserva/.test(name)) return ShieldCheck;
+  if (/emerg|reserva/.test(name)) return Coins;
   if (/viagem|viajar|ferias/.test(name)) return Plane;
   if (/carro|veiculo|automovel/.test(name)) return CarFront;
   if (/casa|apartamento|imovel/.test(name)) return Home;

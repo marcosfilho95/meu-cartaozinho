@@ -28,6 +28,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -44,6 +45,7 @@ import {
   ParsedFinancialDocument,
   ReconciliationReport,
   ROLE_LABEL,
+  addMonthsToIsoDate,
   buildVisionDocument,
   classifyFinancialRow,
   getFileHash,
@@ -59,7 +61,7 @@ import {
   sha256Hex,
 } from "@/lib/finance/imports";
 import { LocalCategoryClassifier } from "@/lib/finance/imports/classifier";
-import { normalizeLabel } from "@/lib/financeShared";
+import { addMonthsToKey, normalizeLabel } from "@/lib/financeShared";
 import { cn } from "@/lib/utils";
 import { findImportedAccountIdByName, resolveImportedAccountId } from "@/lib/finance/imports/accountNormalization";
 import { classifyTransactionsWithAi, extractFinancialDocumentWithVision } from "@/lib/finance/aiService";
@@ -101,6 +103,10 @@ type ExistingTx = {
   source?: string | null;
   type: "income" | "expense" | "transfer";
   category_id?: string | null;
+  description_normalized?: string | null;
+  institution?: string | null;
+  installment_current?: number | null;
+  installment_total?: number | null;
 };
 
 type ReviewRow = NormalizedTransaction & {
@@ -261,6 +267,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
   const [creatingAccount, setCreatingAccount] = useState(false);
   const [aiClassifying, setAiClassifying] = useState(false);
   const [aiSummary, setAiSummary] = useState<{ classified: number; created: number } | null>(null);
+  const [launchFutureInstallments, setLaunchFutureInstallments] = useState(true);
   const [recentImports, setRecentImports] = useState<Array<{
     id: string;
     institution: string | null;
@@ -332,7 +339,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
   const fetchExistingForDedup = useCallback(async (): Promise<ExistingTx[]> => {
     const full = await untypedSupabase
       .from("transactions")
-      .select("id, external_id, fingerprint, amount, transaction_date, source, type, category_id")
+      .select("id, external_id, fingerprint, amount, transaction_date, source, type, category_id, description_normalized, institution, installment_current, installment_total")
       .eq("user_id", userId)
       .is("deleted_at", null)
       .limit(5000);
@@ -628,6 +635,14 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
   };
 
   const selectedRows = useMemo(() => rows.filter((r) => r.selected), [rows]);
+  const futureInstallmentsCount = useMemo(() => {
+    if (!launchFutureInstallments) return 0;
+    return selectedRows.reduce((total, row) => {
+      const current = row.installmentCurrent || 0;
+      const installmentTotal = row.installmentTotal || 0;
+      return total + Math.max(0, installmentTotal - current);
+    }, 0);
+  }, [launchFutureInstallments, selectedRows]);
 
   const suggestedAccountName = useMemo(() => {
     if (!parsedInfo) return "";
@@ -781,11 +796,16 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
           institution: row.institution !== "UNKNOWN" ? row.institution : null,
         }));
 
-        const results = await classifyTransactionsWithAi(
-          payloadRows,
-          knownCategories.map((c) => ({ name: c.name, kind: c.kind })),
-          accounts.map((account) => ({ name: account.name, institution: account.institution })),
-        );
+        const results = [];
+        const batchSize = 40;
+        for (let offset = 0; offset < payloadRows.length; offset += batchSize) {
+          const batchResults = await classifyTransactionsWithAi(
+            payloadRows.slice(offset, offset + batchSize),
+            knownCategories.map((c) => ({ name: c.name, kind: c.kind })),
+            accounts.map((account) => ({ name: account.name, institution: account.institution })),
+          );
+          results.push(...batchResults);
+        }
 
         if (results.length === 0) {
           if (!opts?.silent) toast.info("A IA não encontrou classificações novas.");
@@ -941,6 +961,52 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
         };
       }));
 
+      if (launchFutureInstallments) {
+        const projectedPayload = await Promise.all(selectedRows.flatMap((row, rowIndex) => {
+          const current = row.installmentCurrent || 0;
+          const total = row.installmentTotal || 0;
+          if (current < 1 || total <= current) return [];
+          const base = txPayload[rowIndex];
+          return Array.from({ length: total - current }, async (_, index) => {
+            const monthOffset = index + 1;
+            const installmentCurrent = current + monthOffset;
+            const transactionDate = addMonthsToIsoDate(row.transactionDate, monthOffset);
+            const competenceMonth = addMonthsToKey(base.competence_month || row.transactionDate.slice(0, 7), monthOffset);
+            const statementMonth = row.sourceType === "CREDIT_CARD"
+              ? addMonthsToKey(base.statement_month || base.competence_month || row.transactionDate.slice(0, 7), monthOffset)
+              : null;
+            const fingerprint = await getTransactionFingerprint({
+              institution: row.institution,
+              accountHint: row.sourceAccountName || row.sourceAccountId,
+              transactionDate,
+              amount: Math.abs(Number(row.amount)).toFixed(2),
+              descriptionNormalized: row.descriptionNormalized || row.descriptionOriginal,
+              direction: row.direction,
+              installmentCurrent,
+              installmentTotal: total,
+            });
+            return {
+              ...base,
+              transaction_date: transactionDate,
+              posting_date: null,
+              paid_at: null,
+              status: "pending" as const,
+              external_id: null,
+              fingerprint,
+              installment_current: installmentCurrent,
+              competence_month: competenceMonth,
+              statement_month: statementMonth,
+              possible_duplicate: false,
+              metadata: {
+                ...base.metadata,
+                projectedFromImport: true,
+              },
+            };
+          });
+        }));
+        txPayload.push(...projectedPayload);
+      }
+
       const { data: confirmData, error: confirmError } = await untypedSupabase.rpc("confirm_financial_import", {
         p_file: filePayload,
         p_import: {
@@ -964,10 +1030,13 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
 
       await learnCategorizationRules(selectedRows);
 
+      const projectionMessage = futureInstallmentsCount > 0
+        ? `, incluindo ${futureInstallmentsCount} parcela(s) futura(s)`
+        : "";
       toast.success(
         skippedCount > 0
-          ? `${importedCount} movimentação(ões) importada(s); ${skippedCount} duplicada(s) ignorada(s).`
-          : `${importedCount} movimentação(ões) importada(s).`,
+          ? `${importedCount} movimentação(ões) importada(s)${projectionMessage}; ${skippedCount} duplicada(s) ignorada(s).`
+          : `${importedCount} movimentação(ões) importada(s)${projectionMessage}.`,
       );
       setRows([]);
       setParsedInfo(null);
@@ -1359,6 +1428,21 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
                 <p className="text-xs text-muted-foreground">
                   Duplicadas já vêm desmarcadas. Transferências internas estão destacadas em azul.
                 </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <Switch
+                    id="launch-future-installments"
+                    checked={launchFutureInstallments}
+                    onCheckedChange={setLaunchFutureInstallments}
+                  />
+                  <Label htmlFor="launch-future-installments" className="cursor-pointer text-xs font-normal">
+                    Lançar parcelas futuras
+                  </Label>
+                  {futureInstallmentsCount > 0 && (
+                    <Badge variant="outline" className="rounded-md px-1.5 py-0 text-[9px] font-normal">
+                      +{futureInstallmentsCount} parcelas
+                    </Badge>
+                  )}
+                </div>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="ghost" onClick={() => bulkToggleAll(false)} className="text-xs">
@@ -1388,7 +1472,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
                   className="gap-1.5 text-xs"
                 >
                   {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                  Confirmar {selectedRows.length} lançamentos
+                  Confirmar {selectedRows.length + futureInstallmentsCount} lançamentos
                 </Button>
               </div>
             </div>
@@ -1514,6 +1598,11 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
                           {row.installmentCurrent && row.installmentTotal && (
                             <Badge variant="outline" className="rounded-md px-1.5 py-0 text-[9px] font-normal">
                               {row.installmentCurrent}/{row.installmentTotal}
+                            </Badge>
+                          )}
+                          {launchFutureInstallments && row.installmentCurrent && row.installmentTotal && row.installmentTotal > row.installmentCurrent && (
+                            <Badge className="rounded-md border-primary/20 bg-primary/10 px-1.5 py-0 text-[9px] font-normal text-primary hover:bg-primary/10">
+                              +{row.installmentTotal - row.installmentCurrent} parcelas
                             </Badge>
                           )}
                           {row.possibleDuplicate && (

@@ -1,5 +1,6 @@
 import { FinancialFileParser, NormalizedTransaction, ParserContext, ParserDetectionResult } from "./types";
 import {
+  detectInstallment,
   getTransactionFingerprint,
   isLikelyInternalTransfer,
   normalizeMerchantName,
@@ -200,6 +201,9 @@ const parseInstallment = (raw: string) => {
   return { installmentCurrent: current, installmentTotal: total };
 };
 
+const stripCardMachinePrefix = (value: string) =>
+  value.replace(/^(?:CIELO|PAG|STONE|MP)\s*\*\s*/i, "").trim();
+
 const suggestFromSourceCategory = (raw: string) => {
   const normalized = normalizeText(raw);
   if (!normalized || normalized === "-") return undefined;
@@ -293,7 +297,9 @@ export const genericCsvParser: FinancialFileParser = {
         })
         : proposedDirection;
       const amount = Math.abs(signedValue).toFixed(2);
-      const normalized = normalizeMerchantName(original);
+      const detectedInstallment = installmentIdx < 0 ? detectInstallment(original) : null;
+      const normalized = normalizeMerchantName(detectedInstallment?.normalizedDescription || original);
+      const merchantName = stripCardMachinePrefix(normalized) || normalized;
       const cardHint = cardFinalIdx >= 0 ? cells[cardFinalIdx] || undefined : undefined;
       const sourceAccountRaw = accountIdx >= 0 ? cells[accountIdx] || "" : "";
       const sourceAccountName = normalizeImportedAccountName(sourceAccountRaw, {
@@ -302,7 +308,12 @@ export const genericCsvParser: FinancialFileParser = {
       });
       const accountHint = sourceAccountName || cardHint;
       const sourceCategory = categoryIdx >= 0 ? cells[categoryIdx] || "" : "";
-      const installment = installmentIdx >= 0 ? parseInstallment(cells[installmentIdx] || "") : {};
+      const installment = installmentIdx >= 0
+        ? parseInstallment(cells[installmentIdx] || "")
+        : {
+            installmentCurrent: detectedInstallment?.installmentCurrent,
+            installmentTotal: detectedInstallment?.installmentTotal,
+          };
       const fingerprint = await getTransactionFingerprint({
         institution: detection.institution,
         accountHint,
@@ -310,6 +321,8 @@ export const genericCsvParser: FinancialFileParser = {
         amount,
         descriptionNormalized: normalized,
         direction,
+        installmentCurrent: installment.installmentCurrent,
+        installmentTotal: installment.installmentTotal,
       });
 
       transactions.push({
@@ -320,7 +333,7 @@ export const genericCsvParser: FinancialFileParser = {
         transactionDate: date,
         descriptionOriginal: original,
         descriptionNormalized: normalized,
-        merchantName: normalized,
+        merchantName,
         amount,
         direction,
         ...installment,

@@ -8,7 +8,7 @@ import {
   resolveImportedAccountId,
 } from "@/lib/finance/imports/accountNormalization";
 import { parseNubankCsvRows } from "@/lib/finance/imports/nubankCsvParser";
-import { markDuplicates, suggestCategoryName } from "@/lib/finance/imports/utils";
+import { addMonthsToIsoDate, markDuplicates, suggestCategoryName } from "@/lib/finance/imports/utils";
 
 describe("financial imports", () => {
   it("marks repeated rows inside the same imported document as duplicates", async () => {
@@ -251,6 +251,32 @@ Data;Banco;Categoria;Descricao;Valor
     expect(rows[1].installmentTotal).toBe(5);
     expect(rows[1].descriptionNormalized).toBe("UP TRAINING");
     expect(rows[2].categorySuggestion).toBe("Vestuario");
+  });
+
+  it.each(["CIELO", "PAG", "STONE", "MP"])(
+    "detects installments and removes the %s card-machine prefix from generic CSV merchants",
+    async (prefix) => {
+      const parsed = await genericCsvParser.parse({
+        fileName: "fatura.csv",
+        mimeType: "text/csv",
+        fileText: `Data;Descricao;Valor\n25/08/2026;${prefix}*LOJA TESTE - Parcela 2/4;-25,00`,
+        fileHash: `generic-installment-${prefix}`,
+        manualDocumentType: "CREDIT_CARD_STATEMENT",
+      });
+
+      expect(parsed.transactions[0]).toMatchObject({
+        descriptionNormalized: `${prefix}*LOJA TESTE`,
+        merchantName: "LOJA TESTE",
+        installmentCurrent: 2,
+        installmentTotal: 4,
+      });
+    },
+  );
+
+  it("advances installment dates month by month without overflowing shorter months", () => {
+    expect(addMonthsToIsoDate("2026-01-31", 1)).toBe("2026-02-28");
+    expect(addMonthsToIsoDate("2026-01-31", 2)).toBe("2026-03-31");
+    expect(addMonthsToIsoDate("2026-12-15", 1)).toBe("2027-01-15");
   });
 
   it("classifies common market descriptions as food", async () => {
