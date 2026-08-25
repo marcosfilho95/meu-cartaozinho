@@ -1335,6 +1335,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      confirm_financial_import: {
+        Args: { p_file: Json; p_import: Json; p_transactions: Json }
+        Returns: Json
+      }
       create_default_accounts_for_user: {
         Args: { p_user_id: string }
         Returns: undefined
