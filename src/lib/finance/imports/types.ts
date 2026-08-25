@@ -89,4 +89,8 @@ export type ExistingTransactionMatch = {
   transaction_date: string;
   source?: string | null;
   type: "income" | "expense" | "transfer";
+  description_normalized?: string | null;
+  institution?: string | null;
+  installment_current?: number | null;
+  installment_total?: number | null;
 };
