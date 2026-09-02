@@ -372,7 +372,7 @@ Deno.serve(async (req) => {
         ]);
         all.push(...mergeWithFallback(slice, categories, results));
       } catch (err) {
-        console.warn("smart-classify-imports: usando fallback local", err?.message || err);
+        console.warn("smart-classify-imports: usando fallback local", err instanceof Error ? err.message : err);
         all.push(...slice.map((row) => inferFallbackCategory(row, categories)));
       }
     }

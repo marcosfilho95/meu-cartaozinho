@@ -280,7 +280,7 @@ export const getInstallmentSignature = (input: {
   const description = normalizeMerchantName(String(input.descriptionNormalized || ""));
   if (!description) return null;
   return [
-    String(input.institution || "UNKNOWN"),
+    normalizeText(String(input.institution || "UNKNOWN")),
     description,
     Math.abs(Number(input.amount) || 0).toFixed(2),
     input.installmentCurrent,
