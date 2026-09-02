@@ -16,12 +16,10 @@ import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
 import { getDashboardCache, setDashboardCache } from "@/lib/dashboardCache";
 import { getCardBrandTheme } from "@/lib/cardBrandTheme";
 import {
-  addMonths,
   formatCurrency,
   getCurrentMonth,
-  getCycleMonthForDueDay,
+  isInstallmentFromMonth,
   isInstallmentOpen,
-  isRefMonthInCycleOrCarry,
 } from "@/lib/installments";
 import { cn } from "@/lib/utils";
 
@@ -79,15 +77,10 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
     if (openingCardId) return;
 
     setOpeningCardId(card.id);
-    const targetMonth = getCycleMonthForDueDay({
-      baseMonth: month,
-      dueDay: card.default_due_day,
-      onlyShiftCurrentMonth: true,
-    });
     const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
     navigationTimerRef.current = window.setTimeout(() => {
-      navigate(`/cartao/${card.id}?mes=${targetMonth}`, {
+      navigate(`/cartao/${card.id}?mes=${month}`, {
         state: { initialUserId: userId, initialCard: card, initialCards: cards },
       });
     }, reduceMotion ? 0 : 180);
@@ -114,14 +107,13 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
     if (!userId) return;
     if (!getDashboardCache(userId, month)) setLoading(true);
 
-    const nextMonth = addMonths(month, 1);
     const [{ data: cardsData, error: cardsError }, { data: installments, error: installmentsError }] = await Promise.all([
       supabase.from("cards").select("id, name, brand, default_due_day").eq("user_id", userId).order("created_at"),
       supabase
         .from("installments")
         .select("card_id, amount, status, ref_month")
         .eq("user_id", userId)
-        .lte("ref_month", nextMonth),
+        .eq("ref_month", month),
     ]);
 
     if (cardsError || installmentsError) {
@@ -131,19 +123,11 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
     }
 
     const resolvedCards = (cardsData || []) as CardItem[];
-    const cycleMonthByCardId = new Map<string, string>();
-    resolvedCards.forEach((card) => {
-      cycleMonthByCardId.set(card.id, getCycleMonthForDueDay({
-        baseMonth: month,
-        dueDay: card.default_due_day,
-        onlyShiftCurrentMonth: true,
-      }));
-    });
-
-    const scopedInstallments = (installments || []).filter((installment) => {
-      const cycleMonth = cycleMonthByCardId.get(installment.card_id) || month;
-      return isRefMonthInCycleOrCarry(installment.ref_month, cycleMonth, installment.status);
-    });
+    // Keep a defensive client-side check in addition to the database filter so
+    // stale/mocked responses can never leak another month into the totals.
+    const scopedInstallments = (installments || []).filter((installment) =>
+      isInstallmentFromMonth(installment, month),
+    );
 
     const nextTotals: Record<string, CardTotal> = {};
     scopedInstallments.forEach((installment) => {

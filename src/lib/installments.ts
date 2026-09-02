@@ -60,27 +60,12 @@ export function getCurrentMonth(): string {
   return `${y}-${m}`;
 }
 
-export function getCycleMonthForDueDay(params: {
-  baseMonth: string;
-  dueDay?: number | null;
-  today?: Date;
-  onlyShiftCurrentMonth?: boolean;
-}): string {
-  const { baseMonth, dueDay, today = new Date(), onlyShiftCurrentMonth = true } = params;
-  const safeDueDay = Math.max(1, Math.min(31, Number(dueDay || 0) || 31));
-  const todayMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
-  if (onlyShiftCurrentMonth && baseMonth !== todayMonth) return baseMonth;
-  return today.getDate() > safeDueDay ? addMonths(baseMonth, 1) : baseMonth;
-}
-
-export function isRefMonthInCycleOrCarry(
-  refMonth: string | null | undefined,
-  cycleMonth: string,
-  status?: string | null,
+/** A monthly view must never carry installments from another reference month. */
+export function isInstallmentFromMonth(
+  installment: { ref_month?: string | null },
+  month: string,
 ): boolean {
-  if (!refMonth) return false;
-  if (refMonth === cycleMonth) return true;
-  return refMonth < cycleMonth && isInstallmentOpen(status);
+  return installment.ref_month === month;
 }
 
 export function formatCurrency(value: number): string {
@@ -105,11 +90,8 @@ export function getMonthPaymentStatus(
   installments: Array<{ ref_month?: string | null; status?: string | null }>,
   month: string,
 ): MonthPaymentStatus {
-  if (installments.length === 0) return "empty";
   const monthRows = installments.filter((item) => item.ref_month === month);
-  const overdueOpenRows = installments.filter((item) => item.ref_month && item.ref_month < month && isInstallmentOpen(item.status));
-  const relevantRows = [...monthRows, ...overdueOpenRows];
-  if (relevantRows.length === 0) return "empty";
-  const hasOpen = relevantRows.some((item) => isInstallmentOpen(item.status));
+  if (monthRows.length === 0) return "empty";
+  const hasOpen = monthRows.some((item) => isInstallmentOpen(item.status));
   return hasOpen ? "open" : "paid";
 }

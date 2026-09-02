@@ -17,7 +17,7 @@ export interface CardDetailCache {
   profile: CachedProfile | null;
 }
 
-const keyFor = (userId: string, cardId: string, month: string) => `card-detail-cache:${userId}:${cardId}:${month}`;
+const keyFor = (userId: string, cardId: string, month: string) => `card-detail-cache:v2:${userId}:${cardId}:${month}`;
 
 export const getCardDetailCache = (userId: string, cardId: string, month: string): CardDetailCache | null => {
   try {

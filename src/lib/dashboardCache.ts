@@ -18,7 +18,8 @@ export interface DashboardCache {
   overdueOpenCount?: number;
 }
 
-const cacheKey = (userId: string, month: string) => `dashboard-cache:${userId}:${month}`;
+const CACHE_PREFIX = "dashboard-cache:v2:";
+const cacheKey = (userId: string, month: string) => `${CACHE_PREFIX}${userId}:${month}`;
 
 export const getDashboardCache = (userId: string, month: string): DashboardCache | null => {
   try {
@@ -40,7 +41,7 @@ export const setDashboardCache = (userId: string, month: string, data: Dashboard
 
 export const clearDashboardCache = (userId: string) => {
   try {
-    const prefix = `dashboard-cache:${userId}:`;
+    const prefix = `${CACHE_PREFIX}${userId}:`;
     for (let i = localStorage.length - 1; i >= 0; i -= 1) {
       const key = localStorage.key(i);
       if (key && key.startsWith(prefix)) {

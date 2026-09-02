@@ -10,10 +10,8 @@ import { AppFooter } from "@/components/AppFooter";
 import {
   formatCurrency,
   getCurrentMonth,
+  isInstallmentFromMonth,
   isInstallmentOpen,
-  getCycleMonthForDueDay,
-  isRefMonthInCycleOrCarry,
-  addMonths,
 } from "@/lib/installments";
 import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
 import { getStoredProfile, setStoredProfile } from "@/lib/profileCache";
@@ -71,7 +69,7 @@ const isMissingAvatarColumnError = (error: { code?: string; message?: string } |
 
 const CardDetail: React.FC = () => {
   const { cardId } = useParams<{ cardId: string }>();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
   const navState = (location.state || {}) as CardDetailNavState;
@@ -119,16 +117,6 @@ const CardDetail: React.FC = () => {
   }, [userId, cardId, month]);
 
   useEffect(() => {
-    if (!card || requestedMonth) return;
-    const cycleMonth = getCycleMonthForDueDay({
-      baseMonth: getCurrentMonth(),
-      dueDay: card.default_due_day,
-      onlyShiftCurrentMonth: true,
-    });
-    setMonth(cycleMonth);
-  }, [card, requestedMonth]);
-
-  useEffect(() => {
     if (!userId || !cardId) return;
     try {
       const raw = localStorage.getItem(getManualSubgroupsKey(userId, cardId));
@@ -149,31 +137,21 @@ const CardDetail: React.FC = () => {
       ? supabase.from("profiles").select("name").eq("user_id", userId).maybeSingle()
       : supabase.from("profiles").select("name, avatar_id").eq("user_id", userId).maybeSingle();
 
-    const queryUpperBound = addMonths(month, 1);
     const [{ data: cardData }, { data: cardsData }, instResult, profileResult] = await Promise.all([
-      supabase.from("cards").select("id, name, brand, default_due_day").eq("id", cardId).single(),
+      supabase.from("cards").select("id, name, brand, default_due_day").eq("id", cardId).eq("user_id", userId).single(),
       supabase.from("cards").select("id, name, brand, default_due_day").eq("user_id", userId).order("created_at"),
       supabase
         .from("installments")
         .select("id, installment_number, installments_count, due_day, amount, status, ref_month, purchase_id, purchases(id, description, person)")
         .eq("card_id", cardId)
-        .lte("ref_month", queryUpperBound)
+        .eq("user_id", userId)
+        .eq("ref_month", month)
         .order("due_day")
         .order("installment_number"),
       profilePromise,
     ]);
 
-    const rawInstData: any[] = instResult.data || [];
-    const fallbackCardDueDay = navState.initialCard?.default_due_day || null;
-    const effectiveCardDueDay = (cardData as Card | null)?.default_due_day ?? fallbackCardDueDay;
-    const cycleMonth = getCycleMonthForDueDay({
-      baseMonth: month,
-      dueDay: effectiveCardDueDay,
-      onlyShiftCurrentMonth: true,
-    });
-    const instData = rawInstData.filter(
-      (inst) => isRefMonthInCycleOrCarry(inst.ref_month, cycleMonth, inst.status),
-    );
+    const instData = (instResult.data || []).filter((inst) => isInstallmentFromMonth(inst, month));
     const localAvatar = getStoredAvatarId(userId);
     let profileData: any = profileResult.data || null;
 
@@ -210,6 +188,15 @@ const CardDetail: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const changeMonth = useCallback((nextMonth: string) => {
+    setMonth(nextMonth);
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set("mes", nextMonth);
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   const subgroups = useMemo<Subgroup[]>(() => {
     const names = new Set<string>();
@@ -316,7 +303,7 @@ const CardDetail: React.FC = () => {
       return { label: "Em aberto", className: "border-warning/35 bg-warning/15 text-[hsl(var(--warning-foreground))]" };
     }
     return { label: "Sem lancamentos", className: "border-border bg-secondary text-secondary-foreground" };
-  }, [installments, month]);
+  }, [installments]);
   const cardTheme = useMemo(() => getCardBrandTheme(card?.brand), [card?.brand]);
 
   useEffect(() => {
@@ -396,7 +383,7 @@ const CardDetail: React.FC = () => {
               <ReceiptText className="h-5 w-5" style={{ color: cardTheme.accent }} />
               <div><h2 className="font-heading text-lg font-bold">Navegue pela fatura</h2><p className="text-xs text-muted-foreground">Troque o mês ou abra as compras cadastradas.</p></div>
             </div>
-            <div className="mt-5"><MonthNavigator currentMonth={month} onMonthChange={setMonth} /></div>
+            <div className="mt-5"><MonthNavigator currentMonth={month} onMonthChange={changeMonth} /></div>
             <div className="mt-4 grid grid-cols-2 gap-2">
               <div className="rounded-xl p-3" style={{ backgroundColor: cardTheme.soft }}><p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Pessoas</p><p className="mt-1 font-heading text-lg font-bold">{subgroups.length}</p></div>
               <div className="rounded-xl p-3" style={{ backgroundColor: cardTheme.soft }}><p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Parcelas</p><p className="mt-1 font-heading text-lg font-bold">{installments.length}</p></div>
