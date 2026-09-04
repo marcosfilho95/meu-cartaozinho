@@ -33,6 +33,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { normalizeLabel } from "@/lib/financeShared";
 import type { FinanceTx } from "@/lib/financeShared";
 import { calculateAccountBalanceEffect } from "@/lib/financeOverview";
+import { emitFinanceSync } from "@/lib/financeSyncBus";
 
 type TxType = "income" | "expense";
 type PaymentMethod = "pix" | "boleto" | "credit" | "debit" | "cash";
@@ -462,7 +463,7 @@ export const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
       try {
-        window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId } }));
+        emitFinanceSync({ userId });
       } catch {
         // ignore browser event failures
       }

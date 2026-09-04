@@ -64,6 +64,7 @@ import { type PlanningGoal } from "@/lib/financePlanning";
 import { addMonthsToKey, fetchAllFinanceTransactions, monthKey, resolveBankCategoryColor, type FinanceTx } from "@/lib/financeShared";
 import { getErrorMessage, untypedSupabase } from "@/lib/supabaseUntyped";
 import { cn } from "@/lib/utils";
+import { subscribeFinanceSync } from "@/lib/financeSyncBus";
 
 interface FinanceDashboardProps {
   userId: string;
@@ -186,12 +187,9 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
-    const onFinanceUpdate = (event: Event) => {
-      const detail = (event as CustomEvent<{ userId?: string }>).detail;
+    return subscribeFinanceSync((detail) => {
       if (!detail?.userId || detail.userId === userId) void load();
-    };
-    window.addEventListener("finance-sync-updated", onFinanceUpdate);
-    return () => window.removeEventListener("finance-sync-updated", onFinanceUpdate);
+    });
   }, [load, userId]);
 
   const summary = useMemo(() => summarizeMonth(transactions, referenceMonth), [referenceMonth, transactions]);
