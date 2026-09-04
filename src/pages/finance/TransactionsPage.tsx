@@ -18,6 +18,7 @@ import { getDashboardSummary } from "@/lib/financeSelectors";
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
 import { calculateAccountBalanceEffect } from "@/lib/financeOverview";
 import { useSearchParams } from "react-router-dom";
+import { emitFinanceSync, subscribeFinanceSync, type FinanceSyncDetail } from "@/lib/financeSyncBus";
 
 interface TransactionsPageProps {
   userId: string;
@@ -67,14 +68,12 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
   }, [userId, transactions]);
 
   React.useEffect(() => {
-    const onFinanceSync = (event: Event) => {
-      const custom = event as CustomEvent<{ userId?: string }>;
-      if (custom.detail?.userId && custom.detail.userId !== userId) return;
+    const onFinanceSync = (detail: FinanceSyncDetail) => {
+      if (detail?.userId && detail.userId !== userId) return;
       queryClient.invalidateQueries({ queryKey: ["transactions", userId] });
       refetch();
     };
-    window.addEventListener("finance-sync-updated", onFinanceSync as EventListener);
-    return () => window.removeEventListener("finance-sync-updated", onFinanceSync as EventListener);
+    return subscribeFinanceSync((detail) => onFinanceSync(detail));
   }, [queryClient, refetch, userId]);
 
   const scopedTransactions = useMemo(() => {
@@ -182,7 +181,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ userId }) => {
     toast.success("Transação removida");
     queryClient.invalidateQueries({ queryKey: ["transactions"] });
     queryClient.invalidateQueries({ queryKey: ["accounts"] });
-    window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId } }));
+    emitFinanceSync({ userId });
   };
 
   const grouped = useMemo(() => {

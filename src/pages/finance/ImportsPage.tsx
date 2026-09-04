@@ -65,6 +65,7 @@ import { addMonthsToKey, normalizeLabel } from "@/lib/financeShared";
 import { cn } from "@/lib/utils";
 import { findImportedAccountIdByName, resolveImportedAccountId } from "@/lib/finance/imports/accountNormalization";
 import { classifyTransactionsWithAi, extractFinancialDocumentWithVision } from "@/lib/finance/aiService";
+import { emitFinanceSync } from "@/lib/financeSyncBus";
 
 interface ImportsPageProps {
   userId: string;
@@ -307,7 +308,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
       if (impErr) throw impErr;
       toast.success("Importação desfeita.");
       setRecentImports((prev) => prev.filter((i) => i.id !== importId));
-      window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId } }));
+      emitFinanceSync({ userId });
     } catch (error) {
       toast.error(getErrorMessage(error, "Falha ao excluir importação."));
     } finally {
@@ -1045,7 +1046,7 @@ const ImportsPage: React.FC<ImportsPageProps> = ({ userId }) => {
       setFileText("");
       setFileName("");
       setFileHash("");
-      window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId } }));
+      emitFinanceSync({ userId });
       loadRecentImports();
     } catch (error) {
       toast.error(getErrorMessage(error, "Falha ao confirmar importação."));

@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { AlertCircle, Plus } from "lucide-react";
 import { addMonths, generateInstallments, formatMonth, formatCurrency, getCurrentMonth } from "@/lib/installments";
 import { syncCartaozinhoMonths } from "@/lib/finance/cartaozinhoSync";
+import { emitFinanceSync } from "@/lib/financeSyncBus";
 
 const purchaseSchema = z.object({
   card_id: z.string().uuid("Selecione um cartao"),
@@ -257,7 +258,7 @@ export const AddPurchaseDialog: React.FC<AddPurchaseDialogProps> = ({
     if (syncResults.length !== affectedMonths.length) {
       console.warn("[AddPurchase] Nem todos os meses foram sincronizados.", { affectedMonths, syncResults });
     }
-    window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId, months: affectedMonths } }));
+    emitFinanceSync({ userId, months: affectedMonths });
 
     toast.success(`Compra salva com ${data.installments_count} parcela(s)`);
     reset({

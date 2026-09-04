@@ -47,6 +47,7 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
+import { subscribeFinanceSync, type FinanceSyncDetail } from "@/lib/financeSyncBus";
 
 interface BudgetPageProps {
   userId: string;
@@ -229,13 +230,11 @@ const BudgetPage: React.FC<BudgetPageProps> = ({ userId }) => {
   }, [loadData]);
 
   useEffect(() => {
-    const onFinanceSync = (event: Event) => {
-      const custom = event as CustomEvent<{ userId?: string }>;
-      if (custom.detail?.userId && custom.detail.userId !== userId) return;
+    const onFinanceSync = (detail: FinanceSyncDetail) => {
+      if (detail?.userId && detail.userId !== userId) return;
       loadData();
     };
-    window.addEventListener("finance-sync-updated", onFinanceSync as EventListener);
-    return () => window.removeEventListener("finance-sync-updated", onFinanceSync as EventListener);
+    return subscribeFinanceSync((detail) => onFinanceSync(detail));
   }, [loadData, userId]);
 
   const positiveBudgets = useMemo(() => {

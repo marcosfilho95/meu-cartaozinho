@@ -26,6 +26,7 @@ import { fetchFinanceTransactions, getLastMonthKeys, monthKey, type FinanceTx } 
 import { getFinanceViewCache, setFinanceViewCache } from "@/lib/financeViewCache";
 import { getErrorMessage, untypedSupabase } from "@/lib/supabaseUntyped";
 import { cn } from "@/lib/utils";
+import { subscribeFinanceSync } from "@/lib/financeSyncBus";
 
 interface HomeProps {
   userId: string;
@@ -116,9 +117,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
-    const onFinanceUpdate = () => void load();
-    window.addEventListener("finance-sync-updated", onFinanceUpdate);
-    return () => window.removeEventListener("finance-sync-updated", onFinanceUpdate);
+    return subscribeFinanceSync(() => void load());
   }, [load]);
 
   const historyKeys = useMemo(() => {

@@ -44,6 +44,7 @@ import { fetchFinanceTransactions, monthKey, type FinanceTx } from "@/lib/financ
 import { getErrorMessage, untypedSupabase } from "@/lib/supabaseUntyped";
 import { getTransactionCompetenceMonth, shouldIncludeInRealizedCalculations } from "@/lib/financeRealization";
 import { cn } from "@/lib/utils";
+import { emitFinanceSync, subscribeFinanceSync } from "@/lib/financeSyncBus";
 
 interface MonthlyClosingPageProps {
   userId: string;
@@ -128,9 +129,7 @@ const MonthlyClosingPage: React.FC<MonthlyClosingPageProps> = ({ userId }) => {
   }, [refMonth, setSearchParams]);
 
   useEffect(() => {
-    const onFinanceUpdate = () => void load();
-    window.addEventListener("finance-sync-updated", onFinanceUpdate);
-    return () => window.removeEventListener("finance-sync-updated", onFinanceUpdate);
+    return subscribeFinanceSync(() => void load());
   }, [load]);
 
   const monthTransactions = useMemo(() => transactions.filter((transaction) =>
@@ -222,7 +221,7 @@ const MonthlyClosingPage: React.FC<MonthlyClosingPageProps> = ({ userId }) => {
       }
 
       setTransactions((current) => current.filter((item) => item.id !== transaction.id));
-      window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId } }));
+      emitFinanceSync({ userId });
       toast.success("Lançamento removido.");
     } catch (error) {
       toast.error(getErrorMessage(error, "Não foi possível remover o lançamento."));
@@ -236,7 +235,7 @@ const MonthlyClosingPage: React.FC<MonthlyClosingPageProps> = ({ userId }) => {
     try {
       await finalizeFixedBillsForMonth(userId, refMonth, [...includedFixed]);
       await syncCartaozinhoIncomeMonth(userId, refMonth);
-      window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId } }));
+      emitFinanceSync({ userId });
       toast.success(`Revisão de ${monthTitle(refMonth)} salva.`);
       navigate("/financas");
     } catch (error) {

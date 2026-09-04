@@ -14,6 +14,7 @@ import { formatCurrency } from "@/lib/constants";
 import { ensureDefaultAccounts } from "@/lib/financeDefaults";
 import { ensureDefaultCategories } from "@/lib/financeCategoryDefaults";
 import { cn } from "@/lib/utils";
+import { emitFinanceSync } from "@/lib/financeSyncBus";
 
 interface ExpectedBillsPageProps {
   userId: string;
@@ -185,7 +186,7 @@ const ExpectedBillsPage: React.FC<ExpectedBillsPageProps> = ({ userId }) => {
       if (error) throw error;
 
       toast.success("Conta marcada como paga.");
-      window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId } }));
+      emitFinanceSync({ userId });
       await load();
     } catch (error) {
       toast.error(getErrorMessage(error, "Falha ao marcar como paga."));

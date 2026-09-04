@@ -47,6 +47,7 @@ import {
   parseDeterministicTransactions,
   type SmartParsedTransaction,
 } from "@/lib/finance/smartInputParser";
+import { emitFinanceSync } from "@/lib/financeSyncBus";
 
 interface Props {
   open: boolean;
@@ -398,7 +399,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
       try {
-        window.dispatchEvent(new CustomEvent("finance-sync-updated", { detail: { userId } }));
+        emitFinanceSync({ userId });
       } catch {
         // noop
       }
