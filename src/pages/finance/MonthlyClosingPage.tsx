@@ -89,39 +89,80 @@ const MonthlyClosingPage: React.FC<MonthlyClosingPageProps> = ({ userId }) => {
   const [smartOpen, setSmartOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  const applyCache = useCallback((snapshot: ClosingSnapshot) => {
+    setTransactions(snapshot.transactions);
+    setFixedBills(snapshot.fixedBills);
+    setIncludedFixed(new Set(snapshot.includedFixed));
+    setGoals(snapshot.goals);
+    setGoalMovements(snapshot.goalMovements);
+    setLegacySpendingGoal(snapshot.legacySpendingGoal);
+    setFinancialRules(snapshot.financialRules);
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      await Promise.allSettled([ensureDefaultAccounts(userId), ensureDefaultCategories(userId)]);
-      await Promise.all([syncCartaozinhoIncomeMonth(userId, refMonth), generateExpectedBillsForMonth(userId, refMonth)]);
-      const [loadedTransactions, loadedBills, goalsRes, goalTxRes, budgetsRes, loadedRules] = await Promise.all([
-        fetchFinanceTransactions(userId, 24),
-        fetchExpectedBillsForMonth(userId, refMonth),
-        supabase.from("goals").select("*").eq("user_id", userId).order("created_at"),
-        untypedSupabase.from("goal_transactions").select("amount, type, created_at").eq("user_id", userId).limit(1000),
-        supabase.from("budgets").select("category_id, limit_amount").eq("user_id", userId).eq("ref_month", refMonth),
-        fetchFinancialRuleVersions(userId, refMonth),
-      ]);
-      if (goalsRes.error) throw goalsRes.error;
-      if (goalTxRes.error) throw goalTxRes.error;
-      if (budgetsRes.error) throw budgetsRes.error;
+      // Sincronizações de escrita rodam em paralelo, sem bloquear a primeira pintura.
+      const syncing = (async () => {
+        await Promise.allSettled([ensureDefaultAccounts(userId), ensureDefaultCategories(userId)]);
+        await Promise.allSettled([
+          syncCartaozinhoIncomeMonth(userId, refMonth),
+          generateExpectedBillsForMonth(userId, refMonth),
+        ]);
+      })();
 
-      setTransactions(loadedTransactions);
-      setFixedBills(loadedBills);
-      setIncludedFixed(new Set(loadedBills.filter((bill) => !["ignored", "canceled"].includes(bill.status)).map((bill) => bill.id)));
-      setGoals(((goalsRes.data || []) as unknown) as Goal[]);
-      setGoalMovements((goalTxRes.data || []) as GoalMovement[]);
-      setLegacySpendingGoal(getMonthlySpendingGoal(budgetsRes.data || []));
-      setFinancialRules(loadedRules);
+      const readAll = async () => {
+        const [loadedTransactions, loadedBills, goalsRes, goalTxRes, budgetsRes, loadedRules] = await Promise.all([
+          fetchFinanceTransactions(userId, 24),
+          fetchExpectedBillsForMonth(userId, refMonth),
+          supabase.from("goals").select("*").eq("user_id", userId).order("created_at"),
+          untypedSupabase.from("goal_transactions").select("amount, type, created_at").eq("user_id", userId).limit(1000),
+          supabase.from("budgets").select("category_id, limit_amount").eq("user_id", userId).eq("ref_month", refMonth),
+          fetchFinancialRuleVersions(userId, refMonth),
+        ]);
+        if (goalsRes.error) throw goalsRes.error;
+        if (goalTxRes.error) throw goalTxRes.error;
+        if (budgetsRes.error) throw budgetsRes.error;
+
+        const snapshot: ClosingSnapshot = {
+          transactions: loadedTransactions,
+          fixedBills: loadedBills,
+          includedFixed: loadedBills
+            .filter((bill) => !["ignored", "canceled"].includes(bill.status))
+            .map((bill) => bill.id),
+          goals: ((goalsRes.data || []) as unknown) as Goal[],
+          goalMovements: (goalTxRes.data || []) as GoalMovement[],
+          legacySpendingGoal: getMonthlySpendingGoal(budgetsRes.data || []),
+          financialRules: loadedRules,
+        };
+        applyCache(snapshot);
+        setFinanceViewCache(cacheKey(userId, refMonth), snapshot);
+      };
+
+      await readAll();
+      setLoading(false);
+      setHasLoaded(true);
+      // Depois das sincronizações, recarrega silenciosamente para refletir novos registros.
+      await syncing;
+      await readAll().catch(() => undefined);
     } catch (error) {
       toast.error(getErrorMessage(error, "Não foi possível preparar a revisão mensal."));
     } finally {
       setLoading(false);
       setHasLoaded(true);
     }
-  }, [refMonth, userId]);
+  }, [applyCache, refMonth, userId]);
+
+  useEffect(() => {
+    const cached = getFinanceViewCache<ClosingSnapshot>(cacheKey(userId, refMonth));
+    if (cached) {
+      applyCache(cached);
+      setHasLoaded(true);
+    }
+  }, [applyCache, refMonth, userId]);
 
   useEffect(() => { void load(); }, [load]);
+
 
   useEffect(() => {
     setSearchParams({ mes: refMonth }, { replace: true });
