@@ -32,7 +32,6 @@ import {
   parseBudgetAmount,
 } from "@/lib/financeBudget";
 import {
-import { subscribeFinanceSync, type FinanceSyncDetail } from "@/lib/financeSyncBus";
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
@@ -48,6 +47,7 @@ import { subscribeFinanceSync, type FinanceSyncDetail } from "@/lib/financeSyncB
   TrendingUp,
   Wallet,
 } from "lucide-react";
+import { subscribeFinanceSync, type FinanceSyncDetail } from "@/lib/financeSyncBus";
 
 interface BudgetPageProps {
   userId: string;

@@ -39,7 +39,6 @@ import {
 import { parseSmartInputWithAi } from "@/lib/finance/aiService";
 import { recognizeFinancialImageLocally } from "@/lib/finance/localImageOcr";
 import {
-import { emitFinanceSync } from "@/lib/financeSyncBus";
   matchAccountByInstitution,
   matchAccountByHint,
   mergeAiWithDeterministicResult,
@@ -48,6 +47,7 @@ import { emitFinanceSync } from "@/lib/financeSyncBus";
   parseDeterministicTransactions,
   type SmartParsedTransaction,
 } from "@/lib/finance/smartInputParser";
+import { emitFinanceSync } from "@/lib/financeSyncBus";
 
 interface Props {
   open: boolean;
