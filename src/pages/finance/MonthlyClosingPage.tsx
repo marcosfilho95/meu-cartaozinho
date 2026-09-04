@@ -58,6 +58,18 @@ type Goal = {
   monthly_target?: number | null;
 };
 
+type ClosingSnapshot = {
+  transactions: FinanceTx[];
+  fixedBills: FixedBillPreview[];
+  includedFixed: string[];
+  goals: Goal[];
+  goalMovements: GoalMovement[];
+  legacySpendingGoal: number;
+  financialRules: FinancialRuleVersion[];
+};
+
+const cacheKey = (userId: string, month: string) => `closing:${userId}:${month}`;
+
 const STEPS = [
   { title: "Receitas", subtitle: "Quanto entrou", icon: CircleDollarSign },
   { title: "Gastos", subtitle: "Faturas e despesas", icon: ReceiptText },
@@ -68,6 +80,19 @@ const STEPS = [
 const isValidMonth = (value: string | null): value is string => Boolean(value && /^\d{4}-(0[1-9]|1[0-2])$/.test(value));
 
 const transactionLabel = (transaction: FinanceTx) => transaction.source || transaction.categories?.name || "Valor sem descrição";
+
+const WEEKDAYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+const MONTHS_SHORT = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+/** Formata "YYYY-MM-DD" como "21 ago · sex", sem depender do fuso do navegador. */
+const formatTransactionDate = (value?: string | null) => {
+  if (!value || typeof value !== "string") return null;
+  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
+  if (!year || !month || !day) return null;
+  const weekday = WEEKDAYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
+  return `${String(day).padStart(2, "0")} ${MONTHS_SHORT[month - 1]} · ${weekday}`;
+};
+
 
 const MonthlyClosingPage: React.FC<MonthlyClosingPageProps> = ({ userId }) => {
   const navigate = useNavigate();
