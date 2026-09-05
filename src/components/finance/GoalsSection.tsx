@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -49,7 +50,7 @@ import {
   type GoalProjectionVersion,
   type ReferenceRate,
 } from "@/lib/goalProjections";
-import { getErrorMessage } from "@/lib/supabaseUntyped";
+import { getErrorMessage, untypedSupabase } from "@/lib/supabaseUntyped";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -76,6 +77,17 @@ type GoalAccount = {
   name: string;
   type: string;
   current_balance?: number | null;
+};
+
+type FixedIncomeDraft = {
+  issuer: string;
+  titleType: string;
+  indexer: string;
+  yieldForm: string;
+  rate: string;
+  liquidityDaily: boolean;
+  transactionDate: string;
+  maturityDate: string;
 };
 
 interface GoalsSectionProps {
@@ -128,6 +140,14 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
   const [saving, setSaving] = useState(false);
   const [contributionGoalId, setContributionGoalId] = useState<string | null>(null);
   const [contributionAmount, setContributionAmount] = useState("");
+  const [investmentIssuer, setInvestmentIssuer] = useState("");
+  const [investmentTitleType, setInvestmentTitleType] = useState("cdb");
+  const [investmentIndexer, setInvestmentIndexer] = useState("cdi");
+  const [investmentYieldForm, setInvestmentYieldForm] = useState("post_fixed");
+  const [investmentRate, setInvestmentRate] = useState("100");
+  const [investmentLiquidityDaily, setInvestmentLiquidityDaily] = useState(true);
+  const [investmentTransactionDate, setInvestmentTransactionDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [investmentMaturityDate, setInvestmentMaturityDate] = useState("");
   const [projectionGoal, setProjectionGoal] = useState<GoalItem | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [expandedGoalId, setExpandedGoalId] = useState<string | null>(null);
@@ -222,7 +242,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
     setAllocAmount("");
   };
 
-  const handleAllocate = async (goalId = selectedGoalId, rawAmount = allocAmount) => {
+  const handleAllocate = async (goalId = selectedGoalId, rawAmount = allocAmount, investment?: FixedIncomeDraft) => {
     const amount = parseFloat(rawAmount.replace(",", "."));
     if (!amount || amount <= 0) {
       toast.error("Informe o valor que você realmente guardou.");
@@ -292,10 +312,43 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
         if (tErr) throw tErr;
       }
 
+      if (investment?.issuer.trim()) {
+        try {
+          const rate = Number(investment.rate.replace(/\./g, "").replace(",", "."));
+          if (!Number.isFinite(rate) || rate < 0) throw new Error("Taxa da aplicação inválida.");
+          const { data, error } = await untypedSupabase.from("investments").insert({
+            user_id: userId,
+            goal_id: goal.id,
+            issuer: investment.issuer.trim(),
+            title_type: investment.titleType,
+            indexer: investment.indexer,
+            yield_form: investment.yieldForm,
+            rate_percent: rate,
+            liquidity_daily: investment.liquidityDaily,
+            maturity_date: investment.maturityDate || null,
+            started_at: investment.transactionDate,
+            taxable: !["lci", "lca"].includes(investment.titleType),
+          }).select("id").single();
+          if (error) throw error;
+          const { error: transactionError } = await untypedSupabase.from("investment_transactions").insert({
+            user_id: userId,
+            investment_id: (data as { id: string }).id,
+            transaction_type: "buy",
+            amount,
+            transaction_date: investment.transactionDate,
+          });
+          if (transactionError) throw transactionError;
+        } catch (investmentError) {
+          toast.warning(`Aporte registrado, mas os dados da aplicação não foram salvos: ${getErrorMessage(investmentError, "verifique a migração de investimentos.")}`);
+        }
+      }
+
       toast.success(`Aporte de ${formatCurrency(amount)} registrado em "${goal.name}".`);
       setAllocAmount("");
       setSelectedGoalId("");
       setContributionAmount("");
+      setInvestmentIssuer("");
+      setInvestmentMaturityDate("");
       setContributionGoalId(null);
       onReload();
     } catch (error) {
@@ -963,7 +1016,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
       />
 
       <Dialog open={!!contributionGoal} onOpenChange={(open) => { if (!open) { setContributionGoalId(null); setContributionAmount(""); } }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Informar aporte</DialogTitle>
           </DialogHeader>
@@ -984,7 +1037,22 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                 <div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">R$</span><Input type="text" inputMode="decimal" autoFocus placeholder="Ex.: 900,00" value={contributionAmount} onChange={(event) => setContributionAmount(event.target.value)} className="h-11 pl-10 text-right text-base font-bold" /></div>
                 <p className="mt-2 text-[11px] text-muted-foreground">O valor será retirado de {primaryAccount?.name || "sua conta disponível"}. Você pode superar a sugestão.</p>
               </div>
-              <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setContributionGoalId(null)}>Cancelar</Button><Button disabled={saving} className="gap-2" onClick={() => void handleAllocate(contributionGoal.id, contributionAmount)}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PiggyBank className="h-4 w-4" />} Registrar aporte</Button></div>
+              <div className="border-t pt-4">
+                <p className="text-sm font-semibold">Detalhes da aplicação <span className="font-normal text-muted-foreground">(opcional)</span></p>
+                <p className="mt-1 text-xs text-muted-foreground">Preencha para registrar este aporte também como um investimento de renda fixa.</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div><Label>Emissor</Label><Input className="mt-1" value={investmentIssuer} onChange={(event) => setInvestmentIssuer(event.target.value)} placeholder="Ex.: Nubank" /></div>
+                  <div><Label>Tipo de título</Label><Select value={investmentTitleType} onValueChange={setInvestmentTitleType}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cdb">CDB</SelectItem><SelectItem value="rdb">RDB / Caixinha</SelectItem><SelectItem value="treasury_selic">Tesouro Selic</SelectItem><SelectItem value="lci">LCI</SelectItem><SelectItem value="lca">LCA</SelectItem><SelectItem value="other">Outro</SelectItem></SelectContent></Select></div>
+                  <div><Label>Indexador</Label><Select value={investmentIndexer} onValueChange={setInvestmentIndexer}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cdi">CDI</SelectItem><SelectItem value="selic">Selic</SelectItem><SelectItem value="fixed">Prefixado</SelectItem><SelectItem value="ipca">IPCA + taxa</SelectItem></SelectContent></Select></div>
+                  <div><Label>{investmentIndexer === "fixed" ? "Taxa anual" : "Taxa do indexador"}</Label><div className="relative mt-1"><Input inputMode="decimal" value={investmentRate} onChange={(event) => setInvestmentRate(event.target.value)} className="pr-9" placeholder="Ex.: 105" /><span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">%</span></div></div>
+                  <div><Label>Forma</Label><Select value={investmentYieldForm} onValueChange={setInvestmentYieldForm}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="post_fixed">Pós-fixado</SelectItem><SelectItem value="pre_fixed">Prefixado</SelectItem><SelectItem value="hybrid">Híbrido</SelectItem></SelectContent></Select></div>
+                  <div><Label>Valor</Label><div className="mt-1 flex h-10 items-center rounded-md border bg-muted/30 px-3 text-sm font-semibold"><span className="mr-3 text-muted-foreground">R$</span>{contributionAmount ? formatCurrency(Number(contributionAmount.replace(/\./g, "").replace(",", "."))).replace("R$", "").trim() : "0,00"}</div></div>
+                  <div><Label>Data da transação</Label><Input className="mt-1" type="date" value={investmentTransactionDate} onChange={(event) => setInvestmentTransactionDate(event.target.value)} /></div>
+                  <div><Label>Data de vencimento</Label><Input className="mt-1" type="date" value={investmentMaturityDate} onChange={(event) => setInvestmentMaturityDate(event.target.value)} /></div>
+                  <div className="flex items-center justify-between rounded-lg border p-3 sm:col-span-2"><div><p className="text-sm font-medium">Liquidez diária</p><p className="text-xs text-muted-foreground">Permite resgate a qualquer momento.</p></div><Switch checked={investmentLiquidityDaily} onCheckedChange={setInvestmentLiquidityDaily} /></div>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setContributionGoalId(null)}>Cancelar</Button><Button disabled={saving} className="gap-2" onClick={() => void handleAllocate(contributionGoal.id, contributionAmount, { issuer: investmentIssuer, titleType: investmentTitleType, indexer: investmentIndexer, yieldForm: investmentYieldForm, rate: investmentRate, liquidityDaily: investmentLiquidityDaily, transactionDate: investmentTransactionDate, maturityDate: investmentMaturityDate })}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PiggyBank className="h-4 w-4" />} Registrar aporte</Button></div>
             </div>
           )}
         </DialogContent>
