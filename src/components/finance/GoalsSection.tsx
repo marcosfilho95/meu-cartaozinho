@@ -200,6 +200,15 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
     return liquidAccounts[0] || null;
   }, [accounts]);
   const availableBalance = calculateAvailableForContributions(monthlySurplus, allocatedThisMonth);
+  const contributionGoal = contributionGoalId ? goals.find((goal) => goal.id === contributionGoalId) || null : null;
+  const contributionRule = contributionGoal
+    ? resolveFinancialRules(financialRules, refMonth).find((rule) => rule.goal_id === contributionGoal.id) || null
+    : null;
+  const contributionSuggestion = calculateSuggestedContribution(contributionRule, {
+    monthlyIncome,
+    monthlyAvailable: monthlySurplus,
+  });
+  const contributionSavedThisMonth = contributionGoal ? Number(realizedByGoal[contributionGoal.id] || 0) : 0;
   const referenceLabel = new Date(`${refMonth}-15T12:00:00`).toLocaleDateString("pt-BR", {
     month: "long",
     year: "numeric",
@@ -648,7 +657,6 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
               ? referenceRates.find((rate) => rate.rate_key === projectionVersion.yield_type)
               : null;
             const monthsCovered = averageMonthlyExpenses > 0 ? current / averageMonthlyExpenses : 0;
-            const isContributionOpen = contributionGoalId === goal.id;
             const GoalIcon = getGoalIcon(goal);
             const ruleLabel = !currentRule
               ? "Meta mensal não definida"
@@ -805,7 +813,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                           size="sm"
                           className="gradient-primary h-9 gap-1.5 rounded-xl text-[11px] text-primary-foreground sm:col-span-1"
                           onClick={() => {
-                            setContributionGoalId(isContributionOpen ? null : goal.id);
+                            setContributionGoalId(goal.id);
                             setContributionAmount("");
                           }}
                         >
@@ -850,37 +858,6 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                       </div>
                     )}
 
-                    {isContributionOpen && (
-                      <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
-                        <Label className="text-[11px] font-semibold text-foreground">
-                          Quanto você realmente guardou em {referenceLabel}?
-                        </Label>
-                        <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">R$</span>
-                            <Input
-                              type="text"
-                              inputMode="decimal"
-                              placeholder="Ex.: 900,00"
-                              value={contributionAmount}
-                              onChange={(event) => setContributionAmount(event.target.value)}
-                              className="h-10 bg-background pl-10 text-right font-bold"
-                            />
-                          </div>
-                          <Button
-                            className="h-10 gap-2 px-5"
-                            disabled={saving}
-                            onClick={() => void handleAllocate(goal.id, contributionAmount)}
-                          >
-                            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PiggyBank className="h-4 w-4" />}
-                            Registrar
-                          </Button>
-                        </div>
-                        <p className="mt-2 text-[10px] text-muted-foreground">
-                          Sugestão: {formatCurrency(suggested)} · ainda disponível no mês: {formatCurrency(availableBalance)}. Você pode superar a sugestão.
-                        </p>
-                      </div>
-                    )}
                   </div>
 
                   {isExpanded && (
@@ -984,6 +961,34 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
         referenceRates={referenceRates}
         onSaved={onReload}
       />
+
+      <Dialog open={!!contributionGoal} onOpenChange={(open) => { if (!open) { setContributionGoalId(null); setContributionAmount(""); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Informar aporte</DialogTitle>
+          </DialogHeader>
+          {contributionGoal && (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-primary/15 bg-primary/5 p-3">
+                <p className="font-heading text-base font-bold">{contributionGoal.name}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Aporte referente a {referenceLabel}.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="rounded-lg bg-muted/50 p-3"><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Sugestão do mês</p><p className="mt-1 font-bold text-primary">{formatCurrency(contributionSuggestion)}</p></div>
+                <div className="rounded-lg bg-muted/50 p-3"><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Já guardado</p><p className="mt-1 font-bold text-success">{formatCurrency(contributionSavedThisMonth)}</p></div>
+                <div className="rounded-lg bg-muted/50 p-3"><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Disponível no mês</p><p className="mt-1 font-bold">{formatCurrency(availableBalance)}</p></div>
+                <div className="rounded-lg bg-muted/50 p-3"><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Acumulado</p><p className="mt-1 font-bold">{formatCurrency(Number(contributionGoal.current_amount || 0))}</p></div>
+              </div>
+              <div>
+                <Label>Quanto você realmente guardou?</Label>
+                <div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">R$</span><Input type="text" inputMode="decimal" autoFocus placeholder="Ex.: 900,00" value={contributionAmount} onChange={(event) => setContributionAmount(event.target.value)} className="h-11 pl-10 text-right text-base font-bold" /></div>
+                <p className="mt-2 text-[11px] text-muted-foreground">O valor será retirado de {primaryAccount?.name || "sua conta disponível"}. Você pode superar a sugestão.</p>
+              </div>
+              <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setContributionGoalId(null)}>Cancelar</Button><Button disabled={saving} className="gap-2" onClick={() => void handleAllocate(contributionGoal.id, contributionAmount)}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PiggyBank className="h-4 w-4" />} Registrar aporte</Button></div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={!!goalToDelete} onOpenChange={(open) => !open && setGoalToDelete(null)}>
         <AlertDialogContent>

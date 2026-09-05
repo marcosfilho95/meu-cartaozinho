@@ -4,6 +4,8 @@ import {
   ArrowRight,
   BarChart3,
   CircleDollarSign,
+  ChevronDown,
+  ChevronUp,
   Lightbulb,
   ListChecks,
   PiggyBank,
@@ -134,6 +136,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const [manualOpen, setManualOpen] = useState(false);
   const [smartOpen, setSmartOpen] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
+  const [showAllExpenses, setShowAllExpenses] = useState(false);
 
   const load = useCallback(async () => {
     const cacheKey = `dashboard:${userId}:${referenceMonth}`;
@@ -216,7 +219,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     return { key, month: `${key.slice(5, 7)}/${key.slice(2, 4)}`, receitas: item.income, despesas: -item.expenses, resultado: item.result, economia: item.savingsRate };
   }), [analysisMonthKeys, transactions]);
 
-  const expenseBreakdown = useMemo(() => {
+  const expenseBreakdownAll = useMemo(() => {
     const grouped = new Map<string, { name: string; detail: string; value: number; color: string }>();
     transactions.forEach((transaction) => {
       if (
@@ -240,7 +243,11 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     });
     return [...grouped.values()].sort((first, second) => second.value - first.value);
   }, [referenceMonth, transactions]);
-  const expenseBreakdownTotal = expenseBreakdown.reduce((total, expense) => total + expense.value, 0);
+  const expenseBreakdownTotal = expenseBreakdownAll.reduce((total, expense) => total + expense.value, 0);
+  const expenseBreakdown = (showAllExpenses ? expenseBreakdownAll : expenseBreakdownAll.slice(0, 5)).map((expense) => ({
+    ...expense,
+    detail: `${expense.detail} · ${(expenseBreakdownTotal > 0 ? expense.value / expenseBreakdownTotal * 100 : 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`,
+  }));
 
   const averageReserve = useMemo(() => {
     const months = analysisMonthKeys.slice(-3);
@@ -404,7 +411,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
 
           <Card className="border-border/70 shadow-card">
             <CardContent className="flex h-full min-h-64 flex-col p-4">
-              <div className="flex items-start justify-between gap-2"><div><h3 className="font-heading font-bold">Detalhe dos gastos</h3><p className="mt-0.5 text-[11px] text-muted-foreground">Todos os gastos de {monthTitle(referenceMonth)}</p></div><ListChecks className="h-4 w-4 shrink-0 text-primary" /></div>
+              <div className="flex items-start justify-between gap-2"><div><h3 className="font-heading font-bold">Detalhe dos gastos</h3><p className="mt-0.5 text-[11px] text-muted-foreground">Todos os gastos de {monthTitle(referenceMonth)}</p></div>{expenseBreakdownAll.length > 5 ? <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-[11px]" onClick={() => setShowAllExpenses((current) => !current)}>{showAllExpenses ? <><ChevronUp className="h-3.5 w-3.5" /> Menos</> : <><ChevronDown className="h-3.5 w-3.5" /> Todos</>}</Button> : <ListChecks className="h-4 w-4 shrink-0 text-primary" />}</div>
               {expenseBreakdown.length ? <div className="mt-3 max-h-72 space-y-3 overflow-y-auto pr-1">{expenseBreakdown.map((item) => { const share = expenseBreakdownTotal > 0 ? item.value / expenseBreakdownTotal * 100 : 0; return <div key={`${item.name}-${item.detail}`}><div className="flex items-start justify-between gap-3 text-xs"><div className="min-w-0"><p className="truncate font-medium">{item.name}</p><p className="truncate text-[10px] text-muted-foreground">{item.detail}</p></div><strong className="shrink-0 tabular-nums">{formatCurrency(item.value)}</strong></div><div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: item.color }} /></div></div>; })}</div> : <div className="my-auto text-center"><ListChecks className="mx-auto h-6 w-6 text-muted-foreground" /><p className="mt-2 text-xs text-muted-foreground">Nenhum gasto registrado neste mês.</p></div>}
               <div className="mt-auto flex items-end justify-between gap-2 border-t border-border/60 pt-3"><div><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Total de despesas</p><p className="mt-0.5 font-bold tabular-nums">{formatCurrency(expenseBreakdownTotal)}</p></div><Button variant="link" size="sm" className="h-auto px-0 text-xs" onClick={() => navigate("/financas/transacoes")}>Abrir lançamentos <ArrowRight className="ml-1 h-3.5 w-3.5" /></Button></div>
             </CardContent>
