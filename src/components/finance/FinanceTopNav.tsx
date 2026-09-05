@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   ListChecks,
   PiggyBank,
+  TrendingUp,
   Repeat,
   Upload,
   Wallet,
@@ -26,6 +27,7 @@ const PRIMARY_ITEMS = [
   { to: "/financas/fechamento", icon: ListChecks, label: "Revisão" },
   { to: "/financas/transacoes", icon: ArrowLeftRight, label: "Lançamentos" },
   { to: "/financas/cofrinhos", icon: PiggyBank, label: "Planos" },
+  { to: "/financas/investimentos", icon: TrendingUp, label: "Investimentos" },
 ];
 
 const MORE_ITEMS = [
