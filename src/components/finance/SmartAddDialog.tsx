@@ -51,6 +51,7 @@ import {
   type SmartParsedTransaction,
 } from "@/lib/finance/smartInputParser";
 import { emitFinanceSync } from "@/lib/financeSyncBus";
+import { useVoiceDictation } from "@/hooks/use-voice-dictation";
 
 interface Props {
   open: boolean;
@@ -131,6 +132,13 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
   const [categories, setCategories] = useState<SmartCategoryOption[]>([]);
   const [classificationHistory, setClassificationHistory] = useState<SmartClassificationHistory[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const voice = useVoiceDictation({
+    onTranscript: (transcript) => {
+      setText((current) => (current.trim() ? `${current.trimEnd()}\n${transcript}` : transcript));
+      toast.success("Transcrição adicionada. Revise o lançamento antes de processar.");
+    },
+    onError: (message) => toast.error(message),
+  });
 
   useEffect(() => {
     if (!open) return;

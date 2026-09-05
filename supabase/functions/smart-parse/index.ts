@@ -21,6 +21,7 @@ interface ParsedTx {
   confidence?: number;
   transfer_direction?: "in" | "out" | null;
   institution?: string | null;
+  account_hint?: string | null;
   explicit_day?: number | null;
   explicit_month?: number | null;
   explicit_year?: number | null;
@@ -50,6 +51,7 @@ Regras:
 - "payment_method": um de pix, boleto, credit, debit, cash — ou null se não souber.
 - "category_hint": use exatamente o nome da categoria mais específica do catálogo fornecido; só use uma sugestão livre se não houver catálogo.
 - "institution": banco, carteira ou cartão explicitamente mencionado (por exemplo Nubank, C6, PicPay ou Mercado Pago); null se não houver.
+- "account_hint": nome ou apelido da conta explicitamente falado/escrito pelo usuário (por exemplo "conta da Caixa", "minha conta corrente", "cartão Nubank" ou "cofrinho"). Use null quando não houver. Não invente uma conta; este campo é diferente de institution.
 - "explicit_day", "explicit_month" e "explicit_year": componentes numéricos realmente escritos pelo usuário; null quando ausentes.
 - A categoria descreve a finalidade do gasto ou o estabelecimento. Meio de pagamento e conta nunca definem a categoria: "cartão", "crédito", "débito", "PIX" e "boleto" servem apenas para "payment_method".
 - Instituição não é categoria. Nunca use Nubank, C6, PicPay, Mercado Pago, banco ou nome de cartão como "category_hint".
@@ -69,6 +71,9 @@ Interpretação de linguagem natural (entrada digitada pelo usuário):
 - Verbos definem o tipo: gastei, paguei, comprei, torrei => expense. recebi, caiu, entrou, ganhei, salário, freela, pagamento recebido de cliente => income. transferi, apliquei, guardei, investi, resgatei, mandei pra poupança => transfer.
 - Datas relativas em relação à data de hoje: "hoje", "ontem" (-1), "anteontem" (-2), "amanhã" (+1), "semana passada" (-7), "dia 12" (dia 12 do mês atual; se já passou muito, mantenha o mês atual), "segunda passada", "início/meio/fim do mês". Converta sempre para YYYY-MM-DD.
 - Nomes de mês por extenso ou abreviados (jan, fev, mar…) definem explicit_month. "maio" sem ano => ano atual.
+- Reconheça datas ditadas informalmente: "no dia cinco", "dia vinte e dois", "dia primeiro", "em quinze de agosto", "na sexta passada" e "no mês que vem". Converta-as para YYYY-MM-DD usando a data de hoje, sem trocar uma data que o usuário tenha dito explicitamente.
+- Reconheça contas e cartões falados mesmo com variações: "no roxinho" = Nubank, "na conta da Caixa", "no cartão do Inter", "pela conta corrente", "da poupança", "do cofrinho". Preserve a expressão em account_hint e preencha institution quando houver uma instituição conhecida.
+- Reconheça estabelecimentos falados ou com pequenas falhas de transcrição e categorize pelo ramo: "ai fudi"/"ifod" = iFood, "uber", "noventa e nove" = 99, "drogasil", "cobasi", "mercado livre", "shopee", "amazon", "renner", "shell", "ipiranga", "netflix" e "spotify". Use a marca reconhecida em description.
 - Ignore emojis, gírias e ruídos. Corrija erros de digitação óbvios em estabelecimentos conhecidos ("ifod" => iFood, "amazom" => Amazon).
 - Estabelecimentos brasileiros conhecidos definem a categoria pelo ramo: iFood/Rappi => Delivery/Alimentação; Uber/99 => Uber e Táxi; Cobasi/Petz => Pet; Drogasil/Pague Menos/Raia => Saúde/Farmácia; Netflix/Spotify/Prime => Assinaturas; Renner/Riachuelo/Zara/Shein => Roupas; Enel/Cemig/Copel/Sabesp/Comgás => Contas de casa; posto/Shell/Ipiranga => Gasolina.
 - Se a mesma transação aparecer duas vezes no mesmo conteúdo (ex.: resumo e detalhe), retorne apenas uma.
@@ -155,6 +160,7 @@ async function callGateway(messages: any[]): Promise<ParsedTx[]> {
         confidence,
         transfer_direction: t.transfer_direction === "in" || t.transfer_direction === "out" ? t.transfer_direction : null,
         institution: typeof t.institution === "string" ? t.institution.trim().slice(0, 80) || null : null,
+        account_hint: typeof t.account_hint === "string" ? t.account_hint.trim().slice(0, 80) || null : null,
         explicit_day: Number.isInteger(Number(t.explicit_day)) ? Number(t.explicit_day) : null,
         explicit_month: Number.isInteger(Number(t.explicit_month)) ? Number(t.explicit_month) : null,
         explicit_year: Number.isInteger(Number(t.explicit_year)) ? Number(t.explicit_year) : null,
