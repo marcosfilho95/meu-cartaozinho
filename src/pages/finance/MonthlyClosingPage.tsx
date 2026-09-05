@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
+import { FinanceSyncLoader } from "@/components/finance/FinanceSyncLoader";
 import { SmartAddDialog } from "@/components/finance/SmartAddDialog";
 import { MonthNavigator } from "@/components/MonthNavigator";
 import { Badge } from "@/components/ui/badge";
