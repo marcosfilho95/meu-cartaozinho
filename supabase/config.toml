@@ -1,5 +1,8 @@
 project_id = "udqadiqnallwsdqqnuji"
 
+[functions.voice-transcribe]
+verify_jwt = true
+
 [functions.smart-parse]
 verify_jwt = true
 

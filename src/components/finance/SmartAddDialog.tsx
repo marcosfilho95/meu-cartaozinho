@@ -23,7 +23,10 @@ import {
   ArrowUpCircle,
   ArrowDownCircle,
   Wand2,
+  Mic,
+  Square,
 } from "lucide-react";
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -454,7 +457,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
 
               <TabsContent value="text" className="mt-4 space-y-2">
                 <Label className="text-xs text-muted-foreground">
-                  Digite um lançamento por linha. Você pode adicionar quantos precisar.
+                  Digite ou fale um lançamento por linha. Você pode adicionar quantos precisar.
                 </Label>
                 <Textarea
                   placeholder={"TIM Conta 62\nEnergia Conta 300\nInternet 99,90"}
@@ -464,10 +467,51 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                   className="resize-none"
                   autoFocus
                 />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant={voice.recording ? "destructive" : "outline"}
+                    size="sm"
+                    className="gap-2 rounded-full"
+                    disabled={voice.transcribing}
+                    onClick={() => (voice.recording ? void voice.stop() : void voice.start())}
+                  >
+                    {voice.transcribing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" /> Transcrevendo...
+                      </>
+                    ) : voice.recording ? (
+                      <>
+                        <Square className="h-4 w-4" /> Parar e transcrever
+                      </>
+                    ) : (
+                      <>
+                        <Mic className="h-4 w-4" /> Falar lançamento
+                      </>
+                    )}
+                  </Button>
+                  {voice.recording && (
+                    <>
+                      <span className="flex items-center gap-1" aria-hidden>
+                        {[0, 1, 2, 3, 4].map((bar) => (
+                          <span
+                            key={bar}
+                            className="w-1 rounded-full bg-primary transition-all duration-100"
+                            style={{ height: `${6 + Math.min(1, voice.level * (1 + bar * 0.4)) * 18}px` }}
+                          />
+                        ))}
+                      </span>
+                      <Button type="button" variant="ghost" size="sm" onClick={voice.cancel}>
+                        Cancelar
+                      </Button>
+                    </>
+                  )}
+                </div>
                 <p className="text-[11px] text-muted-foreground">
-                  Cada linha será cadastrada separadamente. Você poderá revisar tudo antes de salvar.
+                  Ex.: “gastei 45 no Uber ontem e paguei a conta de luz de 180 no boleto”. Cada linha será cadastrada separadamente e você revisa tudo antes de salvar.
                 </p>
               </TabsContent>
+
 
               <TabsContent value="paste" className="mt-4 space-y-2">
                 <Label className="text-xs text-muted-foreground">
