@@ -316,7 +316,7 @@ const MonthlyClosingPage: React.FC<MonthlyClosingPageProps> = ({ userId }) => {
   ) : (
     <div className="space-y-2">{items.map((transaction) => (
       <div key={transaction.id} className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-card px-3 py-2.5">
-        <div className="min-w-0"><p className="truncate text-sm font-medium">{transactionLabel(transaction)}</p><p className="truncate text-[11px] text-muted-foreground">{transaction.categories?.name || "Sem categoria"}{transaction.external_id?.startsWith("meu_cartaozinho:") ? " · integração automática" : ""}</p></div>
+        <div className="min-w-0"><p className="truncate text-sm font-medium">{transactionLabel(transaction)}</p><p className="truncate text-[11px] text-muted-foreground">{formatTransactionDate(transaction.transaction_date) ? `${formatTransactionDate(transaction.transaction_date)} · ` : ""}{transaction.categories?.name || "Sem categoria"}{transaction.external_id?.startsWith("meu_cartaozinho:") ? " · integração automática" : ""}</p></div>
         <div className="flex shrink-0 items-center gap-2">
           <p className={cn("font-semibold tabular-nums", transaction.type === "income" ? "text-success" : "text-foreground")}>{formatCurrency(transaction.amount)}</p>
           {!transaction.external_id?.startsWith("meu_cartaozinho:") && (
