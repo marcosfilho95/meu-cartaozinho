@@ -339,7 +339,7 @@ const MonthlyClosingPage: React.FC<MonthlyClosingPageProps> = ({ userId }) => {
   );
 
   if (loading && !hasLoaded) {
-    return <div className="mx-auto max-w-5xl space-y-4 px-4 py-8"><Card className="border-primary/20 shadow-card"><CardContent className="flex min-h-52 flex-col items-center justify-center p-8 text-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /><h1 className="mt-4 font-heading text-xl font-bold">Preparando sua revisão mensal</h1><p className="mt-1 text-sm text-muted-foreground">Sincronizando lançamentos, despesas fixas e Cartãozinho de {monthTitle(refMonth)}.</p></CardContent></Card><Skeleton className="h-40 rounded-2xl" /></div>;
+    return <div className="mx-auto max-w-5xl px-4 py-8"><FinanceSyncLoader monthLabel={monthTitle(refMonth)} hint="Sincronizando lançamentos, despesas fixas e Cartãozinho." /></div>;
   }
 
   return (
