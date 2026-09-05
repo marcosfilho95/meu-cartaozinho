@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
+import { FinanceSyncLoader } from "@/components/finance/FinanceSyncLoader";
 import { SmartAddDialog } from "@/components/finance/SmartAddDialog";
 import { MonthNavigator } from "@/components/MonthNavigator";
 import { Badge } from "@/components/ui/badge";
@@ -24,9 +25,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/constants";
+import { getFinanceViewCache, setFinanceViewCache } from "@/lib/financeViewCache";
 import { getMonthlySpendingGoal } from "@/lib/financeBudget";
 import { buildFinancialPlan, fetchFinancialRuleVersions, type FinancialRuleVersion } from "@/lib/financialRules";
 import {
@@ -316,7 +317,7 @@ const MonthlyClosingPage: React.FC<MonthlyClosingPageProps> = ({ userId }) => {
   ) : (
     <div className="space-y-2">{items.map((transaction) => (
       <div key={transaction.id} className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-card px-3 py-2.5">
-        <div className="min-w-0"><p className="truncate text-sm font-medium">{transactionLabel(transaction)}</p><p className="truncate text-[11px] text-muted-foreground">{transaction.categories?.name || "Sem categoria"}{transaction.external_id?.startsWith("meu_cartaozinho:") ? " · integração automática" : ""}</p></div>
+        <div className="min-w-0"><p className="truncate text-sm font-medium">{transactionLabel(transaction)}</p><p className="truncate text-[11px] text-muted-foreground">{formatTransactionDate(transaction.transaction_date) ? `${formatTransactionDate(transaction.transaction_date)} · ` : ""}{transaction.categories?.name || "Sem categoria"}{transaction.external_id?.startsWith("meu_cartaozinho:") ? " · integração automática" : ""}</p></div>
         <div className="flex shrink-0 items-center gap-2">
           <p className={cn("font-semibold tabular-nums", transaction.type === "income" ? "text-success" : "text-foreground")}>{formatCurrency(transaction.amount)}</p>
           {!transaction.external_id?.startsWith("meu_cartaozinho:") && (
@@ -339,12 +340,12 @@ const MonthlyClosingPage: React.FC<MonthlyClosingPageProps> = ({ userId }) => {
   );
 
   if (loading && !hasLoaded) {
-    return <div className="mx-auto max-w-5xl space-y-4 px-4 py-8"><Card className="border-primary/20 shadow-card"><CardContent className="flex min-h-52 flex-col items-center justify-center p-8 text-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /><h1 className="mt-4 font-heading text-xl font-bold">Preparando sua revisão mensal</h1><p className="mt-1 text-sm text-muted-foreground">Sincronizando lançamentos, despesas fixas e Cartãozinho de {monthTitle(refMonth)}.</p></CardContent></Card><Skeleton className="h-40 rounded-2xl" /></div>;
+    return <div className="mx-auto max-w-5xl px-4 py-8"><FinanceSyncLoader monthLabel={monthTitle(refMonth)} hint="Sincronizando lançamentos, despesas fixas e Cartãozinho." /></div>;
   }
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 pb-10">
-      {loading && <div className="fixed inset-0 z-40 flex items-center justify-center bg-background/65 px-4 backdrop-blur-[2px]" role="status" aria-live="polite"><Card className="w-full max-w-sm border-primary/20 shadow-elevated"><CardContent className="flex flex-col items-center p-6 text-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /><p className="mt-3 font-heading font-bold">Atualizando {monthTitle(refMonth)}</p><p className="mt-1 text-xs text-muted-foreground">Sincronizando lançamentos e preparando os valores do mês.</p></CardContent></Card></div>}
+      {loading && <FinanceSyncLoader overlay monthLabel={monthTitle(refMonth)} hint="Sincronizando lançamentos e preparando os valores do mês." />}
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">Revisão mensal</p><h1 className="mt-1 font-heading text-2xl font-bold">Confira o mês em poucos passos.</h1><p className="mt-1 text-sm text-muted-foreground">Nada fica bloqueado: você pode voltar e atualizar quando precisar.</p></div>
         <MonthNavigator currentMonth={refMonth} onMonthChange={(month) => { setLoading(true); setRefMonth(month); }} />
