@@ -179,6 +179,7 @@ export const createGoalProjectionVersion = async (
 };
 
 const BCB_SELIC_URL = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.432/dados/ultimos/10?formato=json";
+const BCB_IPCA_URL = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.13522/dados/ultimos/3?formato=json";
 
 const parseBcbDate = (value: string) => {
   const [day, month, year] = value.split("/");
@@ -189,22 +190,34 @@ export const fetchReferenceRates = async (): Promise<ReferenceRate[]> => {
   const { data: cachedData } = await untypedSupabase
     .from("financial_reference_rates")
     .select("rate_key, annual_rate, as_of_date, source, is_approximation, updated_at")
-    .in("rate_key", ["selic", "cdi"]);
+    .in("rate_key", ["selic", "cdi", "ipca"]);
   const cached = (cachedData || []) as ReferenceRate[];
-  const isFresh = cached.length === 2 && cached.every((rate) =>
+  const isFresh = cached.length >= 3 && cached.every((rate) =>
     Date.now() - new Date(rate.updated_at).getTime() < 24 * 60 * 60 * 1000,
   );
   if (isFresh) return cached;
 
   try {
-    const response = await fetch(BCB_SELIC_URL);
-    if (!response.ok) throw new Error("BCB indisponível");
-    const values = await response.json() as Array<{ data: string; valor: string }>;
+    const [selicResponse, ipcaResponse] = await Promise.all([
+      fetch(BCB_SELIC_URL),
+      fetch(BCB_IPCA_URL).catch(() => null),
+    ]);
+    if (!selicResponse.ok) throw new Error("BCB indisponível");
+    const values = await selicResponse.json() as Array<{ data: string; valor: string }>;
     const latest = values.at(-1);
     const selic = Number(latest?.valor?.replace(",", "."));
     if (!latest || !Number.isFinite(selic) || selic <= 0) throw new Error("Taxa Selic inválida");
     const asOfDate = parseBcbDate(latest.data);
     const cdi = Math.max(selic - 0.1, 0);
+
+    let ipca: { value: number; asOf: string } | null = null;
+    if (ipcaResponse && ipcaResponse.ok) {
+      const ipcaValues = await ipcaResponse.json() as Array<{ data: string; valor: string }>;
+      const latestIpca = ipcaValues.at(-1);
+      const parsed = Number(latestIpca?.valor?.replace(",", "."));
+      if (latestIpca && Number.isFinite(parsed)) ipca = { value: parsed, asOf: parseBcbDate(latestIpca.data) };
+    }
+
     const rpc = untypedSupabase.rpc as unknown as (name: string, args: Record<string, unknown>) => Promise<{ error: { message?: string } | null }>;
     await rpc("cache_financial_reference_rate", {
       p_rate_key: "selic",
@@ -220,12 +233,23 @@ export const fetchReferenceRates = async (): Promise<ReferenceRate[]> => {
       p_source: "Aproximação: Meta Selic BCB − 0,10 p.p.",
       p_is_approximation: true,
     });
+    if (ipca) {
+      await rpc("cache_financial_reference_rate", {
+        p_rate_key: "ipca",
+        p_annual_rate: ipca.value,
+        p_as_of_date: ipca.asOf,
+        p_source: "Banco Central do Brasil · SGS 13522 (IPCA 12 meses)",
+        p_is_approximation: false,
+      });
+    }
     const now = new Date().toISOString();
     return [
       { rate_key: "selic", annual_rate: selic, as_of_date: asOfDate, source: "Banco Central do Brasil · SGS 432", is_approximation: false, updated_at: now },
       { rate_key: "cdi", annual_rate: cdi, as_of_date: asOfDate, source: "Aproximação: Meta Selic BCB − 0,10 p.p.", is_approximation: true, updated_at: now },
+      ...(ipca ? [{ rate_key: "ipca", annual_rate: ipca.value, as_of_date: ipca.asOf, source: "Banco Central do Brasil · SGS 13522 (IPCA 12 meses)", is_approximation: false, updated_at: now }] : cached.filter((rate) => rate.rate_key === "ipca")),
     ];
   } catch {
     return cached;
   }
 };
+
