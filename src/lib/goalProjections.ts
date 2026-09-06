@@ -246,7 +246,7 @@ export const fetchReferenceRates = async (): Promise<ReferenceRate[]> => {
     return [
       { rate_key: "selic", annual_rate: selic, as_of_date: asOfDate, source: "Banco Central do Brasil · SGS 432", is_approximation: false, updated_at: now },
       { rate_key: "cdi", annual_rate: cdi, as_of_date: asOfDate, source: "Aproximação: Meta Selic BCB − 0,10 p.p.", is_approximation: true, updated_at: now },
-      ...(ipca ? [{ rate_key: "ipca", annual_rate: ipca.value, as_of_date: ipca.asOf, source: "Banco Central do Brasil · SGS 13522 (IPCA 12 meses)", is_approximation: false, updated_at: now }] : cached.filter((rate) => rate.rate_key === "ipca")),
+      ...(ipca ? [{ rate_key: "ipca" as const, annual_rate: ipca.value, as_of_date: ipca.asOf, source: "Banco Central do Brasil · SGS 13522 (IPCA 12 meses)", is_approximation: false, updated_at: now }] : cached.filter((rate) => rate.rate_key === "ipca")),
     ];
   } catch {
     return cached;
