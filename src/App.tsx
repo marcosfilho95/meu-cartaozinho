@@ -3,34 +3,41 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { applyAccentTheme, getStoredAccentTheme } from "@/lib/accentTheme";
 import Auth from "./pages/Auth";
-import ResetPassword from "./pages/ResetPassword";
-import OAuthConsent from "./pages/OAuthConsent";
 import Home from "./pages/Home";
-import Dashboard from "./pages/Dashboard";
-import CardDetail from "./pages/CardDetail";
-import Purchases from "./pages/Purchases";
-import Profile from "./pages/Profile";
-import NotFound from "./pages/NotFound";
-import FinanceDashboard from "./pages/finance/FinanceDashboard";
-import AccountsPage from "./pages/finance/AccountsPage";
-import CategoriesPage from "./pages/finance/CategoriesPage";
-import TransactionsPage from "./pages/finance/TransactionsPage";
-import BudgetPage from "./pages/finance/BudgetPage";
-import ImportsPage from "./pages/finance/ImportsPage";
-import ExpectedBillsPage from "./pages/finance/ExpectedBillsPage";
-import RecurrencesPage from "./pages/finance/RecurrencesPage";
-import MembersPage from "./pages/finance/MembersPage";
-import ReportsPage from "./pages/finance/ReportsPage";
-import CofrinhosPage from "./pages/finance/CofrinhosPage";
-import MonthlyClosingPage from "./pages/finance/MonthlyClosingPage";
-import InvestmentsPage from "./pages/finance/InvestmentsPage";
 import { FinanceLayout } from "./components/finance/FinanceLayout";
 
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const CardDetail = lazy(() => import("./pages/CardDetail"));
+const Purchases = lazy(() => import("./pages/Purchases"));
+const Profile = lazy(() => import("./pages/Profile"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const FinanceDashboard = lazy(() => import("./pages/finance/FinanceDashboard"));
+const AccountsPage = lazy(() => import("./pages/finance/AccountsPage"));
+const CategoriesPage = lazy(() => import("./pages/finance/CategoriesPage"));
+const TransactionsPage = lazy(() => import("./pages/finance/TransactionsPage"));
+const BudgetPage = lazy(() => import("./pages/finance/BudgetPage"));
+const ImportsPage = lazy(() => import("./pages/finance/ImportsPage"));
+const ExpectedBillsPage = lazy(() => import("./pages/finance/ExpectedBillsPage"));
+const RecurrencesPage = lazy(() => import("./pages/finance/RecurrencesPage"));
+const MembersPage = lazy(() => import("./pages/finance/MembersPage"));
+const ReportsPage = lazy(() => import("./pages/finance/ReportsPage"));
+const CofrinhosPage = lazy(() => import("./pages/finance/CofrinhosPage"));
+const MonthlyClosingPage = lazy(() => import("./pages/finance/MonthlyClosingPage"));
+const InvestmentsPage = lazy(() => import("./pages/finance/InvestmentsPage"));
+const OAuthConsent = lazy(() => import("./pages/OAuthConsent"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+
 const queryClient = new QueryClient();
+
+const RouteFallback = () => (
+  <div className="flex min-h-[50vh] items-center justify-center">
+    <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+  </div>
+);
 
 const AppRoutes = () => {
   const [session, setSession] = useState<any>(undefined);
@@ -108,7 +115,7 @@ const AppRoutes = () => {
   if (!session) return <Auth />;
 
   return (
-    <>
+    <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/" element={<Home userId={session?.user?.id} />} />
         <Route path="/cards" element={<Dashboard initialUserId={session?.user?.id} />} />
@@ -132,7 +139,7 @@ const AppRoutes = () => {
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>
-    </>
+    </Suspense>
   );
 };
 
@@ -142,11 +149,13 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
           <Route path="/*" element={<AppRoutes />} />
         </Routes>
+        </Suspense>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
