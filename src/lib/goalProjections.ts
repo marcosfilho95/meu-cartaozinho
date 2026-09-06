@@ -20,7 +20,7 @@ export type GoalProjectionVersion = {
 };
 
 export type ReferenceRate = {
-  rate_key: "selic" | "cdi";
+  rate_key: "selic" | "cdi" | "ipca";
   annual_rate: number;
   as_of_date: string;
   source: string;
