@@ -9,10 +9,15 @@ export const getFixedIncomeAnnualRate = (
 ) => {
   const rate = Math.max(Number(ratePercent) || 0, 0);
   if (indexer === "fixed") return rate;
-  if (indexer === "ipca") return rate;
+  if (indexer === "ipca") {
+    const inflation = Math.max(Number(references.find((item) => item.rate_key === "ipca")?.annual_rate) || 0, 0);
+    // IPCA + spread compõem juros reais sobre a inflação (juros compostos).
+    return ((1 + inflation / 100) * (1 + rate / 100) - 1) * 100;
+  }
   const reference = references.find((item) => item.rate_key === indexer);
   return Math.max(Number(reference?.annual_rate) || 0, 0) * rate / 100;
 };
+
 
 export const estimateFixedIncome = ({
   principal,
