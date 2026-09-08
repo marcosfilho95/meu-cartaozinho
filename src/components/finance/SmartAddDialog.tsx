@@ -128,6 +128,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
   const [optionsLoading, setOptionsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [drafts, setDrafts] = useState<DraftTx[]>([]);
+  const [stage, setStage] = useState<"input" | "confirm" | "review">("input");
   const [accounts, setAccounts] = useState<any[]>([]);
   const [categories, setCategories] = useState<SmartCategoryOption[]>([]);
   const [classificationHistory, setClassificationHistory] = useState<SmartClassificationHistory[]>([]);
