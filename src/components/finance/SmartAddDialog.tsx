@@ -344,10 +344,11 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         };
       });
       setDrafts(newDrafts);
+      setStage("confirm");
       toast.success(
         newDrafts.length === 1
-          ? "Transação reconhecida. Revise e salve."
-          : `${newDrafts.length} transações reconhecidas. Revise e salve.`,
+          ? "Transação reconhecida. Confira o resumo."
+          : `${newDrafts.length} transações reconhecidas. Confira o resumo.`,
       );
     } catch (err: any) {
       toast.error(err?.message || "Erro ao processar com IA");
