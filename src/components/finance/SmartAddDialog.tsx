@@ -448,7 +448,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         </DialogHeader>
 
         <div className="max-h-[75vh] space-y-4 overflow-y-auto px-5 py-4">
-          {drafts.length === 0 ? (
+          {drafts.length === 0 || stage === "input" ? (
             <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
               <div className="mb-3 flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-foreground">
                 <ClipboardPaste className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
