@@ -10,6 +10,7 @@ import {
   Dog,
   Dumbbell,
   Gamepad2,
+  Gem,
   Gift,
   GraduationCap,
   HandHeart,
