@@ -23,7 +23,7 @@ import {
   PartyPopper,
   PiggyBank,
   Plane,
-  Ring,
+  
   Shirt,
   Smartphone,
   Sofa,
