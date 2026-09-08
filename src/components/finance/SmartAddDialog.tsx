@@ -110,6 +110,11 @@ const guessAccount = (
   return accounts.find((a) => a.type === "checking")?.id || accounts[0].id;
 };
 
+const formatDraftDate = (value: string) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : value;
+};
+
 const guessCounterpartAccount = (accounts: any[], sourceId: string, role: DraftTx["role"]) => {
   const candidates = accounts.filter((account) => account.id !== sourceId);
   if (role === "investment_in" || role === "investment_out") {
