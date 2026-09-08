@@ -110,6 +110,11 @@ const guessAccount = (
   return accounts.find((a) => a.type === "checking")?.id || accounts[0].id;
 };
 
+const formatDraftDate = (value: string) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : value;
+};
+
 const guessCounterpartAccount = (accounts: any[], sourceId: string, role: DraftTx["role"]) => {
   const candidates = accounts.filter((account) => account.id !== sourceId);
   if (role === "investment_in" || role === "investment_out") {
@@ -128,6 +133,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
   const [optionsLoading, setOptionsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [drafts, setDrafts] = useState<DraftTx[]>([]);
+  const [stage, setStage] = useState<"input" | "confirm" | "review">("input");
   const [accounts, setAccounts] = useState<any[]>([]);
   const [categories, setCategories] = useState<SmartCategoryOption[]>([]);
   const [classificationHistory, setClassificationHistory] = useState<SmartClassificationHistory[]>([]);
@@ -148,6 +154,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     setPasted("");
     setImageDataUrl(null);
     setDrafts([]);
+    setStage("input");
     setOptionsLoading(true);
 
     const loadOptions = async () => {
@@ -344,10 +351,11 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         };
       });
       setDrafts(newDrafts);
+      setStage("confirm");
       toast.success(
         newDrafts.length === 1
-          ? "Transação reconhecida. Revise e salve."
-          : `${newDrafts.length} transações reconhecidas. Revise e salve.`,
+          ? "Transação reconhecida. Confira o resumo."
+          : `${newDrafts.length} transações reconhecidas. Confira o resumo.`,
       );
     } catch (err: any) {
       toast.error(err?.message || "Erro ao processar com IA");
@@ -445,7 +453,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         </DialogHeader>
 
         <div className="max-h-[75vh] space-y-4 overflow-y-auto px-5 py-4">
-          {drafts.length === 0 ? (
+          {drafts.length === 0 || stage === "input" ? (
             <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
               <div className="mb-3 flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-foreground">
                 <ClipboardPaste className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
@@ -591,6 +599,69 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                 )}
               </Button>
             </Tabs>
+          ) : stage === "confirm" ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">
+                  {drafts.length === 1 ? "Confira o que entendemos" : `Confira os ${drafts.length} lançamentos`}
+                </p>
+                <Button variant="ghost" size="sm" onClick={() => { setDrafts([]); setStage("input"); }}>
+                  Corrigir texto
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Seu texto continua salvo: se algo estiver errado, volte, ajuste e processe de novo.
+              </p>
+
+              <div className="overflow-hidden rounded-xl border">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-muted/60 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2">Data</th>
+                      <th className="px-3 py-2">Descrição</th>
+                      <th className="px-3 py-2">Conta</th>
+                      <th className="px-3 py-2">Categoria</th>
+                      <th className="px-3 py-2 text-right">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {drafts.map((d) => (
+                      <tr key={d.id} className="border-t">
+                        <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{formatDraftDate(d.date)}</td>
+                        <td className="px-3 py-2 font-medium">{d.description}</td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {accounts.find((a) => a.id === d.account_id)?.name || "Selecionar"}
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {categories.find((c) => c.id === d.category_id)?.name || d.category_hint || "Sem categoria"}
+                        </td>
+                        <td className={cn(
+                          "whitespace-nowrap px-3 py-2 text-right font-semibold",
+                          d.type === "income" ? "text-success" : d.type === "transfer" ? "text-primary" : "text-destructive",
+                        )}>
+                          {d.type === "income" ? "+" : d.type === "expense" ? "-" : ""}{formatCurrency(d.amount)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="border-t bg-muted/40">
+                    <tr>
+                      <td colSpan={4} className="px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground">Total de despesas</td>
+                      <td className="px-3 py-2 text-right text-sm font-bold">
+                        {formatCurrency(drafts.filter((d) => d.type === "expense").reduce((sum, d) => sum + d.amount, 0))}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              <Button
+                onClick={() => setStage("review")}
+                className="h-11 w-full gap-2 gradient-primary text-primary-foreground"
+              >
+                Está correto, continuar
+              </Button>
+            </div>
           ) : (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -599,7 +670,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                     ? "Transação para revisar"
                     : `${drafts.length} transações para revisar`}
                 </p>
-                <Button variant="ghost" size="sm" onClick={() => setDrafts([])}>
+                <Button variant="ghost" size="sm" onClick={() => setStage("confirm")}>
                   Voltar
                 </Button>
               </div>
