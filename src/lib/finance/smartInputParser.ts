@@ -301,24 +301,28 @@ export const parseDeterministicTransactions = (
   referenceDate = new Date(),
 ): SmartParsedTransaction[] => {
   const lines = text.split(/\r?\n|;/).map((line) => line.trim()).filter(Boolean);
-  const contextLine = lines.find((line) =>
-    parseDeterministicTransaction(line, referenceDate) === null &&
-    /\b(?:mes|competencia|referencia)\b/.test(normalizeText(line)),
-  );
+  // Cabeçalhos como "Despesas Cartões paga no dia 08 de setembro de 2026" valem para todas as linhas seguintes.
+  const contextLine = lines.find((line) => {
+    if (parseDeterministicTransaction(line, referenceDate) !== null) return false;
+    const parts = extractDateParts(line, referenceDate);
+    return parts.day !== null || parts.month !== null || parts.year !== null;
+  });
   const context = contextLine ? extractDateParts(contextLine, referenceDate) : null;
 
   return lines
     .map((line) => parseDeterministicTransaction(line, referenceDate))
     .filter((transaction): transaction is SmartParsedTransaction => Boolean(transaction))
     .map((transaction) => {
-      if (!context?.month || transaction.explicit_month !== null) return transaction;
+      if (!context || (context.day === null && context.month === null && context.year === null)) return transaction;
+      const month = transaction.explicit_month ?? context.month ?? referenceDate.getMonth() + 1;
       const year = transaction.explicit_year ?? context.year ?? referenceDate.getFullYear();
-      const day = transaction.explicit_day ?? 5;
+      const day = transaction.explicit_day ?? context.day ?? 5;
       return {
         ...transaction,
-        date: safeIsoDate(year, context.month, day),
-        explicit_month: context.month,
-        explicit_year: context.year ?? transaction.explicit_year,
+        date: safeIsoDate(year, month, day),
+        explicit_day: transaction.explicit_day ?? context.day,
+        explicit_month: transaction.explicit_month ?? context.month,
+        explicit_year: transaction.explicit_year ?? context.year,
       };
     });
 };
