@@ -200,3 +200,14 @@ describe("smart parser merge and account matching", () => {
     });
   });
 });
+
+describe("data de cabeçalho", () => {
+  it("aplica a data do cabeçalho às linhas seguintes", () => {
+    const result = parseDeterministicTransactions(
+      "Despesas Cartões paga no dia 08 de setembro de 2026\nC6: 375,18 reais\nAmazon: 664,34 reais",
+      new Date(2026, 8, 8),
+    );
+    expect(result).toHaveLength(2);
+    expect(result.map((t) => t.date)).toEqual(["2026-09-08", "2026-09-08"]);
+  });
+});
