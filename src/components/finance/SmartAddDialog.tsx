@@ -149,6 +149,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     setPasted("");
     setImageDataUrl(null);
     setDrafts([]);
+    setStage("input");
     setOptionsLoading(true);
 
     const loadOptions = async () => {
