@@ -116,6 +116,97 @@ export const fetchExpectedBillsForMonth = async (userId: string, monthKey: strin
   })) as FixedBillPreview[];
 };
 
+const resolveFallbackAccountId = async (userId: string) => {
+  const { data, error } = await supabase
+    .from("accounts")
+    .select("id, type")
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  const accounts = data || [];
+  const fallback =
+    accounts.find((account) => account.type === "checking") ||
+    accounts.find((account) => account.type === "cash") ||
+    accounts.find((account) => account.type !== "credit_card") ||
+    accounts[0];
+  return fallback?.id || null;
+};
+
+/**
+ * Lança automaticamente as contas fixas cuja data de vencimento já chegou,
+ * sem depender do fechamento mensal. Idempotente pelo external_id.
+ */
+export const postDueFixedBillsForMonth = async (userId: string, monthKey: string) => {
+  await generateExpectedBillsForMonth(userId, monthKey);
+  const bills = await fetchExpectedBillsForMonth(userId, monthKey);
+  const today = todayKey();
+  const due = bills.filter(
+    (bill) =>
+      !bill.transactionId &&
+      bill.amount > 0 &&
+      bill.dueDate <= today &&
+      !["ignored", "canceled"].includes(bill.status),
+  );
+  if (due.length === 0) return { created: 0 };
+
+  const fallbackAccountId = await resolveFallbackAccountId(userId);
+  let created = 0;
+
+  for (const bill of due) {
+    const accountId = bill.accountId || fallbackAccountId;
+    if (!accountId) continue;
+
+    const externalId = `fixed_bill:${bill.id}`;
+    const { data: existingRows, error: existingError } = await supabase
+      .from("transactions")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("external_id", externalId)
+      .is("deleted_at", null)
+      .limit(1);
+    if (existingError) throw existingError;
+
+    let transactionId = existingRows?.[0]?.id;
+    if (!transactionId) {
+      const { data: inserted, error } = await supabase
+        .from("transactions")
+        .insert({
+          user_id: userId,
+          account_id: accountId,
+          category_id: bill.categoryId,
+          type: "expense",
+          amount: bill.amount,
+          status: "pending",
+          transaction_date: bill.dueDate,
+          due_date: bill.dueDate,
+          competence_month: monthKey,
+          recurrence_id: bill.recurrenceId,
+          external_id: externalId,
+          source: bill.name,
+          source_origin: "fixed_bill_auto",
+          description_original: bill.name,
+          notes: "Conta fixa lançada automaticamente no vencimento",
+          metadata: { expectedBillId: bill.id, refMonth: monthKey, nature: "fixed" },
+        })
+        .select("id")
+        .single();
+      if (error) throw error;
+      transactionId = inserted.id;
+      created += 1;
+    }
+
+    const { error: updateError } = await supabase
+      .from("expected_bills")
+      .update({ status: "pending", transaction_id: transactionId })
+      .eq("id", bill.id)
+      .eq("user_id", userId);
+    if (updateError) throw updateError;
+  }
+
+  return { created };
+};
+
 export type FinalizeFixedBillsResult = {
   created: number;
   ignored: number;
