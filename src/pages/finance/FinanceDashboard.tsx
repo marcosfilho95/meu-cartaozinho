@@ -49,6 +49,7 @@ import { formatCurrency } from "@/lib/constants";
 import { getGoalIcon } from "@/components/finance/goalVisuals";
 
 import { syncCartaozinhoIncomeMonths } from "@/lib/finance/cartaozinhoSync";
+import { postDueFixedBillsForMonth } from "@/lib/finance/fixedBills";
 import { ensureDefaultCategories } from "@/lib/financeCategoryDefaults";
 import { ensureDefaultAccounts } from "@/lib/financeDefaults";
 import {
@@ -157,6 +158,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       await Promise.allSettled([ensureDefaultAccounts(userId), ensureDefaultCategories(userId)]);
       const syncMonths = Array.from({ length: 6 }, (_, index) => addMonthsToKey(referenceMonth, -index));
       await syncCartaozinhoIncomeMonths(userId, syncMonths);
+      await postDueFixedBillsForMonth(userId, referenceMonth).catch(() => undefined);
 
       const [goalsRes, goalTxRes, budgetsRes, loadedTransactions, loadedRules] = await Promise.all([
         supabase.from("goals").select("*").eq("user_id", userId).order("created_at"),
