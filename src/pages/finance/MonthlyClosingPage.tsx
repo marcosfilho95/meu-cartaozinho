@@ -33,7 +33,7 @@ import { buildFinancialPlan, fetchFinancialRuleVersions, type FinancialRuleVersi
 import {
   fetchExpectedBillsForMonth,
   finalizeFixedBillsForMonth,
-  generateExpectedBillsForMonth,
+  postDueFixedBillsForMonth,
   type FixedBillPreview,
 } from "@/lib/finance/fixedBills";
 import { syncCartaozinhoIncomeMonth } from "@/lib/finance/cartaozinhoSync";
@@ -133,7 +133,7 @@ const MonthlyClosingPage: React.FC<MonthlyClosingPageProps> = ({ userId }) => {
         await Promise.allSettled([ensureDefaultAccounts(userId), ensureDefaultCategories(userId)]);
         await Promise.allSettled([
           syncCartaozinhoIncomeMonth(userId, refMonth),
-          generateExpectedBillsForMonth(userId, refMonth),
+          postDueFixedBillsForMonth(userId, refMonth),
         ]);
       })();
 
