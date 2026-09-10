@@ -754,6 +754,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                             category_id: resolveSmartCategoryId({ categories, description: d.description, hint: d.category_hint, type }),
                             account_id: accountId,
                             counterpart_account_id: type === "transfer" ? guessCounterpartAccount(accounts, accountId, "transfer") : "",
+                            is_fixed: type === "transfer" ? false : d.is_fixed,
                             learned_from_history: false,
                           });
                         }}>
