@@ -685,6 +685,11 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                         <td className="px-3 py-2 text-muted-foreground">
                           {categories.find((c) => c.id === d.category_id)?.name || d.category_hint || "Sem categoria"}
                         </td>
+                        <td className="px-3 py-2">
+                          <Badge variant={d.is_fixed ? "default" : "outline"} className="text-[10px]">
+                            {d.is_fixed ? "Fixa (todo mês)" : "Variável"}
+                          </Badge>
+                        </td>
                         <td className={cn(
                           "whitespace-nowrap px-3 py-2 text-right font-semibold",
                           d.type === "income" ? "text-success" : d.type === "transfer" ? "text-primary" : "text-destructive",
