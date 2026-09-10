@@ -701,7 +701,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                   </tbody>
                   <tfoot className="border-t bg-muted/40">
                     <tr>
-                      <td colSpan={4} className="px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground">Total de despesas</td>
+                      <td colSpan={5} className="px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground">Total de despesas</td>
                       <td className="px-3 py-2 text-right text-sm font-bold">
                         {formatCurrency(drafts.filter((d) => d.type === "expense").reduce((sum, d) => sum + d.amount, 0))}
                       </td>
