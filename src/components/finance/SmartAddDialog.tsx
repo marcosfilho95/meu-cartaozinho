@@ -670,6 +670,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                       <th className="px-3 py-2">Descrição</th>
                       <th className="px-3 py-2">Conta</th>
                       <th className="px-3 py-2">Categoria</th>
+                      <th className="px-3 py-2">Repetição</th>
                       <th className="px-3 py-2 text-right">Valor</th>
                     </tr>
                   </thead>
