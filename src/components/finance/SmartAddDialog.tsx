@@ -765,6 +765,18 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                             <SelectItem value="transfer">Transferência</SelectItem>
                           </SelectContent>
                         </Select>
+                        {d.type !== "transfer" && (
+                          <Select
+                            value={d.is_fixed ? "fixed" : "variable"}
+                            onValueChange={(value) => updateDraft(d.id, { is_fixed: value === "fixed" })}
+                          >
+                            <SelectTrigger className="h-7 w-28 text-[11px]"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="variable">Variável</SelectItem>
+                              <SelectItem value="fixed">Fixa</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
                         {d.confidence < 0.6 && (
                           <Badge variant="outline" className="text-[10px]">
                             Revisar sugestão
