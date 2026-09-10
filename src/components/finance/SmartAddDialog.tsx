@@ -450,7 +450,11 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
           competence_month: d.date.slice(0, 7),
           source_origin: "smart_add",
           is_reviewed: true,
-          metadata: { aiConfidence: d.confidence, transferDirection: d.transfer_direction },
+          metadata: {
+            aiConfidence: d.confidence,
+            transferDirection: d.transfer_direction,
+            nature: d.is_fixed ? "fixed" : "variable",
+          },
           notes: null,
         });
       });
