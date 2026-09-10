@@ -78,7 +78,22 @@ interface DraftTx {
   institution: string | null;
   account_hint: string | null;
   learned_from_history: boolean;
+  /** Lançamento recorrente mensal (conta fixa / receita fixa). */
+  is_fixed: boolean;
 }
+
+const FIXED_PATTERN = /\b(fixa|fixo|fixas|fixos|mensal|mensalidade|todo mes|todos os meses|recorrente)\b/;
+
+const detectFixedNature = (description: string, rawText: string) => {
+  const normalizedDescription = normalizeText(description || "");
+  if (FIXED_PATTERN.test(normalizedDescription)) return true;
+  const normalizedInput = normalizeText(rawText || "");
+  if (!normalizedDescription) return false;
+  const line = normalizedInput
+    .split(/\n|;/)
+    .find((entry) => entry.includes(normalizedDescription));
+  return Boolean(line && FIXED_PATTERN.test(line));
+};
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
