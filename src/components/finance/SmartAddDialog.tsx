@@ -78,7 +78,22 @@ interface DraftTx {
   institution: string | null;
   account_hint: string | null;
   learned_from_history: boolean;
+  /** Lançamento recorrente mensal (conta fixa / receita fixa). */
+  is_fixed: boolean;
 }
+
+const FIXED_PATTERN = /\b(fixa|fixo|fixas|fixos|mensal|mensalidade|todo mes|todos os meses|recorrente)\b/;
+
+const detectFixedNature = (description: string, rawText: string) => {
+  const normalizedDescription = normalizeText(description || "");
+  if (FIXED_PATTERN.test(normalizedDescription)) return true;
+  const normalizedInput = normalizeText(rawText || "");
+  if (!normalizedDescription) return false;
+  const line = normalizedInput
+    .split(/\n|;/)
+    .find((entry) => entry.includes(normalizedDescription));
+  return Boolean(line && FIXED_PATTERN.test(line));
+};
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -344,6 +359,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
           transfer_direction: t.transfer_direction || null,
           institution,
           account_hint: t.account_hint || null,
+          is_fixed: t.type !== "transfer" && detectFixedNature(String(t.description || ""), String(payload.text || "")),
           learned_from_history: Boolean(
             (previousCategoryExists && !hasExplicitCategory && (!suggestedCategoryId || isGenericSmartCategoryId(categories, suggestedCategoryId))) ||
             (!t.account_hint && !institution && previousAccountExists)
@@ -386,9 +402,38 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     }
     setSaving(true);
     try {
+      // Lançamentos fixos viram recorrência mensal para repetir nos próximos meses.
+      const recurrenceByDraft = new Map<string, string>();
+      const fixedDrafts = drafts.filter((d) => d.is_fixed && d.type !== "transfer");
+      if (fixedDrafts.length) {
+        const { data: recurrenceRows, error: recurrenceError } = await supabase
+          .from("recurrences")
+          .insert(fixedDrafts.map((d) => ({
+            user_id: userId,
+            name: d.description,
+            kind: d.type,
+            frequency: "monthly" as const,
+            amount: d.amount,
+            day_of_month: Number(d.date.slice(8, 10)) || 1,
+            start_date: d.date,
+            account_id: d.account_id,
+            category_id: d.category_id || null,
+            is_active: true,
+            auto_create: true,
+            next_date: d.date,
+            template_payload: { type: d.type, amount: d.amount, source: d.description },
+          })))
+          .select("id");
+        if (recurrenceError) throw recurrenceError;
+        (recurrenceRows || []).forEach((row: { id: string }, index: number) => {
+          recurrenceByDraft.set(fixedDrafts[index].id, row.id);
+        });
+      }
+
       const rows: any[] = [];
       drafts.forEach((d) => {
         rows.push({
+          recurrence_id: recurrenceByDraft.get(d.id) || null,
           user_id: userId,
           account_id: d.account_id,
           counterpart_account_id: d.type === "transfer" ? d.counterpart_account_id : null,
@@ -405,7 +450,11 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
           competence_month: d.date.slice(0, 7),
           source_origin: "smart_add",
           is_reviewed: true,
-          metadata: { aiConfidence: d.confidence, transferDirection: d.transfer_direction },
+          metadata: {
+            aiConfidence: d.confidence,
+            transferDirection: d.transfer_direction,
+            nature: d.is_fixed ? "fixed" : "variable",
+          },
           notes: null,
         });
       });
@@ -621,6 +670,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                       <th className="px-3 py-2">Descrição</th>
                       <th className="px-3 py-2">Conta</th>
                       <th className="px-3 py-2">Categoria</th>
+                      <th className="px-3 py-2">Repetição</th>
                       <th className="px-3 py-2 text-right">Valor</th>
                     </tr>
                   </thead>
@@ -635,6 +685,11 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                         <td className="px-3 py-2 text-muted-foreground">
                           {categories.find((c) => c.id === d.category_id)?.name || d.category_hint || "Sem categoria"}
                         </td>
+                        <td className="px-3 py-2">
+                          <Badge variant={d.is_fixed ? "default" : "outline"} className="text-[10px]">
+                            {d.is_fixed ? "Fixa (todo mês)" : "Variável"}
+                          </Badge>
+                        </td>
                         <td className={cn(
                           "whitespace-nowrap px-3 py-2 text-right font-semibold",
                           d.type === "income" ? "text-success" : d.type === "transfer" ? "text-primary" : "text-destructive",
@@ -646,7 +701,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                   </tbody>
                   <tfoot className="border-t bg-muted/40">
                     <tr>
-                      <td colSpan={4} className="px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground">Total de despesas</td>
+                      <td colSpan={5} className="px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground">Total de despesas</td>
                       <td className="px-3 py-2 text-right text-sm font-bold">
                         {formatCurrency(drafts.filter((d) => d.type === "expense").reduce((sum, d) => sum + d.amount, 0))}
                       </td>
@@ -699,6 +754,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                             category_id: resolveSmartCategoryId({ categories, description: d.description, hint: d.category_hint, type }),
                             account_id: accountId,
                             counterpart_account_id: type === "transfer" ? guessCounterpartAccount(accounts, accountId, "transfer") : "",
+                            is_fixed: type === "transfer" ? false : d.is_fixed,
                             learned_from_history: false,
                           });
                         }}>
@@ -709,6 +765,18 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                             <SelectItem value="transfer">Transferência</SelectItem>
                           </SelectContent>
                         </Select>
+                        {d.type !== "transfer" && (
+                          <Select
+                            value={d.is_fixed ? "fixed" : "variable"}
+                            onValueChange={(value) => updateDraft(d.id, { is_fixed: value === "fixed" })}
+                          >
+                            <SelectTrigger className="h-7 w-28 text-[11px]"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="variable">Variável</SelectItem>
+                              <SelectItem value="fixed">Fixa</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
                         {d.confidence < 0.6 && (
                           <Badge variant="outline" className="text-[10px]">
                             Revisar sugestão
