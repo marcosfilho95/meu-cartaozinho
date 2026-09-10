@@ -402,9 +402,38 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     }
     setSaving(true);
     try {
+      // Lançamentos fixos viram recorrência mensal para repetir nos próximos meses.
+      const recurrenceByDraft = new Map<string, string>();
+      const fixedDrafts = drafts.filter((d) => d.is_fixed && d.type !== "transfer");
+      if (fixedDrafts.length) {
+        const { data: recurrenceRows, error: recurrenceError } = await supabase
+          .from("recurrences")
+          .insert(fixedDrafts.map((d) => ({
+            user_id: userId,
+            name: d.description,
+            kind: d.type,
+            frequency: "monthly" as const,
+            amount: d.amount,
+            day_of_month: Number(d.date.slice(8, 10)) || 1,
+            start_date: d.date,
+            account_id: d.account_id,
+            category_id: d.category_id || null,
+            is_active: true,
+            auto_create: true,
+            next_date: d.date,
+            template_payload: { type: d.type, amount: d.amount, source: d.description },
+          })))
+          .select("id");
+        if (recurrenceError) throw recurrenceError;
+        (recurrenceRows || []).forEach((row: { id: string }, index: number) => {
+          recurrenceByDraft.set(fixedDrafts[index].id, row.id);
+        });
+      }
+
       const rows: any[] = [];
       drafts.forEach((d) => {
         rows.push({
+          recurrence_id: recurrenceByDraft.get(d.id) || null,
           user_id: userId,
           account_id: d.account_id,
           counterpart_account_id: d.type === "transfer" ? d.counterpart_account_id : null,
