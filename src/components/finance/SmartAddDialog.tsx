@@ -105,6 +105,23 @@ const fileToDataUrl = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
+const normalizeLabel = (value: unknown) =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim();
+
+// Conta padrão quando a IA não identifica: prefere "Conta Corrente",
+// depois qualquer conta corrente, e só então a primeira da lista.
+const findDefaultCheckingAccount = (accounts: any[]) => {
+  const byName = accounts.find((a) => normalizeLabel(a?.name) === "conta corrente");
+  if (byName) return byName;
+  const byNameLoose = accounts.find((a) => normalizeLabel(a?.name).includes("corrente"));
+  if (byNameLoose) return byNameLoose;
+  return accounts.find((a) => a.type === "checking") || accounts[0];
+};
+
 const guessAccount = (
   accounts: any[],
   method: PaymentMethod | null,
@@ -114,15 +131,15 @@ const guessAccount = (
   if (!accounts.length) return "";
   if (institution) return matchAccountByInstitution(accounts, institution);
   if (type === "income") {
-    return accounts.find((a) => a.type === "checking")?.id || accounts[0].id;
+    return findDefaultCheckingAccount(accounts)?.id || "";
   }
   if (method === "credit") {
     return accounts.find((a) => a.type === "credit_card")?.id || "";
   }
   if (method === "cash") {
-    return accounts.find((a) => a.type === "cash")?.id || accounts[0].id;
+    return accounts.find((a) => a.type === "cash")?.id || findDefaultCheckingAccount(accounts)?.id || "";
   }
-  return accounts.find((a) => a.type === "checking")?.id || accounts[0].id;
+  return findDefaultCheckingAccount(accounts)?.id || "";
 };
 
 const formatDraftDate = (value: string) => {
