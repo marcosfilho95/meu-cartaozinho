@@ -692,23 +692,12 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
             const monthlyAchievement = calculateMonthlyGoalAchievement(suggested, actualThisMonth);
             const difference = actualThisMonth - suggested;
             const contributionStats = calculateContributionStats(goalMovements, goal.id, refMonth);
-            const annualRate = getEffectiveAnnualRate(projectionVersion, referenceRates);
             const noYieldProjection = projectGoalCompletion({
               currentAmount: current,
               targetAmount: target,
               monthlyContribution: contributionStats.averageMonthly,
               refMonth,
             });
-            const yieldProjection = annualRate > 0 ? projectGoalCompletion({
-              currentAmount: current,
-              targetAmount: target,
-              monthlyContribution: contributionStats.averageMonthly,
-              annualRate,
-              refMonth,
-            }) : null;
-            const referenceRate = projectionVersion?.yield_type === "cdi" || projectionVersion?.yield_type === "selic"
-              ? referenceRates.find((rate) => rate.rate_key === projectionVersion.yield_type)
-              : null;
             const monthsCovered = averageMonthlyExpenses > 0 ? current / averageMonthlyExpenses : 0;
             const GoalIcon = getGoalIcon(goal);
             const ruleLabel = !currentRule
@@ -828,17 +817,6 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                           {noYieldProjection.completionMonth ? monthTitle(noYieldProjection.completionMonth) : "Ainda sem previsão"}
                         </p>
                         {noYieldProjection.months !== null && <p className="mt-0.5 text-[9px] text-muted-foreground">{noYieldProjection.months} meses restantes</p>}
-                      </div>}
-                      {hasFinalTarget && <div>
-                        <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Rentabilidade</p>
-                        <p className="mt-1 text-xs font-bold text-foreground">
-                          {!projectionVersion || projectionVersion.yield_type === "none"
-                            ? "Sem rendimento"
-                            : projectionVersion.yield_type === "manual"
-                              ? `${annualRate.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}% a.a.`
-                              : `${Number(projectionVersion.yield_rate_percent).toLocaleString("pt-BR")}% do ${projectionVersion.yield_type.toUpperCase()}`}
-                        </p>
-                        {yieldProjection?.completionMonth && <p className="mt-0.5 text-[9px] text-success">Com rendimento: {monthTitle(yieldProjection.completionMonth)}</p>}
                       </div>}
                     </div>
 
