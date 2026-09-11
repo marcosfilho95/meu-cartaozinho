@@ -1,89 +1,21 @@
-# Redesign do Organizador Financeiro + Importação Inteligente
+# Concluir caixinhas e melhorar o Input Inteligente
 
-Escopo grande. Vou entregar em **4 fases sequenciais**, cada uma revisável de forma isolada. Nada quebra o que já funciona (Nubank CSV, Mercado Pago PDF, rotas atuais).
+## O que será alterado
 
-## Fase 1 — Fundação de design "financeira premium"
+- Remover das caixinhas os últimos textos, controles e cálculos de rentabilidade, mantendo somente valor bruto guardado, meta e previsão baseada nos aportes.
+- Simplificar a janela de objetivo para editar apenas a meta final; reservas de emergência continuam podendo usar meses de custo de vida.
+- Corrigir a leitura de datas para que um dia explicitamente informado, como “dia 8”, nunca seja substituído pelo dia padrão 5 nem pela interpretação da IA.
+- Ampliar a interpretação local de datas escritas em números e por extenso, incluindo frases com várias contas e cabeçalhos que definem a data das linhas seguintes.
+- Reforçar as instruções da IA e validar sua resposta antes de exibi-la, preservando valor, data, conta e instituição explicitamente escritos pelo usuário.
+- Atualizar o modelo usado pela interpretação inteligente para o modelo atual recomendado, mantendo o processamento em streaming quando aplicável e o fallback local quando o serviço estiver indisponível.
 
-Objetivo: dar cara clean, calma e densa ao módulo `/financas` sem tocar em lógica.
+## Validação
 
-- Novo design system escopado ao módulo (não afeta Meu Cartãozinho):
-  - Fundo neutro quase-branco (dark mode: grafite frio).
-  - Cards planos, borda 1px `border/40`, sombra quase nula, radius consistente.
-  - Tipografia numérica tabular (`font-variant-numeric: tabular-nums`) para todos os valores.
-  - Paleta com propósito: verde `emerald` para entradas, vermelho `rose` contido para saídas, grafite/azul para neutro, âmbar só para alertas.
-  - Remoção de gradientes decorativos e "cards coloridos" do dashboard atual.
-- `FinanceTopNav` e `FinanceBottomNav` reorganizados na ordem: **Resumo · Transações · Importar · Contas · Categorias · Planejamento · Relatórios**. "Importar" ganha destaque no bottom nav.
-- `FinanceDashboard` reescrito com hierarquia clara:
-  1. Header do mês (saldo do mês, entradas, saídas, resultado) — tipografia grande, sem cards coloridos.
-  2. Ações primárias: **Importar extrato** e **Novo lançamento**.
-  3. Próximas contas (7 dias).
-  4. Maiores categorias do mês (barra horizontal enxuta).
-  5. Evolução dos últimos 6 meses (mini-gráfico linha).
-  6. Alertas (só aparece se houver algo).
+- Adicionar testes para “dia 8”, datas por extenso, mês explícito e listas com data compartilhada.
+- Testar o caminho real da interpretação inteligente e conferir a mensagem retornada em caso de erro.
+- Validar testes automatizados, tipos e o estado final da aplicação.
 
-## Fase 2 — Arquitetura de parsers extensível
+## Limites
 
-Objetivo: preparar o terreno para novos bancos sem reescrever nada.
-
-- `src/lib/finance/imports/registry.ts`: registro central de parsers, escolhe o melhor por confiança combinada (`fileName + mime + headers + keywords + padrões de data/valor`).
-- Novos parsers plugáveis:
-  - `genericCsvParser` (heurística de colunas: data/descrição/valor).
-  - `genericTextParser` (linhas com data + valor no fim, para colar texto).
-  - `nubankPdfParser` (fatura, se PDF tiver texto).
-- Reforço no detector existente do Mercado Pago e Nubank CSV (mantém comportamento).
-- Estrutura `ParserRegistry.register(parser)` deixa slot pronto para OFX/XLSX depois.
-- Sugestão automática de **conta** a partir do parser:
-  - Nubank CSV/PDF fatura → conta cartão Nubank.
-  - Mercado Pago → conta Mercado Pago.
-  - Se não existir, o resumo oferece "Criar conta X" em 1 clique.
-
-## Fase 3 — Nova tela de Importação (didática)
-
-Objetivo: usuário perde o mínimo de tempo, entende tudo.
-
-Fluxo em 3 passos numerados numa mesma página:
-
-**1. Enviar** — dropzone grande, aceita CSV/PDF/texto colado. Tabs "Arquivo" · "Colar texto".
-
-**2. Analisar** — feedback ao vivo:
-- Instituição detectada · Formato · Tipo de documento · Confiança.
-- Resumo em cards discretos: total de linhas, entradas, saídas, possíveis duplicidades, transferências internas, conta sugerida.
-- Erros didáticos com título + explicação + ação sugerida:
-  - "Não consegui ler este PDF" · "Parece ser imagem/escaneado" · "Tente CSV ou cole o texto".
-  - Botão "Ver texto extraído" (diagnóstico) quando disponível.
-
-**3. Revisar e confirmar** — tabela densa e escaneável:
-- Colunas: descrição limpa (com original em cinza abaixo), data, valor, categoria, conta, status, confiança, badges de duplicidade/transferência.
-- Duplicidades **desmarcadas** por padrão; transferências destacadas em azul.
-- Seleção múltipla + barra de ações em massa: aplicar categoria, aplicar conta, ignorar, confirmar selecionadas.
-- Editar categoria abre popover com opção **"Aplicar para próximas compras deste estabelecimento"** (cria regra).
-
-## Fase 4 — Classificação inteligente + aprendizado
-
-Objetivo: acertar categoria sozinho na maior parte das vezes.
-
-- Nova tabela `categorization_rules` (user_id, pattern, match_type, category_id) com RLS por usuário.
-- Motor de classificação em camadas, nesta ordem:
-  1. Regras aprendidas do usuário (`categorization_rules`).
-  2. Histórico: mesma descrição normalizada já categorizada antes → usa a mesma categoria.
-  3. Regras locais por palavras-chave (expandidas: iFood, Domino's, Uber, Enel, Cagece, Netflix, Spotify, Farmácia, Drogaria, postos, etc.).
-  4. Fallback "Outros".
-- Ao alterar categoria na revisão, oferece silenciosamente criar regra para o `merchantName` normalizado.
-- Arquitetura preparada para um agente opcional (interface `CategoryClassifier` — implementação local por padrão, gancho para IA no futuro).
-
-## Fora do escopo desta entrega
-
-- Agente IA de importação em produção (só a interface pronta).
-- Suporte real a OFX/XLSX (só o slot no registry).
-- Onboarding tutorial guiado (microcopy sim, tour não).
-- Mudanças no módulo Meu Cartãozinho — permanece intocado.
-
-## Detalhes técnicos
-
-- Nenhuma alteração em migrations existentes; apenas **1 nova migration** (`categorization_rules` + índices + RLS + GRANTs).
-- Nenhuma quebra de rotas: `/financas/importacoes` continua o entry point, apenas com nova UI/UX interna.
-- `FinanceDashboard`, `FinanceTopNav`, `FinanceBottomNav`, `ImportsPage` são reescritos; demais páginas ganham só ajuste de tokens visuais.
-- Design tokens ficam em `src/index.css` (novas variáveis com prefixo `--finance-*`) e classes utilitárias em Tailwind — sem cores hardcoded nos componentes.
-- Tudo TypeScript, sem dependências novas.
-
-Confirma que posso seguir com as 4 fases nessa ordem? Se quiser começar só por uma (ex.: só Fase 3 — importação), me diz que ajusto.
+- Os dados existentes e os lançamentos já salvos não serão alterados.
+- A rentabilidade dos investimentos permanece na área de investimentos; a remoção vale apenas para as caixinhas/Meus Planos.
