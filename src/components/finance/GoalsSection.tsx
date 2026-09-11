@@ -44,11 +44,9 @@ import {
 import {
   calculateContributionStats,
   calculateGoalTarget,
-  getEffectiveAnnualRate,
   projectGoalCompletion,
   resolveGoalProjectionVersions,
   type GoalProjectionVersion,
-  type ReferenceRate,
 } from "@/lib/goalProjections";
 import { getErrorMessage, untypedSupabase } from "@/lib/supabaseUntyped";
 import {
@@ -100,7 +98,6 @@ interface GoalsSectionProps {
   realizedByGoal: Record<string, number>;
   goalMovements: GoalContributionMovement[];
   projectionVersions: GoalProjectionVersion[];
-  referenceRates: ReferenceRate[];
   averageMonthlyExpenses: number;
   refMonth: string;
   financialRules?: FinancialRuleVersion[];
@@ -127,7 +124,6 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
   realizedByGoal,
   goalMovements,
   projectionVersions,
-  referenceRates,
   averageMonthlyExpenses,
   refMonth,
   financialRules = [],
@@ -832,12 +828,6 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                       </p>
                     )}
 
-                    {hasFinalTarget && yieldProjection && (
-                      <p className="text-[10px] leading-relaxed text-muted-foreground">
-                        Estimativa baseada na taxa atual. Taxas futuras podem mudar.{referenceRate?.is_approximation ? " O CDI exibido é uma aproximação identificada." : ""}
-                      </p>
-                    )}
-
                     {(
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
                         <Button
@@ -864,7 +854,7 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
                           className="h-9 gap-1.5 rounded-xl text-[11px]"
                           onClick={() => setProjectionGoal(goal)}
                         >
-                          <CalendarClock className="h-3.5 w-3.5" /> {hasFinalTarget ? "Meta final e rendimento" : "Definir objetivo final"}
+                          <CalendarClock className="h-3.5 w-3.5" /> {hasFinalTarget ? "Meta final" : "Definir objetivo final"}
                         </Button>
                         <Button
                           variant="outline"
@@ -989,7 +979,6 @@ export const GoalsSection: React.FC<GoalsSectionProps> = ({
         goal={projectionGoal}
         currentVersion={projectionGoal ? activeProjectionVersions.get(projectionGoal.id) || null : null}
         averageMonthlyExpenses={averageMonthlyExpenses}
-        referenceRates={referenceRates}
         onSaved={onReload}
       />
 

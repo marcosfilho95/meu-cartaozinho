@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, TrendingUp } from "lucide-react";
+import { Loader2, Target } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -15,8 +15,6 @@ import {
   createGoalProjectionVersion,
   type GoalProjectionVersion,
   type GoalTargetMode,
-  type GoalYieldType,
-  type ReferenceRate,
 } from "@/lib/goalProjections";
 
 type ProjectionGoal = {
@@ -34,7 +32,6 @@ interface GoalProjectionDialogProps {
   goal: ProjectionGoal | null;
   currentVersion?: GoalProjectionVersion | null;
   averageMonthlyExpenses: number;
-  referenceRates: ReferenceRate[];
   onSaved: () => void;
 }
 
@@ -50,15 +47,12 @@ export const GoalProjectionDialog: React.FC<GoalProjectionDialogProps> = ({
   goal,
   currentVersion = null,
   averageMonthlyExpenses,
-  referenceRates,
   onSaved,
 }) => {
   const isEmergency = goal?.goal_type === "emergency";
   const [targetMode, setTargetMode] = useState<GoalTargetMode>("fixed");
   const [targetAmount, setTargetAmount] = useState("");
   const [emergencyMonths, setEmergencyMonths] = useState("6");
-  const [yieldType, setYieldType] = useState<GoalYieldType>("none");
-  const [yieldRate, setYieldRate] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -66,8 +60,6 @@ export const GoalProjectionDialog: React.FC<GoalProjectionDialogProps> = ({
     setTargetMode(currentVersion?.target_mode || "fixed");
     setTargetAmount(String(currentVersion?.target_amount || goal.target_amount || "").replace(".", ","));
     setEmergencyMonths(String(currentVersion?.emergency_months || 6).replace(".", ","));
-    setYieldType(currentVersion?.yield_type || "none");
-    setYieldRate(currentVersion?.yield_type === "none" ? "" : String(currentVersion?.yield_rate_percent || 100).replace(".", ","));
   }, [currentVersion, goal, open]);
 
   const calculatedTarget = useMemo(() => calculateGoalTarget(
@@ -80,19 +72,12 @@ export const GoalProjectionDialog: React.FC<GoalProjectionDialogProps> = ({
     averageMonthlyExpenses,
   ), [averageMonthlyExpenses, currentVersion, emergencyMonths, goal?.target_amount, targetAmount, targetMode]);
 
-  const selectedReference = referenceRates.find((rate) => rate.rate_key === yieldType);
-  const selectedReferenceIsStale = selectedReference
-    ? Date.now() - new Date(selectedReference.updated_at).getTime() > 7 * 24 * 60 * 60 * 1000
-    : false;
-
   const save = async () => {
     if (!goal) return;
     const fixedTarget = parseNumber(targetAmount);
     const months = parseNumber(emergencyMonths);
-    const rate = yieldType === "none" ? 0 : parseNumber(yieldRate);
     if (targetMode === "fixed" && (!fixedTarget || fixedTarget <= 0)) return void toast.error("Informe a meta final do plano.");
     if (targetMode === "emergency_months" && (!months || months <= 0)) return void toast.error("Informe quantos meses deseja cobrir.");
-    if (yieldType !== "none" && (!Number.isFinite(rate) || rate <= 0)) return void toast.error("Informe a taxa ou o percentual do indexador.");
 
     setSaving(true);
     try {
@@ -103,8 +88,8 @@ export const GoalProjectionDialog: React.FC<GoalProjectionDialogProps> = ({
         target_mode: targetMode,
         target_amount: targetMode === "fixed" ? fixedTarget : calculatedTarget,
         emergency_months: targetMode === "emergency_months" ? months : null,
-        yield_type: yieldType,
-        yield_rate_percent: rate,
+        yield_type: "none",
+        yield_rate_percent: 0,
       });
       const { error } = await supabase
         .from("goals")
@@ -112,7 +97,7 @@ export const GoalProjectionDialog: React.FC<GoalProjectionDialogProps> = ({
         .eq("id", goal.id)
         .eq("user_id", userId);
       if (error) throw error;
-      toast.success(`Meta final e projeção atualizadas para ${monthTitle(refMonth)}.`);
+      toast.success(`Meta final atualizada para ${monthTitle(refMonth)}.`);
       onOpenChange(false);
       onSaved();
     } catch (error) {
@@ -126,11 +111,11 @@ export const GoalProjectionDialog: React.FC<GoalProjectionDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto rounded-2xl">
         <DialogHeader>
-          <DialogTitle className="font-heading">Meta final e rendimento</DialogTitle>
+          <DialogTitle className="font-heading">Meta final</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="rounded-xl border border-primary/15 bg-primary/5 p-3 text-xs leading-relaxed text-muted-foreground">
-            Esta versão começa em <strong className="text-foreground">{monthTitle(refMonth)}</strong>. O saldo real não muda: estas opções servem apenas para a meta e para projeções.
+            Esta meta começa em <strong className="text-foreground">{monthTitle(refMonth)}</strong>. O valor já guardado não muda.
           </div>
 
           {isEmergency && (
@@ -165,40 +150,9 @@ export const GoalProjectionDialog: React.FC<GoalProjectionDialogProps> = ({
             </div>
           )}
 
-          <div className="border-t border-border pt-4">
-            <Label className="text-xs text-muted-foreground">Rentabilidade estimada</Label>
-            <Select value={yieldType} onValueChange={(value) => { setYieldType(value as GoalYieldType); setYieldRate(value === "none" ? "" : value === "manual" ? "" : "100"); }}>
-              <SelectTrigger className="mt-1 h-11"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Sem rendimento</SelectItem>
-                <SelectItem value="cdi">Percentual do CDI</SelectItem>
-                <SelectItem value="selic">Percentual da Selic</SelectItem>
-                <SelectItem value="manual">Taxa anual manual</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {yieldType !== "none" && (
-            <div>
-              <Label className="text-xs text-muted-foreground">
-                {yieldType === "manual" ? "Taxa anual" : `Percentual do ${yieldType.toUpperCase()}`}
-              </Label>
-              <div className="relative mt-1">
-                <Input inputMode="decimal" value={yieldRate} onChange={(event) => setYieldRate(event.target.value)} placeholder={yieldType === "manual" ? "Ex.: 12" : "Ex.: 102"} className="h-11 pr-9" />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
-              </div>
-              {selectedReference && (
-                <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-                  Referência atual: {selectedReference.annual_rate.toLocaleString("pt-BR")}% a.a. · {selectedReference.source} · {new Date(`${selectedReference.as_of_date}T12:00:00`).toLocaleDateString("pt-BR")}
-                  {selectedReferenceIsStale && <span className="mt-1 block font-semibold text-amber-700">Última taxa válida salva; a atualização automática pode estar temporariamente indisponível.</span>}
-                </p>
-              )}
-            </div>
-          )}
-
           <Button onClick={save} disabled={saving} className="h-11 w-full gap-2 font-semibold">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4" />}
-            Salvar nova versão
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Target className="h-4 w-4" />}
+            Salvar meta final
           </Button>
         </div>
       </DialogContent>

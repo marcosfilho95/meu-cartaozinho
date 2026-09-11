@@ -54,6 +54,18 @@ const MONTHS: Array<[number, string[]]> = [
   [12, ["dezembro", "dez"]],
 ];
 
+const DAY_WORDS: Array<[number, string[]]> = [
+  [1, ["primeiro", "um"]], [2, ["dois"]], [3, ["tres"]], [4, ["quatro"]],
+  [5, ["cinco"]], [6, ["seis"]], [7, ["sete"]], [8, ["oito"]], [9, ["nove"]],
+  [10, ["dez"]], [11, ["onze"]], [12, ["doze"]], [13, ["treze"]],
+  [14, ["quatorze", "catorze"]], [15, ["quinze"]], [16, ["dezesseis"]],
+  [17, ["dezessete"]], [18, ["dezoito"]], [19, ["dezenove"]], [20, ["vinte"]],
+  [21, ["vinte e um"]], [22, ["vinte e dois"]], [23, ["vinte e tres"]],
+  [24, ["vinte e quatro"]], [25, ["vinte e cinco"]], [26, ["vinte e seis"]],
+  [27, ["vinte e sete"]], [28, ["vinte e oito"]], [29, ["vinte e nove"]],
+  [30, ["trinta"]], [31, ["trinta e um"]],
+];
+
 export const normalizeText = (value: string): string => value
   .normalize("NFD")
   .replace(/[\u0300-\u036f]/g, "")
@@ -165,8 +177,17 @@ const extractDateParts = (text: string, referenceDate: Date) => {
   }
 
   if (day === null) {
-    const dayMatch = normalized.match(/\b(?:vencimento(?:\s+no)?|vence(?:\s+no)?|dia)\s*(?:dia\s*)?(0?[1-9]|[12]\d|3[01])\b/);
+    const dayMatch = normalized.match(/\b(?:vencimento(?:\s+(?:no|em))?|vence(?:\s+(?:no|em))?|dia|pago(?:\s+no)?|pagamento(?:\s+no)?)\s*(?::|-)?\s*(?:dia\s*)?(0?[1-9]|[12]\d|3[01])\b/)
+      || normalized.match(/\b(?:em|no)\s+(0?[1-9]|[12]\d|3[01])\s+de\s+(?:janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\b/);
     if (dayMatch) day = Number(dayMatch[1]);
+  }
+
+  if (day === null) {
+    const wordMatch = normalized.match(/\b(?:vencimento(?:\s+(?:no|em))?|vence(?:\s+(?:no|em))?|dia|pago(?:\s+no)?|pagamento(?:\s+no)?|em|no)\s*(?::|-)?\s*(?:dia\s*)?([a-z]+(?:\s+e\s+[a-z]+)?)\b/);
+    const spokenDay = wordMatch?.[1];
+    if (spokenDay) {
+      day = DAY_WORDS.find(([, aliases]) => aliases.includes(spokenDay))?.[0] ?? null;
+    }
   }
 
   if (/\bontem\b/.test(normalized)) {
@@ -345,6 +366,14 @@ export const mergeAiWithDeterministicResult = (
     transfer: ["transfer", "investment_in", "investment_out"],
   };
   const role = ai?.role && compatibleRoles[local.type].includes(ai.role) ? ai.role : local.role;
+  const aiDateMatch = typeof ai?.date === "string" ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(ai.date) : null;
+  const aiYear = ai?.explicit_year ?? (aiDateMatch ? Number(aiDateMatch[1]) : null);
+  const aiMonth = ai?.explicit_month ?? (aiDateMatch ? Number(aiDateMatch[2]) : null);
+  const aiDay = ai?.explicit_day ?? (aiDateMatch ? Number(aiDateMatch[3]) : null);
+  const localDateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(local.date);
+  const mergedYear = local.explicit_year ?? aiYear ?? (localDateMatch ? Number(localDateMatch[1]) : new Date().getFullYear());
+  const mergedMonth = local.explicit_month ?? aiMonth ?? (localDateMatch ? Number(localDateMatch[2]) : new Date().getMonth() + 1);
+  const mergedDay = local.explicit_day ?? aiDay ?? (localDateMatch ? Number(localDateMatch[3]) : 5);
   return {
     type: local.type,
     role,
@@ -352,14 +381,14 @@ export const mergeAiWithDeterministicResult = (
     description: local.institution && normalizeText(local.description).startsWith("fatura ")
       ? local.description
       : String(ai?.description || local.description),
-    date: local.date,
+    date: safeIsoDate(mergedYear, mergedMonth, mergedDay),
     payment_method: local.payment_method ?? ai?.payment_method ?? null,
     category_hint: local.category_hint ?? aiCategory ?? null,
     institution: local.institution ?? ai?.institution ?? null,
     account_hint: local.account_hint ?? ai?.account_hint ?? null,
-    explicit_day: local.explicit_day,
-    explicit_month: local.explicit_month,
-    explicit_year: local.explicit_year,
+    explicit_day: local.explicit_day ?? ai?.explicit_day ?? null,
+    explicit_month: local.explicit_month ?? ai?.explicit_month ?? null,
+    explicit_year: local.explicit_year ?? ai?.explicit_year ?? null,
     confidence: Math.max(local.confidence, Number(ai?.confidence || 0)),
     transfer_direction: ai?.transfer_direction ?? local.transfer_direction,
   };
