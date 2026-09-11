@@ -13,9 +13,7 @@ import { calculateReserveMovement, type GoalMovement } from "@/lib/financeOvervi
 import { calculateGoalActualsForMonth, type GoalContributionMovement } from "@/lib/goalContributions";
 import {
   fetchGoalProjectionVersions,
-  fetchReferenceRates,
   type GoalProjectionVersion,
-  type ReferenceRate,
 } from "@/lib/goalProjections";
 import { shouldIncludeInRealizedCalculations } from "@/lib/financeRealization";
 
@@ -36,7 +34,6 @@ const CofrinhosPage: React.FC<CofrinhosPageProps> = ({ userId }) => {
   const [realizedByGoal, setRealizedByGoal] = useState<Record<string, number>>({});
   const [goalMovements, setGoalMovements] = useState<GoalContributionMovement[]>([]);
   const [projectionVersions, setProjectionVersions] = useState<GoalProjectionVersion[]>([]);
-  const [referenceRates, setReferenceRates] = useState<ReferenceRate[]>([]);
   const [averageMonthlyExpenses, setAverageMonthlyExpenses] = useState(0);
   const [financialRules, setFinancialRules] = useState<FinancialRuleVersion[]>([]);
   const [refMonth, setRefMonth] = useState(() => monthKey(new Date()));
@@ -44,7 +41,7 @@ const CofrinhosPage: React.FC<CofrinhosPageProps> = ({ userId }) => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [goalsRes, accountsRes, transactions, goalTxRes, loadedRules, loadedProjections, loadedRates] = await Promise.all([
+      const [goalsRes, accountsRes, transactions, goalTxRes, loadedRules, loadedProjections] = await Promise.all([
         supabase.from("goals").select("*").eq("user_id", userId).order("created_at"),
         supabase
           .from("accounts")
@@ -60,7 +57,6 @@ const CofrinhosPage: React.FC<CofrinhosPageProps> = ({ userId }) => {
           .limit(1000),
         fetchFinancialRuleVersions(userId, refMonth),
         fetchGoalProjectionVersions(userId, refMonth).catch(() => []),
-        fetchReferenceRates().catch(() => []),
       ]);
 
       if (goalsRes.error) throw goalsRes.error;
@@ -80,7 +76,6 @@ const CofrinhosPage: React.FC<CofrinhosPageProps> = ({ userId }) => {
       setGoals(loadedGoals);
       setFinancialRules(loadedRules);
       setProjectionVersions(loadedProjections);
-      setReferenceRates(loadedRates);
       setMonthlyIncome(income);
       setSurplus(Math.max(income - expenses, 0));
 
@@ -141,7 +136,6 @@ const CofrinhosPage: React.FC<CofrinhosPageProps> = ({ userId }) => {
         realizedByGoal={realizedByGoal}
         goalMovements={goalMovements}
         projectionVersions={projectionVersions}
-        referenceRates={referenceRates}
         averageMonthlyExpenses={averageMonthlyExpenses}
         refMonth={refMonth}
         financialRules={financialRules}

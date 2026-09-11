@@ -20,6 +20,9 @@ describe("deterministic smart input parser", () => {
     ["Fatura Nubank de R$ 2.800,50 em agosto", 2800.5, "2026-08-05", "Nubank", "Fatura Nubank"],
     ["Fatura C6 de julho R$ 3.250,40", 3250.4, "2026-07-05", "C6", "Fatura C6"],
     ["Mercado Pago agosto 980", 980, "2026-08-05", "Mercado Pago", "Mercado Pago"],
+    ["Receita salário agosto dia 8 R$ 7.000", 7000, "2026-08-08", null, "Salário"],
+    ["Aluguel R$ 1.900 vencimento: 8 de setembro", 1900, "2026-09-08", null, "Aluguel R$ 1.900 vencimento: 8 de setembro"],
+    ["Internet 99,90 no dia oito de agosto", 99.9, "2026-08-08", null, "Internet 99,90 no dia oito de agosto"],
   ])("extracts explicit data from %s", (input, amount, date, institution, description) => {
     const result = parseDeterministicTransaction(input, referenceDate);
     expect(result).toMatchObject({ amount, date, institution, description });
@@ -198,6 +201,25 @@ describe("smart parser merge and account matching", () => {
       description: "Fatura Nubank",
       category_hint: null,
     });
+  });
+
+  it("uses the AI day only when the local text has no explicit day", () => {
+    const local = parseDeterministicTransaction("Salário agosto R$ 7.000", referenceDate)!;
+    const merged = mergeAiWithDeterministicResult({
+      date: "2026-08-21",
+      explicit_day: 21,
+      explicit_month: 8,
+      explicit_year: 2026,
+    }, local);
+    expect(merged.date).toBe("2026-08-21");
+    expect(merged.explicit_day).toBe(21);
+  });
+
+  it("never lets AI replace an explicit day from the user", () => {
+    const local = parseDeterministicTransaction("Salário agosto dia 8 R$ 7.000", referenceDate)!;
+    const merged = mergeAiWithDeterministicResult({ date: "2026-08-05", explicit_day: 5 }, local);
+    expect(merged.date).toBe("2026-08-08");
+    expect(merged.explicit_day).toBe(8);
   });
 });
 
