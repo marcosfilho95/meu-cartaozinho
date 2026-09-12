@@ -196,7 +196,7 @@ describe("smart parser merge and account matching", () => {
       type: "expense",
       role: "expense",
       amount: 2708.67,
-      date: "2026-05-05",
+      date: "2026-05-01",
       institution: "Nubank",
       description: "Fatura Nubank",
       category_hint: null,
