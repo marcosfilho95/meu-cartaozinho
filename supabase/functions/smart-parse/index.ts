@@ -47,7 +47,7 @@ Regras:
 - "transfer_direction": out para aplicação/PIX enviado e in para resgate/PIX recebido; null quando não souber.
 - "amount": número positivo em reais (float). Nunca negativo.
 - "description": curta e clara (ex.: "Mercado Extra", "Uber", "Salário").
-- "date": YYYY-MM-DD. Se houver mês sem dia, use o dia 05. Se não houver data, use o mês/ano atuais e dia 05.
+- "date": YYYY-MM-DD. NUNCA altere um dia escrito pelo usuário: "dia 8" é sempre o dia 08. Se houver mês sem dia, use o dia 01 e deixe "explicit_day" null. Se não houver data alguma, use a data de hoje e deixe explicit_day/month/year null.
 - "payment_method": um de pix, boleto, credit, debit, cash — ou null se não souber.
 - "category_hint": use exatamente o nome da categoria mais específica do catálogo fornecido; só use uma sugestão livre se não houver catálogo.
 - "institution": banco, carteira ou cartão explicitamente mencionado (por exemplo Nubank, C6, PicPay ou Mercado Pago); null se não houver.
