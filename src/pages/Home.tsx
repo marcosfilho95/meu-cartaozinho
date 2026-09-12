@@ -1,7 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUpRight, CreditCard, LineChart as LineChartIcon, PiggyBank, Plus, Target, Wallet } from "lucide-react";
-import { Bar, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+
+const MonthlyEvolutionChart = lazy(() => import("@/components/finance/MonthlyEvolutionChart"));
+
 
 import { AppHeader } from "@/components/AppHeader";
 import { FinanceSyncLoader } from "@/components/finance/FinanceSyncLoader";
