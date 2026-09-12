@@ -9,35 +9,42 @@ import { applyAccentTheme, getStoredAccentTheme } from "@/lib/accentTheme";
 import Auth from "./pages/Auth";
 import Home from "./pages/Home";
 import { FinanceLayout } from "./components/finance/FinanceLayout";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { prefetchCommonRoutes, routeLoaders } from "@/lib/routeLoaders";
 
-const Dashboard = lazy(() => import("./pages/Dashboard"));
-const CardDetail = lazy(() => import("./pages/CardDetail"));
-const Purchases = lazy(() => import("./pages/Purchases"));
-const Profile = lazy(() => import("./pages/Profile"));
+const Dashboard = lazy(routeLoaders["/cards"]);
+const CardDetail = lazy(routeLoaders["/cartao"]);
+const Purchases = lazy(routeLoaders["/compras"]);
+const Profile = lazy(routeLoaders["/perfil"]);
 const NotFound = lazy(() => import("./pages/NotFound"));
-const FinanceDashboard = lazy(() => import("./pages/finance/FinanceDashboard"));
-const AccountsPage = lazy(() => import("./pages/finance/AccountsPage"));
-const CategoriesPage = lazy(() => import("./pages/finance/CategoriesPage"));
-const TransactionsPage = lazy(() => import("./pages/finance/TransactionsPage"));
-const BudgetPage = lazy(() => import("./pages/finance/BudgetPage"));
-const ImportsPage = lazy(() => import("./pages/finance/ImportsPage"));
-const ExpectedBillsPage = lazy(() => import("./pages/finance/ExpectedBillsPage"));
-const RecurrencesPage = lazy(() => import("./pages/finance/RecurrencesPage"));
-const MembersPage = lazy(() => import("./pages/finance/MembersPage"));
-const ReportsPage = lazy(() => import("./pages/finance/ReportsPage"));
-const CofrinhosPage = lazy(() => import("./pages/finance/CofrinhosPage"));
-const MonthlyClosingPage = lazy(() => import("./pages/finance/MonthlyClosingPage"));
-const InvestmentsPage = lazy(() => import("./pages/finance/InvestmentsPage"));
+const FinanceDashboard = lazy(routeLoaders["/financas"]);
+const AccountsPage = lazy(routeLoaders["/financas/contas"]);
+const CategoriesPage = lazy(routeLoaders["/financas/categorias"]);
+const TransactionsPage = lazy(routeLoaders["/financas/transacoes"]);
+const BudgetPage = lazy(routeLoaders["/financas/orcamento"]);
+const ImportsPage = lazy(routeLoaders["/financas/importacoes"]);
+const ExpectedBillsPage = lazy(routeLoaders["/financas/previstas"]);
+const RecurrencesPage = lazy(routeLoaders["/financas/recorrencias"]);
+const MembersPage = lazy(routeLoaders["/financas/membros"]);
+const ReportsPage = lazy(routeLoaders["/financas/relatorios"]);
+const CofrinhosPage = lazy(routeLoaders["/financas/cofrinhos"]);
+const MonthlyClosingPage = lazy(routeLoaders["/financas/fechamento"]);
+const InvestmentsPage = lazy(routeLoaders["/financas/investimentos"]);
 const OAuthConsent = lazy(() => import("./pages/OAuthConsent"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5,
+      gcTime: 1000 * 60 * 30,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
-const RouteFallback = () => (
-  <div className="flex min-h-[50vh] items-center justify-center">
-    <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-  </div>
-);
+const RouteFallback = () => <PageSkeleton />;
 
 const AppRoutes = () => {
   const [session, setSession] = useState<any>(undefined);
