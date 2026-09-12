@@ -43,14 +43,14 @@ export const FinanceTopNav: React.FC = () => {
 
   return (
     <nav className="sticky top-0 z-30 mx-auto mb-5 mt-[-0.5rem] max-w-6xl px-4">
-      <div className="flex items-center gap-1 rounded-xl border border-border/60 bg-card/95 p-1 backdrop-blur-md">
+      <div className="flex items-center gap-1 overflow-x-auto rounded-xl border border-border/60 bg-card/85 p-1 shadow-card backdrop-blur-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {PRIMARY_ITEMS.map(({ to, icon: Icon, label, end }) => (
           <NavLink
             key={to}
             to={to}
             end={end}
-            className="flex flex-1 shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-            activeClassName="bg-primary/10 text-primary"
+            className="flex flex-1 shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-medium text-muted-foreground transition-all duration-200 hover:bg-muted/60 hover:text-foreground"
+            activeClassName="bg-primary/10 text-primary shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.18)]"
           >
             <Icon className="h-3.5 w-3.5" strokeWidth={2} />
             <span>{label}</span>
