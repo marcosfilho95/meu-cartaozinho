@@ -63,9 +63,7 @@ export const generateExpectedBillsForMonth = async (userId: string, monthKey: st
     if (existingIds.has(rec.id)) return false;
     if (rec.start_date && rec.start_date > end) return false;
     if (rec.end_date && rec.end_date < start) return false;
-    const payload = (rec.template_payload || {}) as { type?: string; amount?: number };
-    const kind = rec.kind || payload.type || "expense";
-    return kind !== "income";
+    return true;
   });
 
   if (rows.length === 0) {
@@ -73,13 +71,14 @@ export const generateExpectedBillsForMonth = async (userId: string, monthKey: st
   }
 
   const inserts = rows.map((rec) => {
-    const payload = (rec.template_payload || {}) as { source?: string; amount?: number };
+    const payload = (rec.template_payload || {}) as { source?: string; amount?: number; type?: string };
     const dueDate = dueDateForMonth(monthKey, rec.day_of_month);
     const amount = Number(rec.amount ?? payload.amount ?? 0) || null;
+    const kind: FixedBillKind = (rec.kind || payload.type) === "income" ? "income" : "expense";
     return {
       user_id: userId,
       recurrence_id: rec.id,
-      name: rec.name || payload.source || "Despesa fixa",
+      name: rec.name || payload.source || (kind === "income" ? "Receita fixa" : "Despesa fixa"),
       amount,
       expected_min_amount: amount,
       expected_max_amount: amount,
@@ -88,7 +87,7 @@ export const generateExpectedBillsForMonth = async (userId: string, monthKey: st
       account_id: rec.account_id,
       category_id: rec.category_id,
       confidence: 1,
-      metadata: { generatedFrom: "recurrence", month: monthKey },
+      metadata: { generatedFrom: "recurrence", month: monthKey, kind },
     };
   });
 
