@@ -82,17 +82,26 @@ interface DraftTx {
   is_fixed: boolean;
 }
 
-const FIXED_PATTERN = /\b(fixa|fixo|fixas|fixos|mensal|mensalidade|todo mes|todos os meses|recorrente)\b/;
+const FIXED_PATTERN = /\b(fixa|fixo|fixas|fixos|mensal|mensalidade|todo mes|todos os meses|todo mês|recorrente|assinatura)\b/;
+/** Receitas que costumam se repetir todo mês. */
+const FIXED_INCOME_PATTERN = /\b(salario|salarios|aposentadoria|pensao|bolsa|aluguel recebido|pro labore|prolabore)\b/;
 
-const detectFixedNature = (description: string, rawText: string) => {
+const detectFixedNature = (
+  description: string,
+  rawText: string,
+  type: "income" | "expense" | "transfer" = "expense",
+) => {
   const normalizedDescription = normalizeText(description || "");
-  if (FIXED_PATTERN.test(normalizedDescription)) return true;
   const normalizedInput = normalizeText(rawText || "");
-  if (!normalizedDescription) return false;
-  const line = normalizedInput
-    .split(/\n|;/)
-    .find((entry) => entry.includes(normalizedDescription));
-  return Boolean(line && FIXED_PATTERN.test(line));
+  if (FIXED_PATTERN.test(normalizedDescription)) return true;
+  if (type === "income" && FIXED_INCOME_PATTERN.test(`${normalizedDescription} ${normalizedInput}`)) return true;
+  const entries = normalizedInput.split(/\n|;/).map((entry) => entry.trim()).filter(Boolean);
+  if (normalizedDescription) {
+    const line = entries.find((entry) => entry.includes(normalizedDescription));
+    if (line) return FIXED_PATTERN.test(line);
+  }
+  // Entrada com um único lançamento: a marcação vale para ele.
+  return entries.length <= 1 && FIXED_PATTERN.test(normalizedInput);
 };
 
 const uid = () => Math.random().toString(36).slice(2, 10);
