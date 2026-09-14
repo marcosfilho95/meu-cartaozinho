@@ -116,6 +116,7 @@ export const fetchExpectedBillsForMonth = async (userId: string, monthKey: strin
     accountId: (row.account_id as string | null) ?? null,
     categoryId: (row.category_id as string | null) ?? null,
     transactionId: (row.transaction_id as string | null) ?? null,
+    kind: ((row.metadata as { kind?: string } | null)?.kind === "income" ? "income" : "expense") as FixedBillKind,
   })) as FixedBillPreview[];
 };
 
