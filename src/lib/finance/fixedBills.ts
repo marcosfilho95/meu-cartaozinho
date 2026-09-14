@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
+export type FixedBillKind = "income" | "expense";
+
 export type FixedBillPreview = {
   id: string;
   name: string;
@@ -10,6 +12,8 @@ export type FixedBillPreview = {
   accountId: string | null;
   categoryId: string | null;
   transactionId: string | null;
+  /** Receita fixa ou despesa fixa. */
+  kind: FixedBillKind;
 };
 
 const pad = (value: number) => String(value).padStart(2, "0");
@@ -59,9 +63,7 @@ export const generateExpectedBillsForMonth = async (userId: string, monthKey: st
     if (existingIds.has(rec.id)) return false;
     if (rec.start_date && rec.start_date > end) return false;
     if (rec.end_date && rec.end_date < start) return false;
-    const payload = (rec.template_payload || {}) as { type?: string; amount?: number };
-    const kind = rec.kind || payload.type || "expense";
-    return kind !== "income";
+    return true;
   });
 
   if (rows.length === 0) {
@@ -69,13 +71,14 @@ export const generateExpectedBillsForMonth = async (userId: string, monthKey: st
   }
 
   const inserts = rows.map((rec) => {
-    const payload = (rec.template_payload || {}) as { source?: string; amount?: number };
+    const payload = (rec.template_payload || {}) as { source?: string; amount?: number; type?: string };
     const dueDate = dueDateForMonth(monthKey, rec.day_of_month);
     const amount = Number(rec.amount ?? payload.amount ?? 0) || null;
+    const kind: FixedBillKind = (rec.kind || payload.type) === "income" ? "income" : "expense";
     return {
       user_id: userId,
       recurrence_id: rec.id,
-      name: rec.name || payload.source || "Despesa fixa",
+      name: rec.name || payload.source || (kind === "income" ? "Receita fixa" : "Despesa fixa"),
       amount,
       expected_min_amount: amount,
       expected_max_amount: amount,
@@ -84,7 +87,7 @@ export const generateExpectedBillsForMonth = async (userId: string, monthKey: st
       account_id: rec.account_id,
       category_id: rec.category_id,
       confidence: 1,
-      metadata: { generatedFrom: "recurrence", month: monthKey },
+      metadata: { generatedFrom: "recurrence", month: monthKey, kind },
     };
   });
 
@@ -97,7 +100,7 @@ export const generateExpectedBillsForMonth = async (userId: string, monthKey: st
 export const fetchExpectedBillsForMonth = async (userId: string, monthKey: string) => {
   const { data, error } = await supabase
     .from("expected_bills")
-    .select("id, name, amount, due_date, status, recurrence_id, account_id, category_id, transaction_id")
+    .select("id, name, amount, due_date, status, recurrence_id, account_id, category_id, transaction_id, metadata")
     .eq("user_id", userId)
     .gte("due_date", `${monthKey}-01`)
     .lte("due_date", `${monthKey}-${pad(daysInMonth(monthKey))}`)
@@ -113,6 +116,7 @@ export const fetchExpectedBillsForMonth = async (userId: string, monthKey: strin
     accountId: (row.account_id as string | null) ?? null,
     categoryId: (row.category_id as string | null) ?? null,
     transactionId: (row.transaction_id as string | null) ?? null,
+    kind: ((row.metadata as { kind?: string } | null)?.kind === "income" ? "income" : "expense") as FixedBillKind,
   })) as FixedBillPreview[];
 };
 
@@ -175,7 +179,7 @@ export const postDueFixedBillsForMonth = async (userId: string, monthKey: string
           user_id: userId,
           account_id: accountId,
           category_id: bill.categoryId,
-          type: "expense",
+          type: bill.kind,
           amount: bill.amount,
           status: "pending",
           transaction_date: bill.dueDate,
@@ -284,7 +288,7 @@ export const finalizeFixedBillsForMonth = async (
           user_id: userId,
           account_id: accountId,
           category_id: bill.categoryId,
-          type: "expense",
+          type: bill.kind,
           amount: bill.amount,
           status: "pending",
           transaction_date: bill.dueDate,
