@@ -100,7 +100,7 @@ export const generateExpectedBillsForMonth = async (userId: string, monthKey: st
 export const fetchExpectedBillsForMonth = async (userId: string, monthKey: string) => {
   const { data, error } = await supabase
     .from("expected_bills")
-    .select("id, name, amount, due_date, status, recurrence_id, account_id, category_id, transaction_id")
+    .select("id, name, amount, due_date, status, recurrence_id, account_id, category_id, transaction_id, metadata")
     .eq("user_id", userId)
     .gte("due_date", `${monthKey}-01`)
     .lte("due_date", `${monthKey}-${pad(daysInMonth(monthKey))}`)
