@@ -385,7 +385,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
           transfer_direction: t.transfer_direction || null,
           institution,
           account_hint: t.account_hint || null,
-          is_fixed: t.type !== "transfer" && detectFixedNature(String(t.description || ""), String(payload.text || "")),
+          is_fixed: t.type !== "transfer" && detectFixedNature(String(t.description || ""), String(payload.text || ""), t.type),
           learned_from_history: Boolean(
             (previousCategoryExists && !hasExplicitCategory && (!suggestedCategoryId || isGenericSmartCategoryId(categories, suggestedCategoryId))) ||
             (!t.account_hint && !institution && previousAccountExists)
