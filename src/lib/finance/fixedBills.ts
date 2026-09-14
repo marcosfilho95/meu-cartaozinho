@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
+export type FixedBillKind = "income" | "expense";
+
 export type FixedBillPreview = {
   id: string;
   name: string;
@@ -10,6 +12,8 @@ export type FixedBillPreview = {
   accountId: string | null;
   categoryId: string | null;
   transactionId: string | null;
+  /** Receita fixa ou despesa fixa. */
+  kind: FixedBillKind;
 };
 
 const pad = (value: number) => String(value).padStart(2, "0");
