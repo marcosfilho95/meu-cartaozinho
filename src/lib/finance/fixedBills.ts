@@ -179,7 +179,7 @@ export const postDueFixedBillsForMonth = async (userId: string, monthKey: string
           user_id: userId,
           account_id: accountId,
           category_id: bill.categoryId,
-          type: "expense",
+          type: bill.kind,
           amount: bill.amount,
           status: "pending",
           transaction_date: bill.dueDate,
