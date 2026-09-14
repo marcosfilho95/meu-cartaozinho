@@ -208,16 +208,27 @@ const MonthlyClosingPage: React.FC<MonthlyClosingPageProps> = ({ userId }) => {
   const expenses = monthTransactions.filter((transaction) => transaction.type === "expense");
   const baseSummary = useMemo(() => summarizeMonth(transactions, refMonth), [refMonth, transactions]);
   const fixedToCreate = fixedBills.filter((bill) => includedFixed.has(bill.id) && !bill.transactionId);
-  const fixedExtra = fixedToCreate.reduce((sum, bill) => sum + Number(bill.amount || 0), 0);
-  const closingSummary = useMemo(() => ({
-    ...baseSummary,
-    expenses: baseSummary.expenses + fixedExtra,
-    result: baseSummary.result - fixedExtra,
-    fixedExpenses: baseSummary.fixedExpenses + fixedExtra,
-    committedRate: baseSummary.income > 0 ? ((baseSummary.expenses + fixedExtra) / baseSummary.income) * 100 : 0,
-    savingsRate: baseSummary.income > 0 ? ((baseSummary.result - fixedExtra) / baseSummary.income) * 100 : 0,
-    hasData: baseSummary.hasData || fixedExtra > 0,
-  }), [baseSummary, fixedExtra]);
+  const fixedExtra = fixedToCreate
+    .filter((bill) => bill.kind !== "income")
+    .reduce((sum, bill) => sum + Number(bill.amount || 0), 0);
+  const fixedIncomeExtra = fixedToCreate
+    .filter((bill) => bill.kind === "income")
+    .reduce((sum, bill) => sum + Number(bill.amount || 0), 0);
+  const closingSummary = useMemo(() => {
+    const income = baseSummary.income + fixedIncomeExtra;
+    const expenses = baseSummary.expenses + fixedExtra;
+    const result = income - expenses;
+    return {
+      ...baseSummary,
+      income,
+      expenses,
+      result,
+      fixedExpenses: baseSummary.fixedExpenses + fixedExtra,
+      committedRate: income > 0 ? (expenses / income) * 100 : 0,
+      savingsRate: income > 0 ? (result / income) * 100 : 0,
+      hasData: baseSummary.hasData || fixedExtra > 0 || fixedIncomeExtra > 0,
+    };
+  }, [baseSummary, fixedExtra, fixedIncomeExtra]);
   const financialPlan = useMemo(
     () => buildFinancialPlan(financialRules, refMonth, closingSummary.income, legacySpendingGoal),
     [closingSummary.income, financialRules, legacySpendingGoal, refMonth],
