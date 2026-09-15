@@ -344,9 +344,13 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         throw aiFailure;
       }
       if (!parsed.length) {
-        toast.info("Nenhuma transação identificada. Tente com mais detalhes.");
+        void chat.append(
+          "assistant",
+          "Não consegui identificar um lançamento. Me diga o valor e o que foi, por exemplo: “luz 180 no dia 10”.",
+        );
         return;
       }
+
 
       const newDrafts: DraftTx[] = parsed.map((t) => {
         const suggestedCategoryId = resolveSmartCategoryId({
