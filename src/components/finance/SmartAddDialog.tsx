@@ -504,6 +504,11 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
       if (error) throw error;
 
       toast.success(rows.length === 1 ? "Lançamento salvo!" : `${rows.length} lançamentos salvos!`);
+      void chat.append(
+        "assistant",
+        rows.length === 1 ? "Pronto, lancei para você. Quer registrar mais alguma coisa?" : `Pronto, lancei ${rows.length} itens. Quer registrar mais alguma coisa?`,
+      );
+
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
