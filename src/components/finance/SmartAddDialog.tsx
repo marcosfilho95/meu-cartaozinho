@@ -168,9 +168,7 @@ const guessCounterpartAccount = (accounts: any[], sourceId: string, role: DraftT
 
 export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) => {
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<"text" | "paste" | "image">("text");
   const [text, setText] = useState("");
-  const [pasted, setPasted] = useState("");
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [optionsLoading, setOptionsLoading] = useState(false);
@@ -181,13 +179,17 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
   const [categories, setCategories] = useState<SmartCategoryOption[]>([]);
   const [classificationHistory, setClassificationHistory] = useState<SmartClassificationHistory[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chat = useSmartChat(userId, open);
   const voice = useVoiceDictation({
     onTranscript: (transcript) => {
-      setText((current) => (current.trim() ? `${current.trimEnd()}\n${transcript}` : transcript));
-      toast.success("Transcrição adicionada. Revise o lançamento antes de processar.");
+      setText((current) => (current.trim() ? `${current.trimEnd()} ${transcript}` : transcript));
+      composerRef.current?.focus();
     },
     onError: (message) => toast.error(message),
   });
+
 
   useEffect(() => {
     if (!open) return;
