@@ -194,9 +194,8 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    setTab("text");
     setText("");
-    setPasted("");
+
     setImageDataUrl(null);
     setDrafts([]);
     setStage("input");
