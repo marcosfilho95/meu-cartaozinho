@@ -541,72 +541,126 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl overflow-hidden rounded-2xl p-0">
         <DialogHeader className="border-b bg-gradient-to-br from-primary/5 to-transparent px-5 py-4">
-          <DialogTitle className="flex items-center gap-2 font-heading text-lg">
-            <Sparkles className="h-5 w-5 text-primary" />
-            Adicionar por texto ou imagem
+          <DialogTitle className="flex items-center justify-between gap-2 font-heading text-lg">
+            <span className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              Adicionar Inteligente
+            </span>
+            {stage === "input" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 text-xs text-muted-foreground"
+                onClick={() => void chat.clear()}
+              >
+                <RotateCcw className="h-3.5 w-3.5" /> Nova conversa
+              </Button>
+            )}
           </DialogTitle>
           <p className="text-xs text-muted-foreground">
-            Informe o essencial. O sistema sugere os campos e você confirma antes de salvar.
+            Escreva, fale ou envie um print. Eu organizo e você confirma antes de lançar.
           </p>
         </DialogHeader>
 
         <div className="max-h-[75vh] space-y-4 overflow-y-auto px-5 py-4">
           {drafts.length === 0 || stage === "input" ? (
-            <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
-              <div className="mb-3 flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-foreground">
-                <ClipboardPaste className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <p><strong>Colar um print:</strong> use <kbd className="rounded border bg-background px-1.5 py-0.5 font-mono text-[10px]">Win + Shift + S</kbd> e depois <kbd className="rounded border bg-background px-1.5 py-0.5 font-mono text-[10px]">Ctrl + V</kbd> nesta janela.</p>
+            <div className="flex flex-col gap-3">
+              <div className="flex max-h-[45vh] min-h-[220px] flex-col gap-3 overflow-y-auto pr-1">
+                {chat.messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={cn("flex", message.role === "user" ? "justify-end" : "justify-start")}
+                  >
+                    <div
+                      className={cn(
+                        "max-w-[85%] whitespace-pre-line text-sm leading-relaxed",
+                        message.role === "user"
+                          ? "rounded-2xl rounded-br-sm bg-primary px-3.5 py-2 text-primary-foreground"
+                          : "text-foreground",
+                      )}
+                    >
+                      {message.content}
+                    </div>
+                  </div>
+                ))}
+                {loading && (
+                  <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Analisando...
+                  </p>
+                )}
+                <div ref={messagesEndRef} />
               </div>
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="text" className="gap-1.5">
-                  <TypeIcon className="h-3.5 w-3.5" /> Texto
-                </TabsTrigger>
-                <TabsTrigger value="paste" className="gap-1.5">
-                  <ClipboardPaste className="h-3.5 w-3.5" /> Colar texto
-                </TabsTrigger>
-                <TabsTrigger value="image" className="gap-1.5">
-                  <ImageIcon className="h-3.5 w-3.5" /> Imagem
-                </TabsTrigger>
-              </TabsList>
 
-              <TabsContent value="text" className="mt-4 space-y-2">
-                <Label className="text-xs text-muted-foreground">
-                  Digite ou fale um lançamento por linha. Você pode adicionar quantos precisar.
-                </Label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                hidden
+                onChange={(e) => handleImagePick(e.target.files?.[0])}
+              />
+
+              {imageDataUrl && (
+                <div className="relative w-fit overflow-hidden rounded-xl border bg-muted">
+                  <img src={imageDataUrl} alt="Comprovante" className="max-h-32 object-contain" />
+                  <button
+                    type="button"
+                    onClick={() => setImageDataUrl(null)}
+                    aria-label="Remover imagem"
+                    className="absolute right-1 top-1 rounded-full bg-background/90 p-1 text-muted-foreground hover:text-destructive"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+
+              <div className="rounded-2xl border bg-card p-2 shadow-sm">
                 <Textarea
-                  placeholder={"TIM Conta 62\nEnergia Conta 300\nInternet 99,90"}
+                  ref={composerRef}
+                  placeholder="Ex.: salário de 7.000 todo dia 5"
                   value={text}
                   onChange={(e) => setText(e.target.value)}
-                  rows={5}
-                  className="resize-none"
+                  rows={2}
+                  className="resize-none border-0 p-2 text-sm shadow-none focus-visible:ring-0"
                   autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      if (canParse) void runParse();
+                    }
+                  }}
                 />
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    variant={voice.recording ? "destructive" : "outline"}
-                    size="sm"
-                    className="gap-2 rounded-full"
-                    disabled={voice.transcribing}
-                    onClick={() => (voice.recording ? void voice.stop() : void voice.start())}
-                  >
-                    {voice.transcribing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" /> Transcrevendo...
-                      </>
-                    ) : voice.recording ? (
-                      <>
-                        <Square className="h-4 w-4" /> Parar e transcrever
-                      </>
-                    ) : (
-                      <>
-                        <Mic className="h-4 w-4" /> Falar lançamento
-                      </>
-                    )}
-                  </Button>
-                  {voice.recording && (
-                    <>
-                      <span className="flex items-center gap-1" aria-hidden>
+                <div className="flex items-center justify-between gap-2 px-1 pb-1">
+                  <div className="flex items-center gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 rounded-full"
+                      onClick={() => fileInputRef.current?.click()}
+                      aria-label="Enviar imagem"
+                    >
+                      <ImageIcon className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={voice.recording ? "destructive" : "ghost"}
+                      size="icon"
+                      className="h-9 w-9 rounded-full"
+                      disabled={voice.transcribing}
+                      aria-label={voice.recording ? "Parar gravação" : "Falar lançamento"}
+                      onClick={() => (voice.recording ? void voice.stop() : void voice.start())}
+                    >
+                      {voice.transcribing ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : voice.recording ? (
+                        <Square className="h-4 w-4" />
+                      ) : (
+                        <Mic className="h-4 w-4" />
+                      )}
+                    </Button>
+                    {voice.recording && (
+                      <span className="ml-1 flex items-center gap-1" aria-hidden>
                         {[0, 1, 2, 3, 4].map((bar) => (
                           <span
                             key={bar}
@@ -615,88 +669,25 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                           />
                         ))}
                       </span>
-                      <Button type="button" variant="ghost" size="sm" onClick={voice.cancel}>
-                        Cancelar
-                      </Button>
-                    </>
-                  )}
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  Ex.: “gastei 45 no Uber ontem e paguei a conta de luz de 180 no boleto”. Cada linha será cadastrada separadamente e você revisa tudo antes de salvar.
-                </p>
-              </TabsContent>
-
-
-              <TabsContent value="paste" className="mt-4 space-y-2">
-                <Label className="text-xs text-muted-foreground">
-                  Cole uma lista com um lançamento por linha. Revise todos os valores antes de salvar.
-                </Label>
-                <Textarea
-                  placeholder={"TIM Conta 62\nEnergia Conta 300\nInternet 99,90"}
-                  value={pasted}
-                  onChange={(e) => setPasted(e.target.value)}
-                  rows={8}
-                  className="resize-none font-mono text-xs"
-                />
-              </TabsContent>
-
-              <TabsContent value="image" className="mt-4 space-y-3">
-                <Label className="text-xs text-muted-foreground">
-                  Cole com Ctrl + V ou selecione um print com instituição, total e mês visíveis. Nada será salvo sem sua revisão.
-                </Label>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  hidden
-                  onChange={(e) => handleImagePick(e.target.files?.[0])}
-                />
-                {imageDataUrl ? (
-                  <div className="space-y-2">
-                    <div className="relative overflow-hidden rounded-xl border bg-muted">
-                      <img src={imageDataUrl} alt="Comprovante" className="max-h-72 w-full object-contain" />
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                        Trocar imagem
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setImageDataUrl(null)}>
-                        Remover
-                      </Button>
-                    </div>
+                    )}
                   </div>
-                ) : (
-                  <button
+                  <Button
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex h-40 w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border text-muted-foreground transition-colors hover:border-primary hover:bg-primary/5"
+                    size="icon"
+                    className="h-9 w-9 rounded-full gradient-primary text-primary-foreground"
+                    disabled={!canParse}
+                    onClick={() => void runParse()}
+                    aria-label="Enviar"
                   >
-                    <ImageIcon className="h-8 w-8" />
-                    <span className="text-sm font-medium">Selecionar ou tirar foto</span>
-                    <span className="text-xs">PNG, JPG até 8 MB</span>
-                  </button>
-                )}
-              </TabsContent>
+                    {loading || optionsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Dica: cole um print com Ctrl + V aqui. Cada linha vira um lançamento separado.
+              </p>
+            </div>
 
-              <Button
-                onClick={runParse}
-                disabled={!canParse}
-                className="mt-4 h-11 w-full gap-2 gradient-primary text-primary-foreground"
-              >
-                {loading || optionsLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {optionsLoading ? "Preparando..." : "Analisando..."}
-                  </>
-                ) : (
-                  <>
-                    <Wand2 className="h-4 w-4" />
-                    Processar com IA
-                  </>
-                )}
-              </Button>
-            </Tabs>
           ) : stage === "confirm" ? (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
