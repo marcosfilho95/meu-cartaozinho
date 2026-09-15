@@ -527,10 +527,13 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
 
   const canParse = useMemo(() => {
     if (loading || optionsLoading) return false;
-    if (tab === "text") return text.trim().length > 3;
-    if (tab === "paste") return pasted.trim().length > 3;
-    return !!imageDataUrl;
-  }, [tab, text, pasted, imageDataUrl, loading, optionsLoading]);
+    return text.trim().length > 2 || !!imageDataUrl;
+  }, [text, imageDataUrl, loading, optionsLoading]);
+
+  useEffect(() => {
+    if (stage === "input") messagesEndRef.current?.scrollIntoView({ block: "end" });
+  }, [chat.messages, stage, loading]);
+
 
   const totalLaunches = drafts.length;
 
