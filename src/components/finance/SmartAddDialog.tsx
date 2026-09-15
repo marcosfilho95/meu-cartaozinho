@@ -402,14 +402,21 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
       });
       setDrafts(newDrafts);
       setStage("confirm");
-      toast.success(
-        newDrafts.length === 1
-          ? "Transação reconhecida. Confira o resumo."
-          : `${newDrafts.length} transações reconhecidas. Confira o resumo.`,
+      const missing = newDrafts.filter((d) => !d.account_id).length;
+      const resumo = newDrafts
+        .map((d) => `• ${formatDraftDate(d.date)} · ${d.description} · ${d.type === "income" ? "+" : "-"}${formatCurrency(d.amount)}${d.is_fixed ? " (todo mês)" : ""}`)
+        .join("\n");
+      void chat.append(
+        "assistant",
+        missing
+          ? `Entendi assim:\n${resumo}\n\nFaltou escolher a conta de ${missing === 1 ? "um lançamento" : `${missing} lançamentos`}. Confira o resumo ao lado e ajuste antes de lançar.`
+          : `Entendi assim:\n${resumo}\n\nConfira o resumo e confirme para lançar.`,
       );
     } catch (err: any) {
+      void chat.append("assistant", `Não consegui processar agora: ${err?.message || "erro desconhecido"}. Quer tentar de novo?`);
       toast.error(err?.message || "Erro ao processar com IA");
     } finally {
+
       setLoading(false);
     }
   };
