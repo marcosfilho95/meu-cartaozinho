@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -15,17 +14,18 @@ import {
 } from "@/components/ui/select";
 import {
   Sparkles,
-  Type as TypeIcon,
-  ClipboardPaste,
   ImageIcon,
   Loader2,
   Trash2,
   ArrowUpCircle,
   ArrowDownCircle,
-  Wand2,
   Mic,
   Square,
+  Send,
+  RotateCcw,
+  X,
 } from "lucide-react";
+
 
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -52,6 +52,7 @@ import {
 } from "@/lib/finance/smartInputParser";
 import { emitFinanceSync } from "@/lib/financeSyncBus";
 import { useVoiceDictation } from "@/hooks/use-voice-dictation";
+import { useSmartChat } from "@/hooks/use-smart-chat";
 
 interface Props {
   open: boolean;
@@ -166,9 +167,7 @@ const guessCounterpartAccount = (accounts: any[], sourceId: string, role: DraftT
 
 export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) => {
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<"text" | "paste" | "image">("text");
   const [text, setText] = useState("");
-  const [pasted, setPasted] = useState("");
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [optionsLoading, setOptionsLoading] = useState(false);
@@ -179,20 +178,23 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
   const [categories, setCategories] = useState<SmartCategoryOption[]>([]);
   const [classificationHistory, setClassificationHistory] = useState<SmartClassificationHistory[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chat = useSmartChat(userId, open);
   const voice = useVoiceDictation({
     onTranscript: (transcript) => {
-      setText((current) => (current.trim() ? `${current.trimEnd()}\n${transcript}` : transcript));
-      toast.success("Transcrição adicionada. Revise o lançamento antes de processar.");
+      setText((current) => (current.trim() ? `${current.trimEnd()} ${transcript}` : transcript));
+      composerRef.current?.focus();
     },
     onError: (message) => toast.error(message),
   });
 
+
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    setTab("text");
     setText("");
-    setPasted("");
+
     setImageDataUrl(null);
     setDrafts([]);
     setStage("input");
@@ -275,8 +277,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
       event.preventDefault();
       void handleImagePick(imageFile).then((accepted) => {
         if (!accepted) return;
-        setTab("image");
-        toast.success("Print colado! Confira a imagem e processe quando estiver pronto.");
+        toast.success("Print colado! Envie na conversa quando estiver pronto.");
       });
     };
 
@@ -285,12 +286,18 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
   }, [drafts.length, handleImagePick, open]);
 
   const runParse = async () => {
+    const message = text.trim();
+    const image = imageDataUrl;
+    const mode = image ? "image" : "text";
+    if (!message && !image) return;
     setLoading(true);
+    void chat.append("user", image ? `${message || "Print enviado"} (imagem anexada)` : message);
+    setText("");
+    setImageDataUrl(null);
     try {
-      const payload: any = { mode: tab };
-      if (tab === "text") payload.text = text.trim();
-      if (tab === "paste") payload.text = pasted.trim();
-      if (tab === "image") payload.imageDataUrl = imageDataUrl;
+      const payload: any = { mode };
+      if (message) payload.text = message;
+      if (image) payload.imageDataUrl = image;
       const categoryById = new Map(categories.map((category) => [category.id, category]));
       payload.categories = categories.map((category) => ({
         name: category.name,
@@ -298,13 +305,8 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         parent: category.parent_id ? categoryById.get(category.parent_id)?.name || null : null,
       }));
 
-      if ((tab !== "image" && !payload.text) || (tab === "image" && !payload.imageDataUrl)) {
-        toast.error("Adicione conteúdo antes de processar");
-        return;
-      }
-
-      let localParsed = tab !== "image"
-        ? parseDeterministicTransactions(String(payload.text), new Date())
+      let localParsed = !image
+        ? parseDeterministicTransactions(String(payload.text || ""), new Date())
         : [];
       let aiParsed: SmartParsedTransaction[] = [];
       let aiFailure: unknown = null;
@@ -314,14 +316,15 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         aiFailure = error;
       }
 
-      if (tab === "image" && imageDataUrl && (aiFailure || aiParsed.length === 0)) {
+      if (image && (aiFailure || aiParsed.length === 0)) {
         toast.info("A leitura online não encontrou dados. Tentando reconhecer o texto da imagem...");
-        const recognizedText = await recognizeFinancialImageLocally(imageDataUrl);
+        const recognizedText = await recognizeFinancialImageLocally(image);
         localParsed = parseDeterministicTransactions(recognizedText, new Date());
         if (localParsed.length) {
           console.info("[SmartAdd] Imagem reconhecida pelo OCR local.");
         }
       }
+
 
       let parsed: SmartParsedTransaction[] = aiParsed;
       if (localParsed.length > 0 && aiParsed.length === localParsed.length) {
@@ -340,9 +343,13 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         throw aiFailure;
       }
       if (!parsed.length) {
-        toast.info("Nenhuma transação identificada. Tente com mais detalhes.");
+        void chat.append(
+          "assistant",
+          "Não consegui identificar um lançamento. Me diga o valor e o que foi, por exemplo: “luz 180 no dia 10”.",
+        );
         return;
       }
+
 
       const newDrafts: DraftTx[] = parsed.map((t) => {
         const suggestedCategoryId = resolveSmartCategoryId({
@@ -394,14 +401,21 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
       });
       setDrafts(newDrafts);
       setStage("confirm");
-      toast.success(
-        newDrafts.length === 1
-          ? "Transação reconhecida. Confira o resumo."
-          : `${newDrafts.length} transações reconhecidas. Confira o resumo.`,
+      const missing = newDrafts.filter((d) => !d.account_id).length;
+      const resumo = newDrafts
+        .map((d) => `• ${formatDraftDate(d.date)} · ${d.description} · ${d.type === "income" ? "+" : "-"}${formatCurrency(d.amount)}${d.is_fixed ? " (todo mês)" : ""}`)
+        .join("\n");
+      void chat.append(
+        "assistant",
+        missing
+          ? `Entendi assim:\n${resumo}\n\nFaltou escolher a conta de ${missing === 1 ? "um lançamento" : `${missing} lançamentos`}. Confira o resumo ao lado e ajuste antes de lançar.`
+          : `Entendi assim:\n${resumo}\n\nConfira o resumo e confirme para lançar.`,
       );
     } catch (err: any) {
+      void chat.append("assistant", `Não consegui processar agora: ${err?.message || "erro desconhecido"}. Quer tentar de novo?`);
       toast.error(err?.message || "Erro ao processar com IA");
     } finally {
+
       setLoading(false);
     }
   };
@@ -489,6 +503,11 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
       if (error) throw error;
 
       toast.success(rows.length === 1 ? "Lançamento salvo!" : `${rows.length} lançamentos salvos!`);
+      void chat.append(
+        "assistant",
+        rows.length === 1 ? "Pronto, lancei para você. Quer registrar mais alguma coisa?" : `Pronto, lancei ${rows.length} itens. Quer registrar mais alguma coisa?`,
+      );
+
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
@@ -507,10 +526,13 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
 
   const canParse = useMemo(() => {
     if (loading || optionsLoading) return false;
-    if (tab === "text") return text.trim().length > 3;
-    if (tab === "paste") return pasted.trim().length > 3;
-    return !!imageDataUrl;
-  }, [tab, text, pasted, imageDataUrl, loading, optionsLoading]);
+    return text.trim().length > 2 || !!imageDataUrl;
+  }, [text, imageDataUrl, loading, optionsLoading]);
+
+  useEffect(() => {
+    if (stage === "input") messagesEndRef.current?.scrollIntoView({ block: "end" });
+  }, [chat.messages, stage, loading]);
+
 
   const totalLaunches = drafts.length;
 
@@ -518,72 +540,126 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl overflow-hidden rounded-2xl p-0">
         <DialogHeader className="border-b bg-gradient-to-br from-primary/5 to-transparent px-5 py-4">
-          <DialogTitle className="flex items-center gap-2 font-heading text-lg">
-            <Sparkles className="h-5 w-5 text-primary" />
-            Adicionar por texto ou imagem
+          <DialogTitle className="flex items-center justify-between gap-2 font-heading text-lg">
+            <span className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              Adicionar Inteligente
+            </span>
+            {stage === "input" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 text-xs text-muted-foreground"
+                onClick={() => void chat.clear()}
+              >
+                <RotateCcw className="h-3.5 w-3.5" /> Nova conversa
+              </Button>
+            )}
           </DialogTitle>
           <p className="text-xs text-muted-foreground">
-            Informe o essencial. O sistema sugere os campos e você confirma antes de salvar.
+            Escreva, fale ou envie um print. Eu organizo e você confirma antes de lançar.
           </p>
         </DialogHeader>
 
         <div className="max-h-[75vh] space-y-4 overflow-y-auto px-5 py-4">
           {drafts.length === 0 || stage === "input" ? (
-            <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
-              <div className="mb-3 flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-foreground">
-                <ClipboardPaste className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <p><strong>Colar um print:</strong> use <kbd className="rounded border bg-background px-1.5 py-0.5 font-mono text-[10px]">Win + Shift + S</kbd> e depois <kbd className="rounded border bg-background px-1.5 py-0.5 font-mono text-[10px]">Ctrl + V</kbd> nesta janela.</p>
+            <div className="flex flex-col gap-3">
+              <div className="flex max-h-[45vh] min-h-[220px] flex-col gap-3 overflow-y-auto pr-1">
+                {chat.messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={cn("flex", message.role === "user" ? "justify-end" : "justify-start")}
+                  >
+                    <div
+                      className={cn(
+                        "max-w-[85%] whitespace-pre-line text-sm leading-relaxed",
+                        message.role === "user"
+                          ? "rounded-2xl rounded-br-sm bg-primary px-3.5 py-2 text-primary-foreground"
+                          : "text-foreground",
+                      )}
+                    >
+                      {message.content}
+                    </div>
+                  </div>
+                ))}
+                {loading && (
+                  <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Analisando...
+                  </p>
+                )}
+                <div ref={messagesEndRef} />
               </div>
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="text" className="gap-1.5">
-                  <TypeIcon className="h-3.5 w-3.5" /> Texto
-                </TabsTrigger>
-                <TabsTrigger value="paste" className="gap-1.5">
-                  <ClipboardPaste className="h-3.5 w-3.5" /> Colar texto
-                </TabsTrigger>
-                <TabsTrigger value="image" className="gap-1.5">
-                  <ImageIcon className="h-3.5 w-3.5" /> Imagem
-                </TabsTrigger>
-              </TabsList>
 
-              <TabsContent value="text" className="mt-4 space-y-2">
-                <Label className="text-xs text-muted-foreground">
-                  Digite ou fale um lançamento por linha. Você pode adicionar quantos precisar.
-                </Label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                hidden
+                onChange={(e) => handleImagePick(e.target.files?.[0])}
+              />
+
+              {imageDataUrl && (
+                <div className="relative w-fit overflow-hidden rounded-xl border bg-muted">
+                  <img src={imageDataUrl} alt="Comprovante" className="max-h-32 object-contain" />
+                  <button
+                    type="button"
+                    onClick={() => setImageDataUrl(null)}
+                    aria-label="Remover imagem"
+                    className="absolute right-1 top-1 rounded-full bg-background/90 p-1 text-muted-foreground hover:text-destructive"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+
+              <div className="rounded-2xl border bg-card p-2 shadow-sm">
                 <Textarea
-                  placeholder={"TIM Conta 62\nEnergia Conta 300\nInternet 99,90"}
+                  ref={composerRef}
+                  placeholder="Ex.: salário de 7.000 todo dia 5"
                   value={text}
                   onChange={(e) => setText(e.target.value)}
-                  rows={5}
-                  className="resize-none"
+                  rows={2}
+                  className="resize-none border-0 p-2 text-sm shadow-none focus-visible:ring-0"
                   autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      if (canParse) void runParse();
+                    }
+                  }}
                 />
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    variant={voice.recording ? "destructive" : "outline"}
-                    size="sm"
-                    className="gap-2 rounded-full"
-                    disabled={voice.transcribing}
-                    onClick={() => (voice.recording ? void voice.stop() : void voice.start())}
-                  >
-                    {voice.transcribing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" /> Transcrevendo...
-                      </>
-                    ) : voice.recording ? (
-                      <>
-                        <Square className="h-4 w-4" /> Parar e transcrever
-                      </>
-                    ) : (
-                      <>
-                        <Mic className="h-4 w-4" /> Falar lançamento
-                      </>
-                    )}
-                  </Button>
-                  {voice.recording && (
-                    <>
-                      <span className="flex items-center gap-1" aria-hidden>
+                <div className="flex items-center justify-between gap-2 px-1 pb-1">
+                  <div className="flex items-center gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 rounded-full"
+                      onClick={() => fileInputRef.current?.click()}
+                      aria-label="Enviar imagem"
+                    >
+                      <ImageIcon className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={voice.recording ? "destructive" : "ghost"}
+                      size="icon"
+                      className="h-9 w-9 rounded-full"
+                      disabled={voice.transcribing}
+                      aria-label={voice.recording ? "Parar gravação" : "Falar lançamento"}
+                      onClick={() => (voice.recording ? void voice.stop() : void voice.start())}
+                    >
+                      {voice.transcribing ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : voice.recording ? (
+                        <Square className="h-4 w-4" />
+                      ) : (
+                        <Mic className="h-4 w-4" />
+                      )}
+                    </Button>
+                    {voice.recording && (
+                      <span className="ml-1 flex items-center gap-1" aria-hidden>
                         {[0, 1, 2, 3, 4].map((bar) => (
                           <span
                             key={bar}
@@ -592,88 +668,25 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                           />
                         ))}
                       </span>
-                      <Button type="button" variant="ghost" size="sm" onClick={voice.cancel}>
-                        Cancelar
-                      </Button>
-                    </>
-                  )}
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  Ex.: “gastei 45 no Uber ontem e paguei a conta de luz de 180 no boleto”. Cada linha será cadastrada separadamente e você revisa tudo antes de salvar.
-                </p>
-              </TabsContent>
-
-
-              <TabsContent value="paste" className="mt-4 space-y-2">
-                <Label className="text-xs text-muted-foreground">
-                  Cole uma lista com um lançamento por linha. Revise todos os valores antes de salvar.
-                </Label>
-                <Textarea
-                  placeholder={"TIM Conta 62\nEnergia Conta 300\nInternet 99,90"}
-                  value={pasted}
-                  onChange={(e) => setPasted(e.target.value)}
-                  rows={8}
-                  className="resize-none font-mono text-xs"
-                />
-              </TabsContent>
-
-              <TabsContent value="image" className="mt-4 space-y-3">
-                <Label className="text-xs text-muted-foreground">
-                  Cole com Ctrl + V ou selecione um print com instituição, total e mês visíveis. Nada será salvo sem sua revisão.
-                </Label>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  hidden
-                  onChange={(e) => handleImagePick(e.target.files?.[0])}
-                />
-                {imageDataUrl ? (
-                  <div className="space-y-2">
-                    <div className="relative overflow-hidden rounded-xl border bg-muted">
-                      <img src={imageDataUrl} alt="Comprovante" className="max-h-72 w-full object-contain" />
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                        Trocar imagem
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setImageDataUrl(null)}>
-                        Remover
-                      </Button>
-                    </div>
+                    )}
                   </div>
-                ) : (
-                  <button
+                  <Button
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex h-40 w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border text-muted-foreground transition-colors hover:border-primary hover:bg-primary/5"
+                    size="icon"
+                    className="h-9 w-9 rounded-full gradient-primary text-primary-foreground"
+                    disabled={!canParse}
+                    onClick={() => void runParse()}
+                    aria-label="Enviar"
                   >
-                    <ImageIcon className="h-8 w-8" />
-                    <span className="text-sm font-medium">Selecionar ou tirar foto</span>
-                    <span className="text-xs">PNG, JPG até 8 MB</span>
-                  </button>
-                )}
-              </TabsContent>
+                    {loading || optionsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Dica: cole um print com Ctrl + V aqui. Cada linha vira um lançamento separado.
+              </p>
+            </div>
 
-              <Button
-                onClick={runParse}
-                disabled={!canParse}
-                className="mt-4 h-11 w-full gap-2 gradient-primary text-primary-foreground"
-              >
-                {loading || optionsLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {optionsLoading ? "Preparando..." : "Analisando..."}
-                  </>
-                ) : (
-                  <>
-                    <Wand2 className="h-4 w-4" />
-                    Processar com IA
-                  </>
-                )}
-              </Button>
-            </Tabs>
           ) : stage === "confirm" ? (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
