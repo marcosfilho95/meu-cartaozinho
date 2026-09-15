@@ -15,17 +15,18 @@ import {
 } from "@/components/ui/select";
 import {
   Sparkles,
-  Type as TypeIcon,
-  ClipboardPaste,
   ImageIcon,
   Loader2,
   Trash2,
   ArrowUpCircle,
   ArrowDownCircle,
-  Wand2,
   Mic,
   Square,
+  Send,
+  RotateCcw,
+  X,
 } from "lucide-react";
+
 
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
