@@ -278,8 +278,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
       event.preventDefault();
       void handleImagePick(imageFile).then((accepted) => {
         if (!accepted) return;
-        setTab("image");
-        toast.success("Print colado! Confira a imagem e processe quando estiver pronto.");
+        toast.success("Print colado! Envie na conversa quando estiver pronto.");
       });
     };
 
@@ -288,12 +287,18 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
   }, [drafts.length, handleImagePick, open]);
 
   const runParse = async () => {
+    const message = text.trim();
+    const image = imageDataUrl;
+    const mode = image ? "image" : "text";
+    if (!message && !image) return;
     setLoading(true);
+    void chat.append("user", image ? `${message || "Print enviado"} (imagem anexada)` : message);
+    setText("");
+    setImageDataUrl(null);
     try {
-      const payload: any = { mode: tab };
-      if (tab === "text") payload.text = text.trim();
-      if (tab === "paste") payload.text = pasted.trim();
-      if (tab === "image") payload.imageDataUrl = imageDataUrl;
+      const payload: any = { mode };
+      if (message) payload.text = message;
+      if (image) payload.imageDataUrl = image;
       const categoryById = new Map(categories.map((category) => [category.id, category]));
       payload.categories = categories.map((category) => ({
         name: category.name,
@@ -301,13 +306,8 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         parent: category.parent_id ? categoryById.get(category.parent_id)?.name || null : null,
       }));
 
-      if ((tab !== "image" && !payload.text) || (tab === "image" && !payload.imageDataUrl)) {
-        toast.error("Adicione conteúdo antes de processar");
-        return;
-      }
-
-      let localParsed = tab !== "image"
-        ? parseDeterministicTransactions(String(payload.text), new Date())
+      let localParsed = !image
+        ? parseDeterministicTransactions(String(payload.text || ""), new Date())
         : [];
       let aiParsed: SmartParsedTransaction[] = [];
       let aiFailure: unknown = null;
@@ -317,14 +317,15 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         aiFailure = error;
       }
 
-      if (tab === "image" && imageDataUrl && (aiFailure || aiParsed.length === 0)) {
+      if (image && (aiFailure || aiParsed.length === 0)) {
         toast.info("A leitura online não encontrou dados. Tentando reconhecer o texto da imagem...");
-        const recognizedText = await recognizeFinancialImageLocally(imageDataUrl);
+        const recognizedText = await recognizeFinancialImageLocally(image);
         localParsed = parseDeterministicTransactions(recognizedText, new Date());
         if (localParsed.length) {
           console.info("[SmartAdd] Imagem reconhecida pelo OCR local.");
         }
       }
+
 
       let parsed: SmartParsedTransaction[] = aiParsed;
       if (localParsed.length > 0 && aiParsed.length === localParsed.length) {
