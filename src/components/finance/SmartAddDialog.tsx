@@ -53,6 +53,7 @@ import {
 } from "@/lib/finance/smartInputParser";
 import { emitFinanceSync } from "@/lib/financeSyncBus";
 import { useVoiceDictation } from "@/hooks/use-voice-dictation";
+import { useSmartChat } from "@/hooks/use-smart-chat";
 
 interface Props {
   open: boolean;
