@@ -34,6 +34,15 @@ interface HomeProps {
   userId: string;
 }
 
+type HomeGoal = {
+  id: string;
+  name: string;
+  goal_type?: string | null;
+  saved: number;
+  target: number;
+  progress: number;
+};
+
 type HomeData = {
   transactions: FinanceTx[];
   summary: MonthSummary;
@@ -41,6 +50,7 @@ type HomeData = {
   netWorth: ReturnType<typeof calculateNetWorth>;
   card: CartaozinhoMonthTotal;
   spendingGoal: number;
+  goals: HomeGoal[];
 };
 
 const emptyCardTotal = (refMonth: string): CartaozinhoMonthTotal => ({ refMonth, total: 0, installments: 0, people: 0 });
