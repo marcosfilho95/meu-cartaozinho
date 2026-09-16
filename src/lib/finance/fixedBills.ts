@@ -325,16 +325,7 @@ export const finalizeFixedBillsForMonth = async (
     }
 
     const externalId = `fixed_bill:${bill.id}`;
-    const { data: existingRows, error: existingError } = await supabase
-      .from("transactions")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("external_id", externalId)
-      .is("deleted_at", null)
-      .limit(1);
-    if (existingError) throw existingError;
-
-    let transactionId = existingRows?.[0]?.id;
+    let transactionId = await findEquivalentTransactionId(userId, bill, monthKey, externalId);
     if (!transactionId) {
       const { data: created, error } = await supabase
         .from("transactions")
