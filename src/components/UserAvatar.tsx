@@ -7,10 +7,12 @@ interface UserAvatarProps {
   name?: string | null;
   size?: number;
   className?: string;
+  /** Enquanto o perfil não foi resolvido, mostramos as iniciais em vez do avatar padrão. */
+  pending?: boolean;
 }
 
-export const UserAvatar: React.FC<UserAvatarProps> = ({ avatarId, avatarUrl, name, size = 40, className = "" }) => {
-  const avatar = avatarId ? getAvatarById(avatarId) : null;
+export const UserAvatar: React.FC<UserAvatarProps> = ({ avatarId, avatarUrl, name, size = 40, className = "", pending = false }) => {
+  const avatar = avatarId && !pending ? getAvatarById(avatarId) : null;
   const photoSrc = avatarUrl && avatarUrl.trim() ? avatarUrl : null;
   const initials = (name || "U")
     .trim()
@@ -27,15 +29,30 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({ avatarId, avatarUrl, nam
       title={name || "Perfil"}
     >
       {photoSrc ? (
-        <img src={photoSrc} alt={name || "Foto de perfil"} className="h-full w-full object-cover" />
+        <img
+          src={photoSrc}
+          alt={name || "Foto de perfil"}
+          width={size}
+          height={size}
+          decoding="async"
+          fetchPriority="high"
+          className="h-full w-full object-cover"
+        />
       ) : avatar ? (
-        <img src={avatar.src} alt={avatar.label} className="h-full w-full object-cover" />
+        <img
+          src={avatar.src}
+          alt={avatar.label}
+          width={size}
+          height={size}
+          decoding="async"
+          className="h-full w-full object-cover"
+        />
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-muted to-accent/70 text-sm font-extrabold text-foreground/80">
           {initials}
         </div>
       )}
-      {!photoSrc && (
+      {!photoSrc && !pending && (
         <span className="absolute bottom-0 right-0 rounded-tl-md bg-white/85 px-1 text-[10px] font-bold text-foreground">
           {initials}
         </span>
