@@ -24,6 +24,8 @@ import {
   Send,
   RotateCcw,
   X,
+  Paperclip,
+  FileText,
 } from "lucide-react";
 
 
