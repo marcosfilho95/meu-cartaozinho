@@ -817,8 +817,8 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                     ? "Transação para revisar"
                     : `${drafts.length} transações para revisar`}
                 </p>
-                <Button variant="ghost" size="sm" onClick={() => setStage("confirm")}>
-                  Voltar
+                <Button variant="ghost" size="sm" onClick={() => setStage("input")}>
+                  Voltar à conversa
                 </Button>
               </div>
 
