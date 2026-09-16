@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { DEFAULT_AVATAR_ID } from "@/data/avatars";
 import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
@@ -11,7 +11,8 @@ const PROFILE_AVATAR_URL_CACHE_KEY = "profiles:avatar_url_cache";
 const readCachedAvatarUrl = (userId: string): string => {
   try {
     const raw = localStorage.getItem(`${PROFILE_AVATAR_URL_CACHE_KEY}:${userId}`);
-    return raw || "";
+    if (raw) return raw;
+    return getStoredProfile(userId)?.avatar_url || "";
   } catch {
     return "";
   }
@@ -21,6 +22,12 @@ const writeCachedAvatarUrl = (userId: string, url: string) => {
   try {
     if (url) localStorage.setItem(`${PROFILE_AVATAR_URL_CACHE_KEY}:${userId}`, url);
     else localStorage.removeItem(`${PROFILE_AVATAR_URL_CACHE_KEY}:${userId}`);
+    const cached = getStoredProfile(userId);
+    setStoredProfile(userId, {
+      name: cached?.name ?? null,
+      avatar_id: cached?.avatar_id ?? null,
+      avatar_url: url || null,
+    });
   } catch {
     /* ignore */
   }
@@ -46,26 +53,28 @@ type HeaderProfile = {
   greeting: string;
   avatarId: string;
   avatarUrl: string;
+  /** false enquanto ainda não sabemos se o usuário tem foto (evita piscar o avatar padrão). */
+  resolved: boolean;
 };
 
 export const useUserHeaderProfile = (userId: string | null | undefined): HeaderProfile => {
   const [name, setName] = useState("");
-  const [avatarId, setAvatarIdState] = useState<string>(DEFAULT_AVATAR_ID);
+  const [avatarId, setAvatarIdState] = useState<string>("");
   const [avatarUrl, setAvatarUrl] = useState<string>("");
+  const [resolved, setResolved] = useState(false);
 
   useEffect(() => {
     if (!userId) return;
 
     const cached = getStoredProfile(userId);
     const localAvatar = getStoredAvatarId(userId);
+    const cachedUrl = readCachedAvatarUrl(userId);
 
-    if (cached?.name) {
-      setName(cached.name);
-    }
-    if (cached?.avatar_id || localAvatar) {
-      setAvatarIdState(cached?.avatar_id || localAvatar || DEFAULT_AVATAR_ID);
-    }
-    setAvatarUrl(readCachedAvatarUrl(userId));
+    if (cached?.name) setName(cached.name);
+    if (cached?.avatar_id || localAvatar) setAvatarIdState(cached?.avatar_id || localAvatar || "");
+    if (cachedUrl) setAvatarUrl(cachedUrl);
+    // Com cache válido já mostramos a foto certa de imediato.
+    if (cachedUrl || cached?.avatar_id || localAvatar) setResolved(true);
 
     let mounted = true;
     const loadProfile = async () => {
@@ -95,9 +104,10 @@ export const useUserHeaderProfile = (userId: string | null | undefined): HeaderP
       setName(resolvedName);
       setAvatarIdState(resolvedAvatar);
       setAvatarUrl(resolvedUrl);
+      setResolved(true);
       writeCachedAvatarUrl(userId, resolvedUrl);
       setStoredAvatarId(userId, resolvedAvatar);
-      setStoredProfile(userId, { name: resolvedName, avatar_id: resolvedAvatar });
+      setStoredProfile(userId, { name: resolvedName, avatar_id: resolvedAvatar, avatar_url: resolvedUrl || null });
     };
 
     loadProfile();
@@ -113,9 +123,8 @@ export const useUserHeaderProfile = (userId: string | null | undefined): HeaderP
       greeting: getGreeting(),
       avatarId,
       avatarUrl,
+      resolved,
     }),
-    [avatarId, avatarUrl, name],
+    [avatarId, avatarUrl, name, resolved],
   );
 };
-
-

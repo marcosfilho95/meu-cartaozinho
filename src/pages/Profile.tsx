@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
 import { getStoredProfile, setStoredProfile } from "@/lib/profileCache";
-import { writeCachedAvatarUrl } from "@/hooks/use-user-header-profile";
+import { readCachedAvatarUrl, writeCachedAvatarUrl } from "@/hooks/use-user-header-profile";
 import { Camera, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
@@ -69,13 +69,33 @@ const Profile: React.FC = () => {
         setName(cachedProfile.name || "");
         setAvatarId(cachedProfile.avatar_id || "");
       }
+      const cachedUrl = readCachedAvatarUrl(id);
+      if (cachedUrl) setAvatarUrl(cachedUrl);
       const localAvatar = getStoredAvatarId(id);
-      const { data: profile, error } = await supabase
+      const skipAvatarUrl = localStorage.getItem(PROFILE_AVATAR_URL_MISSING_KEY) === "1";
+      const profileSelect = skipAvatarUrl ? "name, avatar_id, username" : "name, avatar_id, username, avatar_url";
+      const { data: profileRow, error } = await supabase
         .from("profiles")
-        .select("name, avatar_id, username")
+        .select(profileSelect as "name, avatar_id, username")
         .eq("user_id", id)
         .maybeSingle();
-      if (error && isMissingAvatarColumnError(error)) {
+      const profile = profileRow as { name?: string; avatar_id?: string; username?: string; avatar_url?: string } | null;
+      if (error && isMissingAvatarUrlColumnError(error)) {
+        localStorage.setItem(PROFILE_AVATAR_URL_MISSING_KEY, "1");
+        const retry = await supabase
+          .from("profiles")
+          .select("name, avatar_id, username")
+          .eq("user_id", id)
+          .maybeSingle();
+        setName(retry.data?.name || "");
+        const retryUsername = ((retry.data as any)?.username || "").toLowerCase();
+        setUsername(retryUsername);
+        setInitialUsername(retryUsername);
+        const retryAvatar = retry.data?.avatar_id || localAvatar || DEFAULT_AVATAR_ID;
+        setAvatarId(retryAvatar);
+        setStoredAvatarId(id, retryAvatar);
+        setStoredProfile(id, { name: retry.data?.name || "", avatar_id: retryAvatar, avatar_url: cachedUrl || null });
+      } else if (error && isMissingAvatarColumnError(error)) {
         localStorage.setItem(PROFILE_AVATAR_COLUMN_MISSING_KEY, "1");
         const fallback = await supabase.from("profiles").select("name").eq("user_id", id).maybeSingle();
         setName(fallback.data?.name || "");
@@ -89,20 +109,12 @@ const Profile: React.FC = () => {
         const resolvedAvatar = profile?.avatar_id || localAvatar || DEFAULT_AVATAR_ID;
         setAvatarId(resolvedAvatar);
         setStoredAvatarId(id, resolvedAvatar);
-        setStoredProfile(id, { name: profile?.name || "", avatar_id: resolvedAvatar });
-      }
-
-      const { data: urlRow, error: urlErr } = await supabase
-        .from("profiles" as any)
-        .select("avatar_url")
-        .eq("user_id", id)
-        .maybeSingle();
-      if (!urlErr) {
-        const loadedUrl = (urlRow as any)?.avatar_url || "";
-        setAvatarUrl(loadedUrl);
-        writeCachedAvatarUrl(id, loadedUrl);
-      } else if (isMissingAvatarUrlColumnError(urlErr as any)) {
-        localStorage.setItem(PROFILE_AVATAR_URL_MISSING_KEY, "1");
+        const loadedUrl = skipAvatarUrl ? cachedUrl : ((profile as any)?.avatar_url || "");
+        if (!skipAvatarUrl) {
+          setAvatarUrl(loadedUrl);
+          writeCachedAvatarUrl(id, loadedUrl);
+        }
+        setStoredProfile(id, { name: profile?.name || "", avatar_id: resolvedAvatar, avatar_url: loadedUrl || null });
       }
     });
   }, []);

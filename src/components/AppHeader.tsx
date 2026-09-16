@@ -15,6 +15,7 @@ interface AppHeaderProps {
   userName?: string;
   avatarId?: string | null;
   avatarUrl?: string | null;
+  avatarPending?: boolean;
   showBack?: boolean;
   backTo?: string;
   preferHistoryBack?: boolean;
@@ -36,6 +37,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   userName,
   avatarId,
   avatarUrl,
+  avatarPending = false,
   showBack = false,
   backTo = "/",
   preferHistoryBack = false,
@@ -115,7 +117,13 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             onClick={() => navigate("/perfil")}
             className="flex-shrink-0 rounded-full transition-transform hover:scale-105"
           >
-            <UserAvatar avatarId={avatarId ?? undefined} avatarUrl={avatarUrl ?? undefined} name={resolvedUserName} size={50} />
+            <UserAvatar
+              avatarId={avatarId ?? undefined}
+              avatarUrl={avatarUrl ?? undefined}
+              name={resolvedUserName}
+              size={50}
+              pending={avatarPending}
+            />
           </button>
           <div className="min-w-0">
             {greetingLine && (
