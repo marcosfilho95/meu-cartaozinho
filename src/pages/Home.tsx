@@ -116,6 +116,14 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
         netWorth: calculateNetWorth(accountsRes.data || [], goalsRes.data || []),
         card: cardTotals[selectedMonth] || emptyCardTotal(selectedMonth),
         spendingGoal: financialPlan.spendingLimit,
+        goals: ((goalsRes.data || []) as Array<{ id: string; name: string; goal_type?: string | null; target_amount: number; current_amount: number; is_completed?: boolean }>)
+          .filter((goal) => !goal.is_completed)
+          .map((goal) => {
+            const saved = Math.max(Number(goal.current_amount) || 0, 0);
+            const target = Math.max(Number(goal.target_amount) || 0, 0);
+            return { id: goal.id, name: goal.name, goal_type: goal.goal_type, saved, target, progress: target > 0 ? Math.min((saved / target) * 100, 100) : 0 };
+          })
+          .sort((a, b) => (b.saved - a.saved) || (b.progress - a.progress) || a.name.localeCompare(b.name, "pt-BR")),
       };
       setData(nextData);
       setFinanceViewCache(`home:${userId}:${selectedMonth}`, nextData);
