@@ -50,6 +50,7 @@ import {
   parseDeterministicTransactions,
   type SmartParsedTransaction,
 } from "@/lib/finance/smartInputParser";
+import { findMemoryMatch, shiftDateToMonth, type MemoryTransaction } from "@/lib/finance/smartMemory";
 import { emitFinanceSync } from "@/lib/financeSyncBus";
 import { useVoiceDictation } from "@/hooks/use-voice-dictation";
 import { useSmartChat } from "@/hooks/use-smart-chat";
