@@ -390,20 +390,32 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
 
     document.addEventListener("paste", onPaste);
     return () => document.removeEventListener("paste", onPaste);
-  }, [drafts.length, handleImagePick, open]);
+  }, [drafts.length, handleDocumentPick, open]);
 
   const runParse = async () => {
     const message = text.trim();
     const image = imageDataUrl;
-    const mode = image ? "image" : "text";
-    if (!message && !image) return;
+    const file = attachment;
+    const mode = image ? "image" : file ? "paste" : "text";
+    if (!message && !image && !file) return;
+    const combinedText = file
+      ? `${message ? `${message}\n\n` : ""}Conteúdo do arquivo ${file.name}:\n${file.text}`
+      : message;
     setLoading(true);
-    void chat.append("user", image ? `${message || "Print enviado"} (imagem anexada)` : message);
+    void chat.append(
+      "user",
+      image
+        ? `${message || "Print enviado"} (imagem anexada)`
+        : file
+          ? `${message || "Arquivo enviado"} (${file.name})`
+          : message,
+    );
     setText("");
     setImageDataUrl(null);
+    setAttachment(null);
     try {
       const payload: any = { mode };
-      if (message) payload.text = message;
+      if (combinedText) payload.text = combinedText;
       if (image) payload.imageDataUrl = image;
       const categoryById = new Map(categories.map((category) => [category.id, category]));
       payload.categories = categories.map((category) => ({
