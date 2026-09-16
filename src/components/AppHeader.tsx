@@ -15,6 +15,7 @@ interface AppHeaderProps {
   userName?: string;
   avatarId?: string | null;
   avatarUrl?: string | null;
+  avatarPending?: boolean;
   showBack?: boolean;
   backTo?: string;
   preferHistoryBack?: boolean;
