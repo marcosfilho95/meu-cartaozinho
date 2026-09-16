@@ -110,6 +110,33 @@ const detectFixedNature = (
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
+const todayIso = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+};
+
+/** Sempre devolve uma data YYYY-MM-DD válida (o campo de data só aceita esse formato). */
+const normalizeDraftDate = (value: unknown): string => {
+  const raw = String(value ?? "").trim();
+  let year: number, month: number, day: number;
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(raw);
+  const br = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/.exec(raw);
+  if (iso) {
+    [year, month, day] = [Number(iso[1]), Number(iso[2]), Number(iso[3])];
+  } else if (br) {
+    const rawYear = Number(br[3]);
+    [year, month, day] = [rawYear < 100 ? 2000 + rawYear : rawYear, Number(br[2]), Number(br[1])];
+  } else {
+    return todayIso();
+  }
+  if (year < 1900 || year > 2200 || month < 1 || month > 12 || day < 1 || day > 31) return todayIso();
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+};
+
+/** Reconhece confirmações do usuário ("sim", "pode lançar", "está certo"). */
+const CONFIRM_PATTERN = /^(sim|isso|isso ai|ok|okay|beleza|blz|certo|ta certo|esta certo|tudo certo|confirma(r)?|confirmado|pode(r)? (lancar|salvar|confirmar)?|lanca(r)?|salva(r)?|manda|vai|perfeito|correto|positivo|👍|✅)\b/;
+const isConfirmation = (value: string) => CONFIRM_PATTERN.test(normalizeText(value).replace(/[.!,]/g, "").trim());
+
 const fileToDataUrl = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
