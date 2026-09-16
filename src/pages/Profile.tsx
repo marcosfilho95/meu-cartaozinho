@@ -73,11 +73,13 @@ const Profile: React.FC = () => {
       if (cachedUrl) setAvatarUrl(cachedUrl);
       const localAvatar = getStoredAvatarId(id);
       const skipAvatarUrl = localStorage.getItem(PROFILE_AVATAR_URL_MISSING_KEY) === "1";
-      const { data: profile, error } = await supabase
+      const profileSelect = skipAvatarUrl ? "name, avatar_id, username" : "name, avatar_id, username, avatar_url";
+      const { data: profileRow, error } = await supabase
         .from("profiles")
-        .select(skipAvatarUrl ? "name, avatar_id, username" : "name, avatar_id, username, avatar_url")
+        .select(profileSelect as "name, avatar_id, username")
         .eq("user_id", id)
         .maybeSingle();
+      const profile = profileRow as { name?: string; avatar_id?: string; username?: string; avatar_url?: string } | null;
       if (error && isMissingAvatarUrlColumnError(error)) {
         localStorage.setItem(PROFILE_AVATAR_URL_MISSING_KEY, "1");
         const retry = await supabase
