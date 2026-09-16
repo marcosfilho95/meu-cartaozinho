@@ -138,6 +138,60 @@ const resolveFallbackAccountId = async (userId: string) => {
 };
 
 /**
+ * Procura um lançamento equivalente já existente no mês (mesma recorrência ou
+ * mesmo nome/valor) para evitar duplicar quando a conta fixa foi criada antes
+ * de existir o external_id estável.
+ */
+const findEquivalentTransactionId = async (
+  userId: string,
+  bill: FixedBillPreview,
+  monthKey: string,
+  externalId: string,
+) => {
+  const monthStart = `${monthKey}-01`;
+  const monthEnd = `${monthKey}-${pad(daysInMonth(monthKey))}`;
+
+  const { data: byExternal, error: externalError } = await supabase
+    .from("transactions")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("external_id", externalId)
+    .is("deleted_at", null)
+    .limit(1);
+  if (externalError) throw externalError;
+  if (byExternal?.[0]?.id) return byExternal[0].id;
+
+  const { data: candidates, error: candidatesError } = await supabase
+    .from("transactions")
+    .select("id, amount, source, recurrence_id, external_id")
+    .eq("user_id", userId)
+    .eq("type", bill.kind)
+    .gte("transaction_date", monthStart)
+    .lte("transaction_date", monthEnd)
+    .is("deleted_at", null)
+    .limit(200);
+  if (candidatesError) throw candidatesError;
+
+  const match = (candidates || []).find((row) => {
+    if (row.external_id && row.external_id !== externalId) return false;
+    const sameAmount = Math.abs(Number(row.amount || 0) - bill.amount) < 0.005;
+    if (!sameAmount) return false;
+    if (bill.recurrenceId && row.recurrence_id === bill.recurrenceId) return true;
+    return (row.source || "").trim().toLowerCase() === bill.name.trim().toLowerCase();
+  });
+  if (!match) return null;
+
+  // Adota o lançamento existente marcando o external_id estável.
+  const { error: adoptError } = await supabase
+    .from("transactions")
+    .update({ external_id: externalId, recurrence_id: bill.recurrenceId })
+    .eq("id", match.id)
+    .eq("user_id", userId);
+  if (adoptError) throw adoptError;
+  return match.id;
+};
+
+/**
  * Lança automaticamente as contas fixas cuja data de vencimento já chegou,
  * sem depender do fechamento mensal. Idempotente pelo external_id.
  */
@@ -162,16 +216,7 @@ export const postDueFixedBillsForMonth = async (userId: string, monthKey: string
     if (!accountId) continue;
 
     const externalId = `fixed_bill:${bill.id}`;
-    const { data: existingRows, error: existingError } = await supabase
-      .from("transactions")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("external_id", externalId)
-      .is("deleted_at", null)
-      .limit(1);
-    if (existingError) throw existingError;
-
-    let transactionId = existingRows?.[0]?.id;
+    let transactionId = await findEquivalentTransactionId(userId, bill, monthKey, externalId);
     if (!transactionId) {
       const { data: inserted, error } = await supabase
         .from("transactions")
@@ -271,16 +316,7 @@ export const finalizeFixedBillsForMonth = async (
     }
 
     const externalId = `fixed_bill:${bill.id}`;
-    const { data: existingRows, error: existingError } = await supabase
-      .from("transactions")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("external_id", externalId)
-      .is("deleted_at", null)
-      .limit(1);
-    if (existingError) throw existingError;
-
-    let transactionId = existingRows?.[0]?.id;
+    let transactionId = await findEquivalentTransactionId(userId, bill, monthKey, externalId);
     if (!transactionId) {
       const { data: created, error } = await supabase
         .from("transactions")
