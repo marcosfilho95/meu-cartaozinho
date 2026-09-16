@@ -848,6 +848,17 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                     </Button>
                     <Button
                       type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 rounded-full"
+                      disabled={attachmentLoading}
+                      onClick={() => docInputRef.current?.click()}
+                      aria-label="Anexar arquivo do banco (PDF, CSV, XML, OFX, Excel)"
+                    >
+                      {attachmentLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                    </Button>
+                    <Button
+                      type="button"
                       variant={voice.recording ? "destructive" : "ghost"}
                       size="icon"
                       className="h-9 w-9 rounded-full"
