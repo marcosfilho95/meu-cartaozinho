@@ -24,6 +24,8 @@ import {
   Send,
   RotateCcw,
   X,
+  Paperclip,
+  FileText,
 } from "lucide-react";
 
 
@@ -239,7 +241,10 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
   const [categories, setCategories] = useState<SmartCategoryOption[]>([]);
   const [classificationHistory, setClassificationHistory] = useState<SmartClassificationHistory[]>([]);
   const [memoryHistory, setMemoryHistory] = useState<MemoryTransaction[]>([]);
+  const [attachment, setAttachment] = useState<{ name: string; text: string } | null>(null);
+  const [attachmentLoading, setAttachmentLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const docInputRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chat = useSmartChat(userId, open);
@@ -328,38 +333,91 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     }
   }, []);
 
+  const handleDocumentPick = useCallback(async (file: File | undefined) => {
+    if (!file) return false;
+    if (file.type.startsWith("image/")) return handleImagePick(file);
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error("Arquivo muito grande (máx. 15 MB).");
+      return false;
+    }
+    setAttachmentLoading(true);
+    try {
+      const { readFileAsText, isPdfTextSufficient, renderPdfPagesToImages } = await import("@/lib/finance/imports");
+      const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+      let extracted = "";
+      try {
+        extracted = await readFileAsText(file);
+      } catch {
+        extracted = "";
+      }
+
+      if (isPdf && !isPdfTextSufficient(extracted)) {
+        // PDF escaneado: a IA lê a primeira página como imagem.
+        const pages = await renderPdfPagesToImages(file);
+        if (pages.length > 0) {
+          setImageDataUrl(pages[0].dataUrl);
+          setAttachment(null);
+          toast.success(`${file.name} anexado como imagem (documento escaneado).`);
+          return true;
+        }
+      }
+
+      const cleaned = extracted.replace(/\u0000/g, "").trim();
+      if (!cleaned) {
+        toast.error("Não consegui ler o conteúdo desse arquivo.");
+        return false;
+      }
+      setAttachment({ name: file.name, text: cleaned.slice(0, 60000) });
+      toast.success(`${file.name} anexado. Envie na conversa quando estiver pronto.`);
+      return true;
+    } catch {
+      toast.error("Não foi possível abrir esse arquivo.");
+      return false;
+    } finally {
+      setAttachmentLoading(false);
+    }
+  }, [handleImagePick]);
+
   useEffect(() => {
     if (!open || drafts.length > 0) return;
 
     const onPaste = (event: ClipboardEvent) => {
-      const imageItem = Array.from(event.clipboardData?.items || [])
-        .find((item) => item.kind === "file" && item.type.startsWith("image/"));
-      const imageFile = imageItem?.getAsFile();
-      if (!imageFile) return;
+      const fileItem = Array.from(event.clipboardData?.items || []).find((item) => item.kind === "file");
+      const pastedFile = fileItem?.getAsFile();
+      if (!pastedFile) return;
 
       event.preventDefault();
-      void handleImagePick(imageFile).then((accepted) => {
-        if (!accepted) return;
-        toast.success("Print colado! Envie na conversa quando estiver pronto.");
-      });
+      void handleDocumentPick(pastedFile);
     };
 
     document.addEventListener("paste", onPaste);
     return () => document.removeEventListener("paste", onPaste);
-  }, [drafts.length, handleImagePick, open]);
+  }, [drafts.length, handleDocumentPick, open]);
 
   const runParse = async () => {
     const message = text.trim();
     const image = imageDataUrl;
-    const mode = image ? "image" : "text";
-    if (!message && !image) return;
+    const file = attachment;
+    const mode = image ? "image" : file ? "paste" : "text";
+    if (!message && !image && !file) return;
+    const combinedText = file
+      ? `${message ? `${message}\n\n` : ""}Conteúdo do arquivo ${file.name}:\n${file.text}`
+      : message;
     setLoading(true);
-    void chat.append("user", image ? `${message || "Print enviado"} (imagem anexada)` : message);
+    void chat.append(
+      "user",
+      image
+        ? `${message || "Print enviado"} (imagem anexada)`
+        : file
+          ? `${message || "Arquivo enviado"} (${file.name})`
+          : message,
+    );
     setText("");
     setImageDataUrl(null);
+    setAttachment(null);
     try {
       const payload: any = { mode };
-      if (message) payload.text = message;
+      if (combinedText) payload.text = combinedText;
       if (image) payload.imageDataUrl = image;
       const categoryById = new Map(categories.map((category) => [category.id, category]));
       payload.categories = categories.map((category) => ({
@@ -624,9 +682,9 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
   };
 
   const canParse = useMemo(() => {
-    if (loading || optionsLoading) return false;
-    return text.trim().length > 2 || !!imageDataUrl;
-  }, [text, imageDataUrl, loading, optionsLoading]);
+    if (loading || optionsLoading || attachmentLoading) return false;
+    return text.trim().length > 2 || !!imageDataUrl || !!attachment;
+  }, [text, imageDataUrl, attachment, attachmentLoading, loading, optionsLoading]);
 
   useEffect(() => {
     if (stage === "input") messagesEndRef.current?.scrollIntoView({ block: "end" });
@@ -721,6 +779,33 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                 onChange={(e) => handleImagePick(e.target.files?.[0])}
               />
 
+              <input
+                ref={docInputRef}
+                type="file"
+                accept=".pdf,.csv,.txt,.ofx,.qfx,.xml,.xls,.xlsx,.xlsm,image/*,application/pdf,text/csv,text/plain,text/xml,application/xml"
+                hidden
+                onChange={(e) => {
+                  void handleDocumentPick(e.target.files?.[0]);
+                  e.currentTarget.value = "";
+                }}
+              />
+
+              {attachment && (
+                <div className="flex w-fit max-w-full items-center gap-2 rounded-xl border bg-muted/50 px-3 py-2">
+                  <FileText className="h-4 w-4 shrink-0 text-primary" />
+                  <span className="truncate text-xs font-medium">{attachment.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setAttachment(null)}
+                    aria-label="Remover arquivo"
+                    className="rounded-full p-1 text-muted-foreground hover:text-destructive"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+
+
               {imageDataUrl && (
                 <div className="relative w-fit overflow-hidden rounded-xl border bg-muted">
                   <img src={imageDataUrl} alt="Comprovante" className="max-h-32 object-contain" />
@@ -765,6 +850,17 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                     </Button>
                     <Button
                       type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 rounded-full"
+                      disabled={attachmentLoading}
+                      onClick={() => docInputRef.current?.click()}
+                      aria-label="Anexar arquivo do banco (PDF, CSV, XML, OFX, Excel)"
+                    >
+                      {attachmentLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                    </Button>
+                    <Button
+                      type="button"
                       variant={voice.recording ? "destructive" : "ghost"}
                       size="icon"
                       className="h-9 w-9 rounded-full"
@@ -805,7 +901,8 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                 </div>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Dica: cole um print com Ctrl + V aqui. Cada linha vira um lançamento separado.
+                Dica: cole um print com Ctrl + V ou anexe o arquivo do banco (PDF, CSV, XML, OFX, Excel). Cada linha vira um
+                lançamento separado.
               </p>
             </div>
 
