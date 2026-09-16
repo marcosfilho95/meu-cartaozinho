@@ -1,8 +1,7 @@
-import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUpRight, CreditCard, LineChart as LineChartIcon, PiggyBank, Target, Wallet } from "lucide-react";
 
-const MonthlyEvolutionChart = lazy(() => import("@/components/finance/MonthlyEvolutionChart"));
 
 
 import { AppHeader } from "@/components/AppHeader";
@@ -27,7 +26,7 @@ import { getMonthlySpendingGoal } from "@/lib/financeBudget";
 import { buildFinancialPlan, fetchFinancialRuleVersions } from "@/lib/financialRules";
 import { monthTitle, summarizeMonth, type MonthSummary } from "@/lib/financeInsights";
 import { calculateNetWorth, calculateReserveMovement, type GoalMovement } from "@/lib/financeOverview";
-import { fetchFinanceTransactions, getLastMonthKeys, monthKey, type FinanceTx } from "@/lib/financeShared";
+import { fetchFinanceTransactions, monthKey, type FinanceTx } from "@/lib/financeShared";
 import { getFinanceViewCache, setFinanceViewCache } from "@/lib/financeViewCache";
 import { getErrorMessage, untypedSupabase } from "@/lib/supabaseUntyped";
 import { cn } from "@/lib/utils";
