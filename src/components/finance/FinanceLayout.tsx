@@ -26,6 +26,7 @@ export const FinanceLayout: React.FC<FinanceLayoutProps> = ({ userId }) => {
         userName={headerProfile.firstName}
         avatarId={headerProfile.avatarId}
         avatarUrl={headerProfile.avatarUrl}
+        avatarPending={!headerProfile.resolved}
         showBack
         backTo="/"
       />

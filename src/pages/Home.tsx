@@ -155,7 +155,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
 
   return (
     <div className="min-h-screen bg-background pb-16">
-      <AppHeader title="Meu Cartãozinho" greeting={headerProfile.greeting} userName={headerProfile.firstName} avatarId={headerProfile.avatarId} avatarUrl={headerProfile.avatarUrl} />
+      <AppHeader title="Meu Cartãozinho" greeting={headerProfile.greeting} userName={headerProfile.firstName} avatarId={headerProfile.avatarId} avatarUrl={headerProfile.avatarUrl} avatarPending={!headerProfile.resolved} />
 
       <main className="mx-auto max-w-6xl space-y-6 px-4 pt-6 animate-fade-in sm:px-6">
         <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
