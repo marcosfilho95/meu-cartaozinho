@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowUpRight, CreditCard, LineChart as LineChartIcon, PiggyBank, Plus, Target, Wallet } from "lucide-react";
+import { ArrowUpRight, CreditCard, LineChart as LineChartIcon, PiggyBank, Target, Wallet } from "lucide-react";
 
 const MonthlyEvolutionChart = lazy(() => import("@/components/finance/MonthlyEvolutionChart"));
 
@@ -10,6 +10,9 @@ import { FinanceSyncLoader } from "@/components/finance/FinanceSyncLoader";
 import { MonthNavigator } from "@/components/MonthNavigator";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { AppFooter } from "@/components/AppFooter";
+import { getGoalIcon } from "@/components/finance/goalVisuals";
 import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/constants";
@@ -34,6 +37,15 @@ interface HomeProps {
   userId: string;
 }
 
+type HomeGoal = {
+  id: string;
+  name: string;
+  goal_type?: string | null;
+  saved: number;
+  target: number;
+  progress: number;
+};
+
 type HomeData = {
   transactions: FinanceTx[];
   summary: MonthSummary;
@@ -41,6 +53,7 @@ type HomeData = {
   netWorth: ReturnType<typeof calculateNetWorth>;
   card: CartaozinhoMonthTotal;
   spendingGoal: number;
+  goals: HomeGoal[];
 };
 
 const emptyCardTotal = (refMonth: string): CartaozinhoMonthTotal => ({ refMonth, total: 0, installments: 0, people: 0 });
@@ -58,6 +71,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
     netWorth: { assets: 0, goals: 0, debts: 0, total: 0 },
     card: emptyCardTotal(selectedMonth),
     spendingGoal: 0,
+    goals: [],
   }));
 
   const load = useCallback(async () => {
@@ -77,7 +91,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
 
       const [accountsRes, goalsRes, goalTxRes, budgetsRes, transactions, cardTotals, financialRules] = await Promise.all([
         supabase.from("accounts").select("type, current_balance, include_in_net_worth").eq("user_id", userId).eq("is_active", true),
-        supabase.from("goals").select("current_amount").eq("user_id", userId),
+        supabase.from("goals").select("id, name, goal_type, target_amount, current_amount, is_completed").eq("user_id", userId),
         untypedSupabase.from("goal_transactions").select("amount, type, created_at").eq("user_id", userId).limit(1000),
         supabase.from("budgets").select("category_id, limit_amount").eq("user_id", userId).eq("ref_month", selectedMonth),
         fetchFinanceTransactions(userId, 24),
@@ -105,6 +119,14 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
         netWorth: calculateNetWorth(accountsRes.data || [], goalsRes.data || []),
         card: cardTotals[selectedMonth] || emptyCardTotal(selectedMonth),
         spendingGoal: financialPlan.spendingLimit,
+        goals: ((goalsRes.data || []) as Array<{ id: string; name: string; goal_type?: string | null; target_amount: number; current_amount: number; is_completed?: boolean }>)
+          .filter((goal) => !goal.is_completed)
+          .map((goal) => {
+            const saved = Math.max(Number(goal.current_amount) || 0, 0);
+            const target = Math.max(Number(goal.target_amount) || 0, 0);
+            return { id: goal.id, name: goal.name, goal_type: goal.goal_type, saved, target, progress: target > 0 ? Math.min((saved / target) * 100, 100) : 0 };
+          })
+          .sort((a, b) => (b.saved - a.saved) || (b.progress - a.progress) || a.name.localeCompare(b.name, "pt-BR")),
       };
       setData(nextData);
       setFinanceViewCache(`home:${userId}:${selectedMonth}`, nextData);
@@ -217,12 +239,58 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
           </button>
         </section>
 
-        <Card className="border-border/70 shadow-card"><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><PiggyBank className="h-5 w-5" /></div><div><h2 className="font-heading font-bold">Seus planos</h2><p className="text-xs text-muted-foreground">{data.netWorth.goals > 0 ? `${formatCurrency(data.netWorth.goals)} já guardados em cofrinhos.` : "Crie uma viagem, reserva ou compra futura e acompanhe o progresso."}</p></div></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => navigate("/financas/cofrinhos")}><PiggyBank className="mr-2 h-4 w-4" /> Ver planos</Button><Button onClick={() => navigate(`/financas/fechamento?mes=${selectedMonth}`)}><Plus className="mr-2 h-4 w-4" /> Revisar mês</Button></div></CardContent></Card>
+        <Card className="border-border/70 shadow-card">
+          <CardContent className="flex flex-col p-5">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h2 className="font-heading text-lg font-bold">Planos e objetivos</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">Veja o progresso sem misturar com seus gastos</p>
+              </div>
+              <PiggyBank className="h-4 w-4 shrink-0 text-primary" />
+            </div>
 
-        <p className="pb-3 text-center text-[11px] text-muted-foreground">Patrimônio estimado: <span className={cn("font-semibold", data.netWorth.total >= 0 ? "text-foreground" : "text-destructive")}>{formatCurrency(data.netWorth.total)}</span></p>
+            {data.goals.length ? (
+              <div className="mt-4 space-y-3">
+                {data.goals.slice(0, 4).map((goal) => {
+                  const GoalIcon = getGoalIcon({ name: goal.name, goal_type: goal.goal_type });
+                  return (
+                    <div key={goal.id}>
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className="flex min-w-0 items-center gap-1.5 truncate font-medium"><GoalIcon className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />{goal.name}</span>
+                        {goal.target > 0 ? <strong className="text-primary">{goal.progress.toFixed(0)}%</strong> : <strong className="text-primary">{formatCurrency(goal.saved)}</strong>}
+                      </div>
+                      {goal.target > 0 && (
+                        <>
+                          <Progress value={goal.progress} className="mt-1.5 h-2" />
+                          <div className="mt-1 flex justify-between gap-2 text-[10px] text-muted-foreground">
+                            <span>{formatCurrency(goal.saved)} guardados</span>
+                            <span>Faltam {formatCurrency(Math.max(goal.target - goal.saved, 0))}</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-xl border border-dashed p-5 text-center">
+                <p className="text-sm font-medium">Nenhum plano criado</p>
+                <p className="mt-1 text-xs text-muted-foreground">Crie uma viagem, reserva ou compra futura e acompanhe o progresso.</p>
+              </div>
+            )}
+
+            <Button className="mt-5 w-full" onClick={() => navigate("/financas/cofrinhos")}>
+              {data.goals.length ? "Organizar meus planos" : "Criar primeiro plano"} <ArrowUpRight className="ml-2 h-4 w-4" />
+            </Button>
+          </CardContent>
+        </Card>
+
+        <p className="text-center text-[11px] text-muted-foreground">Patrimônio estimado: <span className={cn("font-semibold", data.netWorth.total >= 0 ? "text-foreground" : "text-destructive")}>{formatCurrency(data.netWorth.total)}</span></p>
           </>
         )}
       </main>
+
+      <AppFooter plain className="pb-2 pt-4" />
     </div>
   );
 };

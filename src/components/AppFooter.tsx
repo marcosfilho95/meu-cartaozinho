@@ -2,7 +2,7 @@
 import { Github, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const REPO_URL = "https://github.com/marcosfilho95/meu-Cartãozinho";
+const REPO_URL = "https://github.com/marcosfilho95/meu-cartaozinho";
 
 interface AppFooterProps {
   useContainer?: boolean;
