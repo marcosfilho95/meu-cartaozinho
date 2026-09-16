@@ -421,21 +421,34 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
           is_fixed: t.type !== "transfer" && detectFixedNature(String(t.description || ""), String(payload.text || ""), t.type),
           learned_from_history: Boolean(
             (previousCategoryExists && !hasExplicitCategory && (!suggestedCategoryId || isGenericSmartCategoryId(categories, suggestedCategoryId))) ||
-            (!t.account_hint && !institution && previousAccountExists)
+            (!t.account_hint && !institution && previousAccountExists) ||
+            (memory && (!account_id || !category_id || Number(t.amount) <= 0))
           ),
         };
       });
       setDrafts(newDrafts);
-      setStage("confirm");
+      setStage("input");
       const missing = newDrafts.filter((d) => !d.account_id).length;
-      const resumo = newDrafts
-        .map((d) => `• ${formatDraftDate(d.date)} · ${d.description} · ${d.type === "income" ? "+" : "-"}${formatCurrency(d.amount)}${d.is_fixed ? " (todo mês)" : ""}`)
-        .join("\n");
+      const reused = newDrafts.filter((d) => d.learned_from_history).length;
+      const tabela = [
+        "[TABELA]",
+        "Data|Descrição|Categoria|Conta|Valor",
+        ...newDrafts.map((d) => [
+          formatDraftDate(d.date),
+          `${d.description}${d.is_fixed ? " (todo mês)" : ""}`,
+          categories.find((c) => c.id === d.category_id)?.name || d.category_hint || "Sem categoria",
+          accounts.find((a) => a.id === d.account_id)?.name || "Escolher conta",
+          `${d.type === "income" ? "+" : d.type === "expense" ? "-" : ""}${formatCurrency(d.amount)}`,
+        ].join("|")),
+      ].join("\n");
+      const observacao = reused
+        ? `\nUsei o último lançamento parecido como base${reused > 1 ? ` em ${reused} itens` : ""} e atualizei a data para o mês atual.`
+        : "";
       void chat.append(
         "assistant",
         missing
-          ? `Entendi assim:\n${resumo}\n\nFaltou escolher a conta de ${missing === 1 ? "um lançamento" : `${missing} lançamentos`}. Confira o resumo ao lado e ajuste antes de lançar.`
-          : `Entendi assim:\n${resumo}\n\nConfira o resumo e confirme para lançar.`,
+          ? `${tabela}\n${observacao}\nFaltou a conta de ${missing === 1 ? "um lançamento" : `${missing} lançamentos`}. Toque em “Está certo” para ajustar e lançar.`
+          : `${tabela}\n${observacao}\nEstá tudo certo? Se sim, é só confirmar que eu abro a tela de revisão para lançar.`,
       );
     } catch (err: any) {
       void chat.append("assistant", `Não consegui processar agora: ${err?.message || "erro desconhecido"}. Quer tentar de novo?`);
