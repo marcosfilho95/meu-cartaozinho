@@ -899,7 +899,8 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                 </div>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Dica: cole um print com Ctrl + V aqui. Cada linha vira um lançamento separado.
+                Dica: cole um print com Ctrl + V ou anexe o arquivo do banco (PDF, CSV, XML, OFX, Excel). Cada linha vira um
+                lançamento separado.
               </p>
             </div>
 
