@@ -206,6 +206,24 @@ Deno.serve(async (req) => {
       : "";
     const contextLine = `Data de hoje: ${today}. Moeda: BRL.${catalogContext}`;
 
+    if (mode === "chat") {
+      const message = String(body.message || "").trim().slice(0, 2000);
+      if (!message) throw new Error("Mensagem vazia");
+      const history = Array.isArray(body.history) ? body.history.slice(-8) : [];
+      const reply = await callChatGateway([
+        { role: "system", content: `${CHAT_PROMPT}\nData de hoje: ${today}.` },
+        ...history.flatMap((item: any) => {
+          const role = item?.role === "assistant" ? "assistant" : "user";
+          const content = String(item?.content || "").slice(0, 1500);
+          return content ? [{ role, content }] : [];
+        }),
+        { role: "user", content: message },
+      ]);
+      return new Response(JSON.stringify({ reply }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     let userContent: any;
 
     if (mode === "text" || mode === "paste") {
