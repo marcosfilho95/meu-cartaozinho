@@ -379,17 +379,40 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
             ? guessAccount(accounts, t.payment_method, t.type, institution)
             : previousAccountExists ? previous!.account_id : guessAccount(accounts, t.payment_method, t.type, institution);
         const role = t.role || (t.type === "transfer" ? "transfer" : t.type);
+
+        // Memória: reaproveita o último lançamento com o mesmo nome (valor, conta,
+        // categoria e dia) e traz a data para o mês atual quando o usuário não disser outro.
+        const memory = findMemoryMatch(
+          memoryHistory,
+          `${t.description || ""} ${payload.text || ""}`,
+          t.type,
+        );
+        const memoryAccountExists = Boolean(memory?.account_id && accounts.some((a) => a.id === memory.account_id));
+        const memoryCategoryExists = Boolean(memory?.category_id && categories.some((c) => c.id === memory.category_id));
+        const amount = Number(t.amount) > 0
+          ? Number(t.amount)
+          : memory?.amount ?? Number(t.amount);
+        let date = t.date;
+        if (!t.explicit_day && memory?.day && !t.explicit_month && !t.explicit_year) {
+          date = shiftDateToMonth(memory.day, new Date());
+        } else if (!t.explicit_month && !t.explicit_year && date < new Date().toISOString().slice(0, 7)) {
+          const day = Number(date.slice(8, 10)) || 1;
+          date = shiftDateToMonth(day, new Date());
+        }
+        const finalCategoryId = category_id || (memoryCategoryExists ? memory!.category_id! : "");
+        const finalAccountId = account_id || (memoryAccountExists ? memory!.account_id! : "");
+
         return {
           id: uid(),
           type: t.type,
           role,
-          amount: Number(t.amount),
+          amount,
           description: String(t.description),
-          date: t.date,
-          payment_method: t.payment_method || (previous?.payment_method as PaymentMethod | null) || null,
+          date,
+          payment_method: t.payment_method || (previous?.payment_method as PaymentMethod | null) || (memory?.payment_method as PaymentMethod | null) || null,
           category_hint: t.category_hint,
-          category_id,
-          account_id,
+          category_id: finalCategoryId,
+          account_id: finalAccountId,
           counterpart_account_id: t.type === "transfer" ? guessCounterpartAccount(accounts, account_id, role) : "",
           confidence: t.confidence ?? 0.7,
           transfer_direction: t.transfer_direction || null,
