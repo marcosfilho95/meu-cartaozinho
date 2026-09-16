@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { AppHeader } from "@/components/AppHeader";
+import { AppFooter } from "@/components/AppFooter";
 import { FinanceTopNav } from "@/components/finance/FinanceTopNav";
 import { FinanceBottomNav } from "@/components/finance/FinanceBottomNav";
 import { QuickTransactionFab } from "@/components/finance/QuickTransactionFab";
