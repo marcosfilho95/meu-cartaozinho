@@ -114,10 +114,6 @@ const Profile: React.FC = () => {
         }
         setStoredProfile(id, { name: profile?.name || "", avatar_id: resolvedAvatar, avatar_url: loadedUrl || null });
       }
-
-      if (error && !isMissingAvatarColumnError(error) && isMissingAvatarUrlColumnError(error)) {
-        localStorage.setItem(PROFILE_AVATAR_URL_MISSING_KEY, "1");
-      }
     });
   }, []);
 
