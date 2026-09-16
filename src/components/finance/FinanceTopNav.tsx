@@ -27,11 +27,11 @@ const PRIMARY_ITEMS = [
   { to: "/financas/fechamento", icon: ListChecks, label: "Revisão" },
   { to: "/financas/transacoes", icon: ArrowLeftRight, label: "Lançamentos" },
   { to: "/financas/cofrinhos", icon: PiggyBank, label: "Planos" },
-  { to: "/financas/investimentos", icon: TrendingUp, label: "Investimentos" },
 ];
 
-const MORE_ITEMS = [
-  { to: "/financas/recorrencias", icon: Repeat, label: "Despesas fixas" },
+export const FINANCE_MORE_ITEMS = [
+  { to: "/financas/investimentos", icon: TrendingUp, label: "Investimentos" },
+  { to: "/financas/recorrencias", icon: Repeat, label: "Fixas" },
   { to: "/financas/contas", icon: Wallet, label: "Contas" },
   { to: "/financas/categorias", icon: FolderOpen, label: "Categorias" },
   { to: "/financas/importacoes", icon: Upload, label: "Importação avançada" },
