@@ -117,7 +117,13 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             onClick={() => navigate("/perfil")}
             className="flex-shrink-0 rounded-full transition-transform hover:scale-105"
           >
-            <UserAvatar avatarId={avatarId ?? undefined} avatarUrl={avatarUrl ?? undefined} name={resolvedUserName} size={50} />
+            <UserAvatar
+              avatarId={avatarId ?? undefined}
+              avatarUrl={avatarUrl ?? undefined}
+              name={resolvedUserName}
+              size={50}
+              pending={avatarPending}
+            />
           </button>
           <div className="min-w-0">
             {greetingLine && (
