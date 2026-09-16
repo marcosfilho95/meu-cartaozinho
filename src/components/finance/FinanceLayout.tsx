@@ -35,6 +35,8 @@ export const FinanceLayout: React.FC<FinanceLayoutProps> = ({ userId }) => {
         <Outlet />
       </div>
 
+      <AppFooter plain className="pb-2 pt-0" />
+
       <FinanceBottomNav />
       {!location.pathname.startsWith("/financas/fechamento") && <QuickTransactionFab userId={userId} />}
     </div>
