@@ -215,7 +215,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
           .order("name"),
         supabase
           .from("transactions")
-          .select("source, type, category_id, account_id, payment_method, transaction_date, created_at")
+          .select("source, type, amount, category_id, account_id, payment_method, transaction_date, created_at")
           .eq("user_id", userId)
           .is("deleted_at", null)
           .not("category_id", "is", null)
