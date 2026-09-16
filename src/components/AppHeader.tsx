@@ -37,6 +37,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   userName,
   avatarId,
   avatarUrl,
+  avatarPending = false,
   showBack = false,
   backTo = "/",
   preferHistoryBack = false,
