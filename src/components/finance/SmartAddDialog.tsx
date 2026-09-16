@@ -777,6 +777,33 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                 onChange={(e) => handleImagePick(e.target.files?.[0])}
               />
 
+              <input
+                ref={docInputRef}
+                type="file"
+                accept=".pdf,.csv,.txt,.ofx,.qfx,.xml,.xls,.xlsx,.xlsm,image/*,application/pdf,text/csv,text/plain,text/xml,application/xml"
+                hidden
+                onChange={(e) => {
+                  void handleDocumentPick(e.target.files?.[0]);
+                  e.currentTarget.value = "";
+                }}
+              />
+
+              {attachment && (
+                <div className="flex w-fit max-w-full items-center gap-2 rounded-xl border bg-muted/50 px-3 py-2">
+                  <FileText className="h-4 w-4 shrink-0 text-primary" />
+                  <span className="truncate text-xs font-medium">{attachment.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setAttachment(null)}
+                    aria-label="Remover arquivo"
+                    className="rounded-full p-1 text-muted-foreground hover:text-destructive"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+
+
               {imageDataUrl && (
                 <div className="relative w-fit overflow-hidden rounded-xl border bg-muted">
                   <img src={imageDataUrl} alt="Comprovante" className="max-h-32 object-contain" />
