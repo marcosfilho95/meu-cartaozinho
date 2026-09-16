@@ -1,6 +1,8 @@
 export interface CachedProfile {
   name: string | null;
   avatar_id: string | null;
+  /** Foto do usuário: guardada para evitar o avatar padrão piscando na abertura. */
+  avatar_url?: string | null;
 }
 
 const keyFor = (userId: string) => `profile-cache:${userId}`;
@@ -13,6 +15,7 @@ export const getStoredProfile = (userId: string): CachedProfile | null => {
     return {
       name: typeof parsed.name === "string" ? parsed.name : null,
       avatar_id: typeof parsed.avatar_id === "string" ? parsed.avatar_id : null,
+      avatar_url: typeof parsed.avatar_url === "string" ? parsed.avatar_url : null,
     };
   } catch {
     return null;
