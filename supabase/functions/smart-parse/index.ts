@@ -175,7 +175,7 @@ async function callGateway(messages: any[]): Promise<ParsedTx[]> {
           : t.type === "transfer" ? "transfer" : t.type === "income" ? "income" : "expense",
         amount,
         description: String(t.description || "Lançamento financeiro").slice(0, 200),
-        date: typeof t.date === "string" ? t.date : new Date().toISOString().slice(0, 10),
+        date: normalizeIsoDate(t.date, new Date().toISOString().slice(0, 10)),
         payment_method: paymentMethod,
         category_hint: typeof t.category_hint === "string" ? t.category_hint.trim().slice(0, 80) || null : null,
         installments,
