@@ -166,6 +166,66 @@ const guessCounterpartAccount = (accounts: any[], sourceId: string, role: DraftT
   return candidates[0]?.id || "";
 };
 
+/** Mensagens do assistente podem trazer um bloco [TABELA] com colunas separadas por "|". */
+const AssistantMessage: React.FC<{ content: string }> = ({ content }) => {
+  const tableStart = content.indexOf("[TABELA]");
+  if (tableStart < 0) {
+    return <div className="whitespace-pre-line text-sm leading-relaxed text-foreground">{content}</div>;
+  }
+  const before = content.slice(0, tableStart).trim();
+  const rest = content.slice(tableStart + "[TABELA]".length).split("\n").map((line) => line.trim());
+  const rows: string[][] = [];
+  let index = 0;
+  while (index < rest.length && (rest[index] === "" || rest[index].includes("|"))) {
+    if (rest[index].includes("|")) rows.push(rest[index].split("|"));
+    index += 1;
+  }
+  const after = rest.slice(index).join("\n").trim();
+  const [head, ...body] = rows;
+
+  return (
+    <div className="space-y-2 text-sm leading-relaxed text-foreground">
+      {before && <p className="whitespace-pre-line">{before}</p>}
+      {head && (
+        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+          <table className="w-full text-left text-[11px]">
+            <thead className="bg-muted/60 text-[10px] uppercase tracking-wide text-muted-foreground">
+              <tr>
+                {head.map((cell, cellIndex) => (
+                  <th key={cell + cellIndex} className={cn("px-2.5 py-1.5", cellIndex === head.length - 1 && "text-right")}>
+                    {cell}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {body.map((row, rowIndex) => (
+                <tr key={rowIndex} className="border-t">
+                  {row.map((cell, cellIndex) => (
+                    <td
+                      key={cellIndex}
+                      className={cn(
+                        "px-2.5 py-1.5",
+                        cellIndex === 1 && "font-medium",
+                        cellIndex === row.length - 1
+                          ? cn("whitespace-nowrap text-right font-semibold", cell.startsWith("+") ? "text-success" : cell.startsWith("-") ? "text-destructive" : "text-primary")
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      {cell}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {after && <p className="whitespace-pre-line">{after}</p>}
+    </div>
+  );
+};
+
 export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) => {
   const queryClient = useQueryClient();
   const [text, setText] = useState("");
