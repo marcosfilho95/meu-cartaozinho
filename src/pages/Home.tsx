@@ -236,9 +236,53 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
           </button>
         </section>
 
-        <Card className="border-border/70 shadow-card"><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><PiggyBank className="h-5 w-5" /></div><div><h2 className="font-heading font-bold">Seus planos</h2><p className="text-xs text-muted-foreground">{data.netWorth.goals > 0 ? `${formatCurrency(data.netWorth.goals)} já guardados em cofrinhos.` : "Crie uma viagem, reserva ou compra futura e acompanhe o progresso."}</p></div></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => navigate("/financas/cofrinhos")}><PiggyBank className="mr-2 h-4 w-4" /> Ver planos</Button><Button onClick={() => navigate(`/financas/fechamento?mes=${selectedMonth}`)}><Plus className="mr-2 h-4 w-4" /> Revisar mês</Button></div></CardContent></Card>
+        <Card className="border-border/70 shadow-card">
+          <CardContent className="flex flex-col p-5">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h2 className="font-heading text-lg font-bold">Planos e objetivos</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">Veja o progresso sem misturar com seus gastos</p>
+              </div>
+              <PiggyBank className="h-4 w-4 shrink-0 text-primary" />
+            </div>
 
-        <p className="pb-3 text-center text-[11px] text-muted-foreground">Patrimônio estimado: <span className={cn("font-semibold", data.netWorth.total >= 0 ? "text-foreground" : "text-destructive")}>{formatCurrency(data.netWorth.total)}</span></p>
+            {data.goals.length ? (
+              <div className="mt-4 space-y-3">
+                {data.goals.slice(0, 4).map((goal) => {
+                  const GoalIcon = getGoalIcon({ name: goal.name, goal_type: goal.goal_type });
+                  return (
+                    <div key={goal.id}>
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className="flex min-w-0 items-center gap-1.5 truncate font-medium"><GoalIcon className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />{goal.name}</span>
+                        {goal.target > 0 ? <strong className="text-primary">{goal.progress.toFixed(0)}%</strong> : <strong className="text-primary">{formatCurrency(goal.saved)}</strong>}
+                      </div>
+                      {goal.target > 0 && (
+                        <>
+                          <Progress value={goal.progress} className="mt-1.5 h-2" />
+                          <div className="mt-1 flex justify-between gap-2 text-[10px] text-muted-foreground">
+                            <span>{formatCurrency(goal.saved)} guardados</span>
+                            <span>Faltam {formatCurrency(Math.max(goal.target - goal.saved, 0))}</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-xl border border-dashed p-5 text-center">
+                <p className="text-sm font-medium">Nenhum plano criado</p>
+                <p className="mt-1 text-xs text-muted-foreground">Crie uma viagem, reserva ou compra futura e acompanhe o progresso.</p>
+              </div>
+            )}
+
+            <Button className="mt-5 w-full" onClick={() => navigate("/financas/cofrinhos")}>
+              {data.goals.length ? "Organizar meus planos" : "Criar primeiro plano"} <ArrowUpRight className="ml-2 h-4 w-4" />
+            </Button>
+          </CardContent>
+        </Card>
+
+        <p className="text-center text-[11px] text-muted-foreground">Patrimônio estimado: <span className={cn("font-semibold", data.netWorth.total >= 0 ? "text-foreground" : "text-destructive")}>{formatCurrency(data.netWorth.total)}</span></p>
           </>
         )}
       </main>
