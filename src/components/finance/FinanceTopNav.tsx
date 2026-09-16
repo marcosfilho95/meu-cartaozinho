@@ -27,11 +27,11 @@ const PRIMARY_ITEMS = [
   { to: "/financas/fechamento", icon: ListChecks, label: "Revisão" },
   { to: "/financas/transacoes", icon: ArrowLeftRight, label: "Lançamentos" },
   { to: "/financas/cofrinhos", icon: PiggyBank, label: "Planos" },
-  { to: "/financas/investimentos", icon: TrendingUp, label: "Investimentos" },
 ];
 
-const MORE_ITEMS = [
-  { to: "/financas/recorrencias", icon: Repeat, label: "Despesas fixas" },
+export const FINANCE_MORE_ITEMS = [
+  { to: "/financas/investimentos", icon: TrendingUp, label: "Investimentos" },
+  { to: "/financas/recorrencias", icon: Repeat, label: "Fixas" },
   { to: "/financas/contas", icon: Wallet, label: "Contas" },
   { to: "/financas/categorias", icon: FolderOpen, label: "Categorias" },
   { to: "/financas/importacoes", icon: Upload, label: "Importação avançada" },
@@ -39,7 +39,7 @@ const MORE_ITEMS = [
 
 export const FinanceTopNav: React.FC = () => {
   const { pathname } = useLocation();
-  const moreActive = MORE_ITEMS.some((item) => pathname.startsWith(item.to));
+  const moreActive = FINANCE_MORE_ITEMS.some((item) => pathname.startsWith(item.to));
 
   return (
     <nav className="sticky top-0 z-30 mx-auto mb-5 mt-[-0.5rem] max-w-6xl px-4">
@@ -69,7 +69,7 @@ export const FinanceTopNav: React.FC = () => {
             <ChevronDown className="h-3 w-3 opacity-70" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
-            {MORE_ITEMS.map(({ to, icon: Icon, label }) => (
+            {FINANCE_MORE_ITEMS.map(({ to, icon: Icon, label }) => (
               <DropdownMenuItem key={to} asChild>
                 <RouterNavLink
                   to={to}

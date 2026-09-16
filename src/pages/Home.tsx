@@ -1,8 +1,7 @@
-import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUpRight, CreditCard, LineChart as LineChartIcon, PiggyBank, Target, Wallet } from "lucide-react";
 
-const MonthlyEvolutionChart = lazy(() => import("@/components/finance/MonthlyEvolutionChart"));
 
 
 import { AppHeader } from "@/components/AppHeader";
@@ -27,7 +26,7 @@ import { getMonthlySpendingGoal } from "@/lib/financeBudget";
 import { buildFinancialPlan, fetchFinancialRuleVersions } from "@/lib/financialRules";
 import { monthTitle, summarizeMonth, type MonthSummary } from "@/lib/financeInsights";
 import { calculateNetWorth, calculateReserveMovement, type GoalMovement } from "@/lib/financeOverview";
-import { fetchFinanceTransactions, getLastMonthKeys, monthKey, type FinanceTx } from "@/lib/financeShared";
+import { fetchFinanceTransactions, monthKey, type FinanceTx } from "@/lib/financeShared";
 import { getFinanceViewCache, setFinanceViewCache } from "@/lib/financeViewCache";
 import { getErrorMessage, untypedSupabase } from "@/lib/supabaseUntyped";
 import { cn } from "@/lib/utils";
@@ -144,15 +143,6 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
     return subscribeFinanceSync(() => void load());
   }, [load]);
 
-  const historyKeys = useMemo(() => {
-    const [year, month] = selectedMonth.split("-").map(Number);
-    return getLastMonthKeys(6, new Date(year, month - 1, 15));
-  }, [selectedMonth]);
-
-  const evolution = useMemo(() => historyKeys.map((key) => {
-    const summary = summarizeMonth(data.transactions, key);
-    return { key, month: `${key.slice(5, 7)}/${key.slice(2, 4)}`, receitas: summary.income, despesas: -summary.expenses, resultado: summary.result };
-  }), [data.transactions, historyKeys]);
 
   const hasMonthData = data.summary.hasData || data.reserved > 0 || data.card.total > 0;
   const goalUsage = data.spendingGoal > 0 ? Math.min((data.summary.expenses / data.spendingGoal) * 100, 999) : null;
@@ -199,33 +189,22 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
 
         {!loading && (
           <>
-          <section className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
-          <Card className="border-border/70 shadow-card">
-            <CardContent className="p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div><h2 className="font-heading text-lg font-bold">Evolução financeira</h2><p className="mt-1 text-xs text-muted-foreground">Receitas acima, despesas abaixo e linha do resultado · últimos seis meses.</p></div>
+          <Card className="border-border/70 bg-primary text-primary-foreground shadow-elevated">
+            <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-primary-foreground/75"><Target className="h-4 w-4" /><p className="text-[10px] font-semibold uppercase tracking-[0.16em]">Qualidade financeira</p></div>
+                <p className="mt-2 font-heading text-3xl">{data.summary.savingsRate.toFixed(0)}%</p>
+                <p className="text-sm text-primary-foreground/75">da renda ficou disponível neste mês.</p>
               </div>
-              <div className="mt-4 h-64">
-                <Suspense fallback={<div className="h-full w-full animate-pulse rounded-xl bg-muted/60" />}>
-                  <MonthlyEvolutionChart data={evolution} />
-                </Suspense>
+              <div className="grid gap-2 text-xs sm:text-right">
+                <div className="flex justify-between gap-6 sm:justify-end"><span className="text-primary-foreground/65">Gastos fixos</span><strong>{formatCurrency(data.summary.fixedExpenses)}</strong></div>
+                <div className="flex justify-between gap-6 sm:justify-end"><span className="text-primary-foreground/65">Gastos variáveis</span><strong>{formatCurrency(data.summary.variableExpenses)}</strong></div>
+                <div className="flex justify-between gap-6 sm:justify-end"><span className="text-primary-foreground/65">Meta utilizada</span><strong>{goalUsage === null ? "Defina uma meta" : `${goalUsage.toFixed(0)}%`}</strong></div>
+                <Button variant="secondary" size="sm" className="mt-1 gap-2 sm:justify-self-end" onClick={() => navigate("/financas")}>Ver análise completa <ArrowUpRight className="h-4 w-4" /></Button>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-border/70 bg-primary text-primary-foreground shadow-elevated">
-            <CardContent className="flex h-full flex-col p-5">
-              <div className="flex items-center gap-2 text-primary-foreground/75"><Target className="h-4 w-4" /><p className="text-[10px] font-semibold uppercase tracking-[0.16em]">Qualidade financeira</p></div>
-              <p className="mt-4 font-heading text-3xl">{data.summary.savingsRate.toFixed(0)}%</p><p className="text-sm text-primary-foreground/75">da renda ficou disponível neste mês.</p>
-              <div className="mt-5 space-y-3 border-t border-primary-foreground/15 pt-4 text-xs">
-                <div className="flex justify-between gap-3"><span className="text-primary-foreground/65">Gastos fixos</span><strong>{formatCurrency(data.summary.fixedExpenses)}</strong></div>
-                <div className="flex justify-between gap-3"><span className="text-primary-foreground/65">Gastos variáveis</span><strong>{formatCurrency(data.summary.variableExpenses)}</strong></div>
-                <div className="flex justify-between gap-3"><span className="text-primary-foreground/65">Meta utilizada</span><strong>{goalUsage === null ? "Defina uma meta" : `${goalUsage.toFixed(0)}%`}</strong></div>
-              </div>
-              <Button variant="secondary" className="mt-auto gap-2" onClick={() => navigate("/financas")}>Ver análise completa <ArrowUpRight className="h-4 w-4" /></Button>
-            </CardContent>
-          </Card>
-        </section>
 
         <section className="grid gap-4 md:grid-cols-2">
           <button type="button" onClick={() => navigate("/cards")} className="group rounded-2xl border border-border/70 bg-card p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-elevated">
