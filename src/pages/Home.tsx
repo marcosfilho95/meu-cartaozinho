@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowUpRight, CreditCard, LineChart as LineChartIcon, PiggyBank, Plus, Target, Wallet } from "lucide-react";
+import { ArrowUpRight, CreditCard, LineChart as LineChartIcon, PiggyBank, Target, Wallet } from "lucide-react";
 
 const MonthlyEvolutionChart = lazy(() => import("@/components/finance/MonthlyEvolutionChart"));
 
