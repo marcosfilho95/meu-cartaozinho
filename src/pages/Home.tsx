@@ -144,15 +144,6 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
     return subscribeFinanceSync(() => void load());
   }, [load]);
 
-  const historyKeys = useMemo(() => {
-    const [year, month] = selectedMonth.split("-").map(Number);
-    return getLastMonthKeys(6, new Date(year, month - 1, 15));
-  }, [selectedMonth]);
-
-  const evolution = useMemo(() => historyKeys.map((key) => {
-    const summary = summarizeMonth(data.transactions, key);
-    return { key, month: `${key.slice(5, 7)}/${key.slice(2, 4)}`, receitas: summary.income, despesas: -summary.expenses, resultado: summary.result };
-  }), [data.transactions, historyKeys]);
 
   const hasMonthData = data.summary.hasData || data.reserved > 0 || data.card.total > 0;
   const goalUsage = data.spendingGoal > 0 ? Math.min((data.summary.expenses / data.spendingGoal) * 100, 999) : null;
