@@ -77,7 +77,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
 
       const [accountsRes, goalsRes, goalTxRes, budgetsRes, transactions, cardTotals, financialRules] = await Promise.all([
         supabase.from("accounts").select("type, current_balance, include_in_net_worth").eq("user_id", userId).eq("is_active", true),
-        supabase.from("goals").select("current_amount").eq("user_id", userId),
+        supabase.from("goals").select("id, name, goal_type, target_amount, current_amount, is_completed").eq("user_id", userId),
         untypedSupabase.from("goal_transactions").select("amount, type, created_at").eq("user_id", userId).limit(1000),
         supabase.from("budgets").select("category_id, limit_amount").eq("user_id", userId).eq("ref_month", selectedMonth),
         fetchFinanceTransactions(userId, 24),
