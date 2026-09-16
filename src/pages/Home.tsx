@@ -289,6 +289,8 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
           </>
         )}
       </main>
+
+      <AppFooter plain className="pb-2 pt-4" />
     </div>
   );
 };
