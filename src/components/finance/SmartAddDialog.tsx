@@ -688,6 +688,30 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                 <div ref={messagesEndRef} />
               </div>
 
+              {drafts.length > 0 && !loading && (
+                <div className="flex flex-col gap-2 rounded-2xl border bg-muted/40 p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    {drafts.length === 1 ? "1 lançamento pronto" : `${drafts.length} lançamentos prontos`} · total{" "}
+                    <span className="font-semibold text-foreground">
+                      {formatCurrency(drafts.reduce((sum, d) => sum + (d.type === "income" ? d.amount : -d.amount), 0))}
+                    </span>
+                  </p>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setDrafts([])}>
+                      Ajustar no texto
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="gradient-primary text-primary-foreground"
+                      onClick={() => setStage("review")}
+                    >
+                      Está certo, revisar e lançar
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+
               <input
                 ref={fileInputRef}
                 type="file"
