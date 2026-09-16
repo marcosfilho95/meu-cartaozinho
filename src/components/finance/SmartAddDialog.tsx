@@ -243,6 +243,8 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
   const [memoryHistory, setMemoryHistory] = useState<MemoryTransaction[]>([]);
   const [attachment, setAttachment] = useState<{ name: string; text: string } | null>(null);
   const [attachmentLoading, setAttachmentLoading] = useState(false);
+  /** Guarda a última tabela conferida para o usuário poder confirmar depois. */
+  const lastDraftsRef = useRef<DraftTx[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
