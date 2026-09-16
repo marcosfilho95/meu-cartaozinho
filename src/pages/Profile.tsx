@@ -92,19 +92,15 @@ const Profile: React.FC = () => {
         const resolvedAvatar = profile?.avatar_id || localAvatar || DEFAULT_AVATAR_ID;
         setAvatarId(resolvedAvatar);
         setStoredAvatarId(id, resolvedAvatar);
-        setStoredProfile(id, { name: profile?.name || "", avatar_id: resolvedAvatar });
+        const loadedUrl = skipAvatarUrl ? cachedUrl : ((profile as any)?.avatar_url || "");
+        if (!skipAvatarUrl) {
+          setAvatarUrl(loadedUrl);
+          writeCachedAvatarUrl(id, loadedUrl);
+        }
+        setStoredProfile(id, { name: profile?.name || "", avatar_id: resolvedAvatar, avatar_url: loadedUrl || null });
       }
 
-      const { data: urlRow, error: urlErr } = await supabase
-        .from("profiles" as any)
-        .select("avatar_url")
-        .eq("user_id", id)
-        .maybeSingle();
-      if (!urlErr) {
-        const loadedUrl = (urlRow as any)?.avatar_url || "";
-        setAvatarUrl(loadedUrl);
-        writeCachedAvatarUrl(id, loadedUrl);
-      } else if (isMissingAvatarUrlColumnError(urlErr as any)) {
+      if (error && !isMissingAvatarColumnError(error) && isMissingAvatarUrlColumnError(error)) {
         localStorage.setItem(PROFILE_AVATAR_URL_MISSING_KEY, "1");
       }
     });
