@@ -68,6 +68,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
     netWorth: { assets: 0, goals: 0, debts: 0, total: 0 },
     card: emptyCardTotal(selectedMonth),
     spendingGoal: 0,
+    goals: [],
   }));
 
   const load = useCallback(async () => {
