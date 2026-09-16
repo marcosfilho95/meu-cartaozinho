@@ -399,7 +399,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
               <div className="flex items-start justify-between gap-2"><div><h3 className="font-heading font-bold">Planos e objetivos</h3><p className="mt-0.5 text-[11px] text-muted-foreground">Veja o progresso sem misturar com seus gastos</p></div><PiggyBank className="h-4 w-4 shrink-0 text-primary" /></div>
               {goalProjections.length ? (
                 <div className="mt-4 space-y-3">
-                  {goalProjections.slice(0, 3).map((goal) => {
+                  {rankedGoals.slice(0, 3).map((goal) => {
                     const source = goals.find((item) => item.id === goal.id);
                     const GoalIcon = getGoalIcon({ name: goal.name, goal_type: source?.goal_type });
                     return goal.target > 0 ? (
