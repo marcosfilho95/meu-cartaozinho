@@ -680,9 +680,9 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
   };
 
   const canParse = useMemo(() => {
-    if (loading || optionsLoading) return false;
-    return text.trim().length > 2 || !!imageDataUrl;
-  }, [text, imageDataUrl, loading, optionsLoading]);
+    if (loading || optionsLoading || attachmentLoading) return false;
+    return text.trim().length > 2 || !!imageDataUrl || !!attachment;
+  }, [text, imageDataUrl, attachment, attachmentLoading, loading, optionsLoading]);
 
   useEffect(() => {
     if (stage === "input") messagesEndRef.current?.scrollIntoView({ block: "end" });
