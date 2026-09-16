@@ -50,6 +50,7 @@ import {
   parseDeterministicTransactions,
   type SmartParsedTransaction,
 } from "@/lib/finance/smartInputParser";
+import { findMemoryMatch, shiftDateToMonth, type MemoryTransaction } from "@/lib/finance/smartMemory";
 import { emitFinanceSync } from "@/lib/financeSyncBus";
 import { useVoiceDictation } from "@/hooks/use-voice-dictation";
 import { useSmartChat } from "@/hooks/use-smart-chat";
@@ -165,6 +166,66 @@ const guessCounterpartAccount = (accounts: any[], sourceId: string, role: DraftT
   return candidates[0]?.id || "";
 };
 
+/** Mensagens do assistente podem trazer um bloco [TABELA] com colunas separadas por "|". */
+const AssistantMessage: React.FC<{ content: string }> = ({ content }) => {
+  const tableStart = content.indexOf("[TABELA]");
+  if (tableStart < 0) {
+    return <div className="whitespace-pre-line text-sm leading-relaxed text-foreground">{content}</div>;
+  }
+  const before = content.slice(0, tableStart).trim();
+  const rest = content.slice(tableStart + "[TABELA]".length).split("\n").map((line) => line.trim());
+  const rows: string[][] = [];
+  let index = 0;
+  while (index < rest.length && (rest[index] === "" || rest[index].includes("|"))) {
+    if (rest[index].includes("|")) rows.push(rest[index].split("|"));
+    index += 1;
+  }
+  const after = rest.slice(index).join("\n").trim();
+  const [head, ...body] = rows;
+
+  return (
+    <div className="space-y-2 text-sm leading-relaxed text-foreground">
+      {before && <p className="whitespace-pre-line">{before}</p>}
+      {head && (
+        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+          <table className="w-full text-left text-[11px]">
+            <thead className="bg-muted/60 text-[10px] uppercase tracking-wide text-muted-foreground">
+              <tr>
+                {head.map((cell, cellIndex) => (
+                  <th key={cell + cellIndex} className={cn("px-2.5 py-1.5", cellIndex === head.length - 1 && "text-right")}>
+                    {cell}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {body.map((row, rowIndex) => (
+                <tr key={rowIndex} className="border-t">
+                  {row.map((cell, cellIndex) => (
+                    <td
+                      key={cellIndex}
+                      className={cn(
+                        "px-2.5 py-1.5",
+                        cellIndex === 1 && "font-medium",
+                        cellIndex === row.length - 1
+                          ? cn("whitespace-nowrap text-right font-semibold", cell.startsWith("+") ? "text-success" : cell.startsWith("-") ? "text-destructive" : "text-primary")
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      {cell}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {after && <p className="whitespace-pre-line">{after}</p>}
+    </div>
+  );
+};
+
 export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) => {
   const queryClient = useQueryClient();
   const [text, setText] = useState("");
@@ -173,10 +234,11 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
   const [optionsLoading, setOptionsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [drafts, setDrafts] = useState<DraftTx[]>([]);
-  const [stage, setStage] = useState<"input" | "confirm" | "review">("input");
+  const [stage, setStage] = useState<"input" | "review">("input");
   const [accounts, setAccounts] = useState<any[]>([]);
   const [categories, setCategories] = useState<SmartCategoryOption[]>([]);
   const [classificationHistory, setClassificationHistory] = useState<SmartClassificationHistory[]>([]);
+  const [memoryHistory, setMemoryHistory] = useState<MemoryTransaction[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -215,7 +277,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
           .order("name"),
         supabase
           .from("transactions")
-          .select("source, type, category_id, account_id, payment_method, transaction_date, created_at")
+          .select("source, type, amount, category_id, account_id, payment_method, transaction_date, created_at")
           .eq("user_id", userId)
           .is("deleted_at", null)
           .not("category_id", "is", null)
@@ -230,6 +292,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
       setAccounts(accs.data || []);
       setCategories((cats.data || []) as SmartCategoryOption[]);
       setClassificationHistory((history.data || []) as SmartClassificationHistory[]);
+      setMemoryHistory((history.data || []) as MemoryTransaction[]);
     };
 
     void loadOptions()
@@ -376,18 +439,41 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
             ? guessAccount(accounts, t.payment_method, t.type, institution)
             : previousAccountExists ? previous!.account_id : guessAccount(accounts, t.payment_method, t.type, institution);
         const role = t.role || (t.type === "transfer" ? "transfer" : t.type);
+
+        // Memória: reaproveita o último lançamento com o mesmo nome (valor, conta,
+        // categoria e dia) e traz a data para o mês atual quando o usuário não disser outro.
+        const memory = findMemoryMatch(
+          memoryHistory,
+          `${t.description || ""} ${payload.text || ""}`,
+          t.type,
+        );
+        const memoryAccountExists = Boolean(memory?.account_id && accounts.some((a) => a.id === memory.account_id));
+        const memoryCategoryExists = Boolean(memory?.category_id && categories.some((c) => c.id === memory.category_id));
+        const amount = Number(t.amount) > 0
+          ? Number(t.amount)
+          : memory?.amount ?? Number(t.amount);
+        let date = t.date;
+        if (!t.explicit_day && memory?.day && !t.explicit_month && !t.explicit_year) {
+          date = shiftDateToMonth(memory.day, new Date());
+        } else if (!t.explicit_month && !t.explicit_year && date < new Date().toISOString().slice(0, 7)) {
+          const day = Number(date.slice(8, 10)) || 1;
+          date = shiftDateToMonth(day, new Date());
+        }
+        const finalCategoryId = category_id || (memoryCategoryExists ? memory!.category_id! : "");
+        const finalAccountId = account_id || (memoryAccountExists ? memory!.account_id! : "");
+
         return {
           id: uid(),
           type: t.type,
           role,
-          amount: Number(t.amount),
+          amount,
           description: String(t.description),
-          date: t.date,
-          payment_method: t.payment_method || (previous?.payment_method as PaymentMethod | null) || null,
+          date,
+          payment_method: t.payment_method || (previous?.payment_method as PaymentMethod | null) || (memory?.payment_method as PaymentMethod | null) || null,
           category_hint: t.category_hint,
-          category_id,
-          account_id,
-          counterpart_account_id: t.type === "transfer" ? guessCounterpartAccount(accounts, account_id, role) : "",
+          category_id: finalCategoryId,
+          account_id: finalAccountId,
+          counterpart_account_id: t.type === "transfer" ? guessCounterpartAccount(accounts, finalAccountId, role) : "",
           confidence: t.confidence ?? 0.7,
           transfer_direction: t.transfer_direction || null,
           institution,
@@ -395,21 +481,34 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
           is_fixed: t.type !== "transfer" && detectFixedNature(String(t.description || ""), String(payload.text || ""), t.type),
           learned_from_history: Boolean(
             (previousCategoryExists && !hasExplicitCategory && (!suggestedCategoryId || isGenericSmartCategoryId(categories, suggestedCategoryId))) ||
-            (!t.account_hint && !institution && previousAccountExists)
+            (!t.account_hint && !institution && previousAccountExists) ||
+            (memory && (!account_id || !category_id || Number(t.amount) <= 0))
           ),
         };
       });
       setDrafts(newDrafts);
-      setStage("confirm");
+      setStage("input");
       const missing = newDrafts.filter((d) => !d.account_id).length;
-      const resumo = newDrafts
-        .map((d) => `• ${formatDraftDate(d.date)} · ${d.description} · ${d.type === "income" ? "+" : "-"}${formatCurrency(d.amount)}${d.is_fixed ? " (todo mês)" : ""}`)
-        .join("\n");
+      const reused = newDrafts.filter((d) => d.learned_from_history).length;
+      const tabela = [
+        "[TABELA]",
+        "Data|Descrição|Categoria|Conta|Valor",
+        ...newDrafts.map((d) => [
+          formatDraftDate(d.date),
+          `${d.description}${d.is_fixed ? " (todo mês)" : ""}`,
+          categories.find((c) => c.id === d.category_id)?.name || d.category_hint || "Sem categoria",
+          accounts.find((a) => a.id === d.account_id)?.name || "Escolher conta",
+          `${d.type === "income" ? "+" : d.type === "expense" ? "-" : ""}${formatCurrency(d.amount)}`,
+        ].join("|")),
+      ].join("\n");
+      const observacao = reused
+        ? `\nUsei o último lançamento parecido como base${reused > 1 ? ` em ${reused} itens` : ""} e atualizei a data para o mês atual.`
+        : "";
       void chat.append(
         "assistant",
         missing
-          ? `Entendi assim:\n${resumo}\n\nFaltou escolher a conta de ${missing === 1 ? "um lançamento" : `${missing} lançamentos`}. Confira o resumo ao lado e ajuste antes de lançar.`
-          : `Entendi assim:\n${resumo}\n\nConfira o resumo e confirme para lançar.`,
+          ? `${tabela}\n${observacao}\nFaltou a conta de ${missing === 1 ? "um lançamento" : `${missing} lançamentos`}. Toque em “Está certo” para ajustar e lançar.`
+          : `${tabela}\n${observacao}\nEstá tudo certo? Se sim, é só confirmar que eu abro a tela de revisão para lançar.`,
       );
     } catch (err: any) {
       void chat.append("assistant", `Não consegui processar agora: ${err?.message || "erro desconhecido"}. Quer tentar de novo?`);
@@ -570,16 +669,15 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                     key={message.id}
                     className={cn("flex", message.role === "user" ? "justify-end" : "justify-start")}
                   >
-                    <div
-                      className={cn(
-                        "max-w-[85%] whitespace-pre-line text-sm leading-relaxed",
-                        message.role === "user"
-                          ? "rounded-2xl rounded-br-sm bg-primary px-3.5 py-2 text-primary-foreground"
-                          : "text-foreground",
-                      )}
-                    >
-                      {message.content}
-                    </div>
+                    {message.role === "user" ? (
+                      <div className="max-w-[85%] whitespace-pre-line rounded-2xl rounded-br-sm bg-primary px-3.5 py-2 text-sm leading-relaxed text-primary-foreground">
+                        {message.content}
+                      </div>
+                    ) : (
+                      <div className="max-w-[92%]">
+                        <AssistantMessage content={message.content} />
+                      </div>
+                    )}
                   </div>
                 ))}
                 {loading && (
@@ -589,6 +687,30 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                 )}
                 <div ref={messagesEndRef} />
               </div>
+
+              {drafts.length > 0 && !loading && (
+                <div className="flex flex-col gap-2 rounded-2xl border bg-muted/40 p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    {drafts.length === 1 ? "1 lançamento pronto" : `${drafts.length} lançamentos prontos`} · total{" "}
+                    <span className="font-semibold text-foreground">
+                      {formatCurrency(drafts.reduce((sum, d) => sum + (d.type === "income" ? d.amount : -d.amount), 0))}
+                    </span>
+                  </p>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setDrafts([])}>
+                      Ajustar no texto
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="gradient-primary text-primary-foreground"
+                      onClick={() => setStage("review")}
+                    >
+                      Está certo, revisar e lançar
+                    </Button>
+                  </div>
+                </div>
+              )}
+
 
               <input
                 ref={fileInputRef}
@@ -687,75 +809,6 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
               </p>
             </div>
 
-          ) : stage === "confirm" ? (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold">
-                  {drafts.length === 1 ? "Confira o que entendemos" : `Confira os ${drafts.length} lançamentos`}
-                </p>
-                <Button variant="ghost" size="sm" onClick={() => { setDrafts([]); setStage("input"); }}>
-                  Corrigir texto
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Seu texto continua salvo: se algo estiver errado, volte, ajuste e processe de novo.
-              </p>
-
-              <div className="overflow-hidden rounded-xl border">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-muted/60 text-[10px] uppercase tracking-wide text-muted-foreground">
-                    <tr>
-                      <th className="px-3 py-2">Data</th>
-                      <th className="px-3 py-2">Descrição</th>
-                      <th className="px-3 py-2">Conta</th>
-                      <th className="px-3 py-2">Categoria</th>
-                      <th className="px-3 py-2">Repetição</th>
-                      <th className="px-3 py-2 text-right">Valor</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {drafts.map((d) => (
-                      <tr key={d.id} className="border-t">
-                        <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{formatDraftDate(d.date)}</td>
-                        <td className="px-3 py-2 font-medium">{d.description}</td>
-                        <td className="px-3 py-2 text-muted-foreground">
-                          {accounts.find((a) => a.id === d.account_id)?.name || "Selecionar"}
-                        </td>
-                        <td className="px-3 py-2 text-muted-foreground">
-                          {categories.find((c) => c.id === d.category_id)?.name || d.category_hint || "Sem categoria"}
-                        </td>
-                        <td className="px-3 py-2">
-                          <Badge variant={d.is_fixed ? "default" : "outline"} className="text-[10px]">
-                            {d.is_fixed ? "Fixa (todo mês)" : "Variável"}
-                          </Badge>
-                        </td>
-                        <td className={cn(
-                          "whitespace-nowrap px-3 py-2 text-right font-semibold",
-                          d.type === "income" ? "text-success" : d.type === "transfer" ? "text-primary" : "text-destructive",
-                        )}>
-                          {d.type === "income" ? "+" : d.type === "expense" ? "-" : ""}{formatCurrency(d.amount)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="border-t bg-muted/40">
-                    <tr>
-                      <td colSpan={5} className="px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground">Total de despesas</td>
-                      <td className="px-3 py-2 text-right text-sm font-bold">
-                        {formatCurrency(drafts.filter((d) => d.type === "expense").reduce((sum, d) => sum + d.amount, 0))}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-
-              <Button
-                onClick={() => setStage("review")}
-                className="h-11 w-full gap-2 gradient-primary text-primary-foreground"
-              >
-                Está correto, continuar
-              </Button>
-            </div>
           ) : (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -764,8 +817,8 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                     ? "Transação para revisar"
                     : `${drafts.length} transações para revisar`}
                 </p>
-                <Button variant="ghost" size="sm" onClick={() => setStage("confirm")}>
-                  Voltar
+                <Button variant="ghost" size="sm" onClick={() => setStage("input")}>
+                  Voltar à conversa
                 </Button>
               </div>
 
