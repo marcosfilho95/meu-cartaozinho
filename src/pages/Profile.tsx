@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
 import { getStoredProfile, setStoredProfile } from "@/lib/profileCache";
-import { writeCachedAvatarUrl } from "@/hooks/use-user-header-profile";
+import { readCachedAvatarUrl, writeCachedAvatarUrl } from "@/hooks/use-user-header-profile";
 import { Camera, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
