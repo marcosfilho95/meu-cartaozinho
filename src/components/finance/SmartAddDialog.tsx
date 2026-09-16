@@ -413,7 +413,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
           category_hint: t.category_hint,
           category_id: finalCategoryId,
           account_id: finalAccountId,
-          counterpart_account_id: t.type === "transfer" ? guessCounterpartAccount(accounts, account_id, role) : "",
+          counterpart_account_id: t.type === "transfer" ? guessCounterpartAccount(accounts, finalAccountId, role) : "",
           confidence: t.confidence ?? 0.7,
           transfer_direction: t.transfer_direction || null,
           institution,
