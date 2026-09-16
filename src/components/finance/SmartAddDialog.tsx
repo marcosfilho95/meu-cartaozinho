@@ -331,20 +331,61 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     }
   }, []);
 
+  const handleDocumentPick = useCallback(async (file: File | undefined) => {
+    if (!file) return false;
+    if (file.type.startsWith("image/")) return handleImagePick(file);
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error("Arquivo muito grande (máx. 15 MB).");
+      return false;
+    }
+    setAttachmentLoading(true);
+    try {
+      const { readFileAsText, isPdfTextSufficient, renderPdfPagesToImages } = await import("@/lib/finance/imports");
+      const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+      let extracted = "";
+      try {
+        extracted = await readFileAsText(file);
+      } catch {
+        extracted = "";
+      }
+
+      if (isPdf && !isPdfTextSufficient(extracted)) {
+        // PDF escaneado: a IA lê a primeira página como imagem.
+        const pages = await renderPdfPagesToImages(file);
+        if (pages.length > 0) {
+          setImageDataUrl(pages[0].dataUrl);
+          setAttachment(null);
+          toast.success(`${file.name} anexado como imagem (documento escaneado).`);
+          return true;
+        }
+      }
+
+      const cleaned = extracted.replace(/\u0000/g, "").trim();
+      if (!cleaned) {
+        toast.error("Não consegui ler o conteúdo desse arquivo.");
+        return false;
+      }
+      setAttachment({ name: file.name, text: cleaned.slice(0, 60000) });
+      toast.success(`${file.name} anexado. Envie na conversa quando estiver pronto.`);
+      return true;
+    } catch {
+      toast.error("Não foi possível abrir esse arquivo.");
+      return false;
+    } finally {
+      setAttachmentLoading(false);
+    }
+  }, [handleImagePick]);
+
   useEffect(() => {
     if (!open || drafts.length > 0) return;
 
     const onPaste = (event: ClipboardEvent) => {
-      const imageItem = Array.from(event.clipboardData?.items || [])
-        .find((item) => item.kind === "file" && item.type.startsWith("image/"));
-      const imageFile = imageItem?.getAsFile();
-      if (!imageFile) return;
+      const fileItem = Array.from(event.clipboardData?.items || []).find((item) => item.kind === "file");
+      const pastedFile = fileItem?.getAsFile();
+      if (!pastedFile) return;
 
       event.preventDefault();
-      void handleImagePick(imageFile).then((accepted) => {
-        if (!accepted) return;
-        toast.success("Print colado! Envie na conversa quando estiver pronto.");
-      });
+      void handleDocumentPick(pastedFile);
     };
 
     document.addEventListener("paste", onPaste);
