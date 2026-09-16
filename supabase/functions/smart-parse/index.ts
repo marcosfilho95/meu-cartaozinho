@@ -7,7 +7,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-type Mode = "text" | "paste" | "image";
+type Mode = "text" | "paste" | "image" | "chat";
 
 interface ParsedTx {
   type: "income" | "expense" | "transfer";
