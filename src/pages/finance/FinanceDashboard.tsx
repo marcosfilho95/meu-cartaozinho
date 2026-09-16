@@ -268,6 +268,10 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       : Number(goal.monthly_target || 0) || (activeGoals.length ? averageReserve / activeGoals.length : 0),
     referenceMonth,
   )), [activeGoals.length, averageReserve, financialPlan.goalAmounts, goals, referenceMonth]);
+  const rankedGoals = useMemo(
+    () => [...goalProjections].sort((a, b) => (b.saved - a.saved) || (b.progress - a.progress) || a.name.localeCompare(b.name, "pt-BR")),
+    [goalProjections],
+  );
   const insights = useMemo(() => buildInsights({
     refMonth: referenceMonth,
     summary,
