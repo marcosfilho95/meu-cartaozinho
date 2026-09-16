@@ -216,16 +216,7 @@ export const postDueFixedBillsForMonth = async (userId: string, monthKey: string
     if (!accountId) continue;
 
     const externalId = `fixed_bill:${bill.id}`;
-    const { data: existingRows, error: existingError } = await supabase
-      .from("transactions")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("external_id", externalId)
-      .is("deleted_at", null)
-      .limit(1);
-    if (existingError) throw existingError;
-
-    let transactionId = existingRows?.[0]?.id;
+    let transactionId = await findEquivalentTransactionId(userId, bill, monthKey, externalId);
     if (!transactionId) {
       const { data: inserted, error } = await supabase
         .from("transactions")
