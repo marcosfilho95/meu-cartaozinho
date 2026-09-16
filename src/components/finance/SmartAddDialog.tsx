@@ -232,6 +232,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
       setAccounts(accs.data || []);
       setCategories((cats.data || []) as SmartCategoryOption[]);
       setClassificationHistory((history.data || []) as SmartClassificationHistory[]);
+      setMemoryHistory((history.data || []) as MemoryTransaction[]);
     };
 
     void loadOptions()
