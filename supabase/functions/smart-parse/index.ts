@@ -120,6 +120,28 @@ const sanitizeCategoryCatalog = (raw: unknown): CategoryCatalogItem[] => {
   });
 };
 
+/** Resposta conversacional em texto livre (modo chat). */
+async function callChatGateway(messages: any[]): Promise<string> {
+  const key = Deno.env.get("LOVABLE_API_KEY");
+  if (!key) throw new Error("LOVABLE_API_KEY ausente");
+
+  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
+    body: JSON.stringify({ model: "google/gemini-3-flash-preview", messages }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    if (res.status === 429) throw new Error("Muitas requisições. Tente novamente em instantes.");
+    if (res.status === 402) throw new Error("Créditos de IA esgotados no workspace.");
+    throw new Error(`AI gateway ${res.status}: ${text.slice(0, 200)}`);
+  }
+
+  const json = await res.json();
+  return String(json?.choices?.[0]?.message?.content || "").trim();
+}
+
 async function callGateway(messages: any[]): Promise<ParsedTx[]> {
   const key = Deno.env.get("LOVABLE_API_KEY");
   if (!key) throw new Error("LOVABLE_API_KEY ausente");
