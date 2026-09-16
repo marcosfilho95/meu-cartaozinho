@@ -83,6 +83,28 @@ Interpretação de linguagem natural (entrada digitada pelo usuário):
 
 Retorne APENAS o JSON, sem markdown.`;
 
+const CHAT_PROMPT = `Você é o assistente do "Meu Cartãozinho", um app brasileiro de finanças pessoais.
+Converse de forma natural, calorosa e objetiva em português do Brasil (no máximo 3 frases curtas).
+Você ajuda o usuário a registrar gastos, receitas, contas fixas e transferências: quando ele mandar um lançamento, você monta uma tabela para conferência e ele confirma.
+Se a mensagem for só um "oi", uma dúvida ou um comentário, responda normalmente como uma pessoa prestativa e, quando fizer sentido, mostre um exemplo de como lançar (ex.: "luz 180 no dia 10" ou "salário 3000 todo mês").
+Nunca invente valores, saldos ou lançamentos que o usuário não informou. Não use markdown nem listas longas.`;
+
+/** Garante uma data YYYY-MM-DD válida; cai para hoje quando o modelo devolve algo estranho. */
+const normalizeIsoDate = (value: unknown, fallback: string) => {
+  const raw = String(value ?? "").trim();
+  let match = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(raw);
+  if (!match) {
+    const br = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(raw);
+    if (br) match = [raw, br[3], br[2], br[1]] as unknown as RegExpExecArray;
+  }
+  if (!match) return fallback;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (year < 1900 || year > 2200 || month < 1 || month > 12 || day < 1 || day > 31) return fallback;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+};
+
 const sanitizeCategoryCatalog = (raw: unknown): CategoryCatalogItem[] => {
   if (!Array.isArray(raw)) return [];
   return raw.slice(0, 200).flatMap((item): CategoryCatalogItem[] => {
