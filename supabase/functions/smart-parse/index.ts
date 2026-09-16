@@ -7,7 +7,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-type Mode = "text" | "paste" | "image";
+type Mode = "text" | "paste" | "image" | "chat";
 
 interface ParsedTx {
   type: "income" | "expense" | "transfer";
@@ -83,6 +83,28 @@ Interpretação de linguagem natural (entrada digitada pelo usuário):
 
 Retorne APENAS o JSON, sem markdown.`;
 
+const CHAT_PROMPT = `Você é o assistente do "Meu Cartãozinho", um app brasileiro de finanças pessoais.
+Converse de forma natural, calorosa e objetiva em português do Brasil (no máximo 3 frases curtas).
+Você ajuda o usuário a registrar gastos, receitas, contas fixas e transferências: quando ele mandar um lançamento, você monta uma tabela para conferência e ele confirma.
+Se a mensagem for só um "oi", uma dúvida ou um comentário, responda normalmente como uma pessoa prestativa e, quando fizer sentido, mostre um exemplo de como lançar (ex.: "luz 180 no dia 10" ou "salário 3000 todo mês").
+Nunca invente valores, saldos ou lançamentos que o usuário não informou. Não use markdown nem listas longas.`;
+
+/** Garante uma data YYYY-MM-DD válida; cai para hoje quando o modelo devolve algo estranho. */
+const normalizeIsoDate = (value: unknown, fallback: string) => {
+  const raw = String(value ?? "").trim();
+  let match = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(raw);
+  if (!match) {
+    const br = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(raw);
+    if (br) match = [raw, br[3], br[2], br[1]] as unknown as RegExpExecArray;
+  }
+  if (!match) return fallback;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (year < 1900 || year > 2200 || month < 1 || month > 12 || day < 1 || day > 31) return fallback;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+};
+
 const sanitizeCategoryCatalog = (raw: unknown): CategoryCatalogItem[] => {
   if (!Array.isArray(raw)) return [];
   return raw.slice(0, 200).flatMap((item): CategoryCatalogItem[] => {
@@ -97,6 +119,28 @@ const sanitizeCategoryCatalog = (raw: unknown): CategoryCatalogItem[] => {
     }];
   });
 };
+
+/** Resposta conversacional em texto livre (modo chat). */
+async function callChatGateway(messages: any[]): Promise<string> {
+  const key = Deno.env.get("LOVABLE_API_KEY");
+  if (!key) throw new Error("LOVABLE_API_KEY ausente");
+
+  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
+    body: JSON.stringify({ model: "google/gemini-3-flash-preview", messages }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    if (res.status === 429) throw new Error("Muitas requisições. Tente novamente em instantes.");
+    if (res.status === 402) throw new Error("Créditos de IA esgotados no workspace.");
+    throw new Error(`AI gateway ${res.status}: ${text.slice(0, 200)}`);
+  }
+
+  const json = await res.json();
+  return String(json?.choices?.[0]?.message?.content || "").trim();
+}
 
 async function callGateway(messages: any[]): Promise<ParsedTx[]> {
   const key = Deno.env.get("LOVABLE_API_KEY");
@@ -153,7 +197,7 @@ async function callGateway(messages: any[]): Promise<ParsedTx[]> {
           : t.type === "transfer" ? "transfer" : t.type === "income" ? "income" : "expense",
         amount,
         description: String(t.description || "Lançamento financeiro").slice(0, 200),
-        date: typeof t.date === "string" ? t.date : new Date().toISOString().slice(0, 10),
+        date: normalizeIsoDate(t.date, new Date().toISOString().slice(0, 10)),
         payment_method: paymentMethod,
         category_hint: typeof t.category_hint === "string" ? t.category_hint.trim().slice(0, 80) || null : null,
         installments,
@@ -183,6 +227,24 @@ Deno.serve(async (req) => {
       ? `\nCatálogo de categorias disponíveis (JSON): ${JSON.stringify(categoryCatalog)}`
       : "";
     const contextLine = `Data de hoje: ${today}. Moeda: BRL.${catalogContext}`;
+
+    if (mode === "chat") {
+      const message = String(body.message || "").trim().slice(0, 2000);
+      if (!message) throw new Error("Mensagem vazia");
+      const history = Array.isArray(body.history) ? body.history.slice(-8) : [];
+      const reply = await callChatGateway([
+        { role: "system", content: `${CHAT_PROMPT}\nData de hoje: ${today}.` },
+        ...history.flatMap((item: any) => {
+          const role = item?.role === "assistant" ? "assistant" : "user";
+          const content = String(item?.content || "").slice(0, 1500);
+          return content ? [{ role, content }] : [];
+        }),
+        { role: "user", content: message },
+      ]);
+      return new Response(JSON.stringify({ reply }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     let userContent: any;
 

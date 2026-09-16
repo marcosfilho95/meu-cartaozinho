@@ -98,6 +98,18 @@ export const parseSmartInputWithAi = async (payload: SmartParsePayload): Promise
   return ((data as { transactions?: SmartParsedTransaction[] } | null)?.transactions || []);
 };
 
+/** Conversa livre com o assistente financeiro (quando não há lançamento na mensagem). */
+export const chatWithFinanceAssistant = async (payload: {
+  history: Array<{ role: "user" | "assistant"; content: string }>;
+  message: string;
+}): Promise<string> => {
+  const { data, error } = await supabase.functions.invoke("smart-parse", {
+    body: { mode: "chat", ...payload },
+  });
+  if (error || (data as { error?: unknown } | null)?.error) throw await normalizeInvokeError(error, data);
+  return String((data as { reply?: string } | null)?.reply || "").trim();
+};
+
 export const extractFinancialDocumentWithVision = async (payload: {
   images: Array<{ dataUrl: string; pageNumber: number }>;
   fileName: string;
