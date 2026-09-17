@@ -256,11 +256,15 @@ Deno.serve(async (req) => {
         : `O usuário colou o texto abaixo (pode ser fatura, extrato, comprovante). Extraia todas as transações relevantes:\n\n"""${text}"""`;
       userContent = `${contextLine}\n\n${instruction}`;
     } else if (mode === "image") {
-      const dataUrl: string = String(body.imageDataUrl || "");
-      if (!dataUrl.startsWith("data:")) throw new Error("Imagem inválida");
+      const dataUrls: string[] = Array.isArray(body.imageDataUrls)
+        ? body.imageDataUrls.map((u: unknown) => String(u)).filter((u: string) => u.startsWith("data:"))
+        : [];
+      const single: string = String(body.imageDataUrl || "");
+      if (dataUrls.length === 0 && single.startsWith("data:")) dataUrls.push(single);
+      if (dataUrls.length === 0) throw new Error("Imagem inválida");
       userContent = [
-        { type: "text", text: `${contextLine}\n\nAnalise este comprovante/print e extraia uma ou mais transações. Se houver apenas o total de uma fatura, registre-o como uma única despesa agregada; não exija a lista de compras.` },
-        { type: "image_url", image_url: { url: dataUrl } },
+        { type: "text", text: `${contextLine}\n\nAnalise ${dataUrls.length > 1 ? `estes ${dataUrls.length} comprovantes/prints` : "este comprovante/print"} e extraia uma ou mais transações no total. Se houver apenas o total de uma fatura, registre-o como uma única despesa agregada; não exija a lista de compras. Trate todas as imagens como um único envio: some as transações de todas elas, sem duplicar itens que apareçam em mais de uma imagem.` },
+        ...dataUrls.map((url) => ({ type: "image_url", image_url: { url } })),
       ];
     } else {
       throw new Error("Modo inválido");
