@@ -429,6 +429,18 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     const file = attachment;
     const mode = image ? "image" : file ? "paste" : "text";
     if (!message && !image && !file) return;
+
+    // "Sim, pode lançar": confirma a última tabela conferida sem pedir tudo de novo.
+    const pending = drafts.length ? drafts : lastDraftsRef.current;
+    if (!image && !file && message && pending.length && isConfirmation(message)) {
+      void chat.append("user", message);
+      setText("");
+      setDrafts(pending);
+      setStage("review");
+      void chat.append("assistant", "Perfeito! Abri a tela de revisão para você conferir e lançar.");
+      return;
+    }
+
     const combinedText = file
       ? `${message ? `${message}\n\n` : ""}Conteúdo do arquivo ${file.name}:\n${file.text}`
       : message;
