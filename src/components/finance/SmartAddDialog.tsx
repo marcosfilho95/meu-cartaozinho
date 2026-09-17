@@ -460,19 +460,19 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     setLoading(true);
     void chat.append(
       "user",
-      image
-        ? `${message || "Print enviado"} (imagem anexada)`
+      hasImages
+        ? `${message || "Print enviado"} (${images.length === 1 ? "1 imagem anexada" : `${images.length} imagens anexadas`})`
         : file
           ? `${message || "Arquivo enviado"} (${file.name})`
           : message,
     );
     setText("");
-    setImageDataUrl(null);
+    setImageDataUrls([]);
     setAttachment(null);
     try {
       const payload: any = { mode };
       if (combinedText) payload.text = combinedText;
-      if (image) payload.imageDataUrl = image;
+      if (hasImages) payload.imageDataUrls = images;
       const categoryById = new Map(categories.map((category) => [category.id, category]));
       payload.categories = categories.map((category) => ({
         name: category.name,
@@ -480,7 +480,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         parent: category.parent_id ? categoryById.get(category.parent_id)?.name || null : null,
       }));
 
-      let localParsed = !image
+      let localParsed = !hasImages
         ? parseDeterministicTransactions(String(payload.text || ""), new Date())
         : [];
       let aiParsed: SmartParsedTransaction[] = [];
@@ -491,10 +491,10 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         aiFailure = error;
       }
 
-      if (image && (aiFailure || aiParsed.length === 0)) {
-        toast.info("A leitura online não encontrou dados. Tentando reconhecer o texto da imagem...");
-        const recognizedText = await recognizeFinancialImageLocally(image);
-        localParsed = parseDeterministicTransactions(recognizedText, new Date());
+      if (hasImages && (aiFailure || aiParsed.length === 0)) {
+        toast.info("A leitura online não encontrou dados. Tentando reconhecer o texto das imagens...");
+        const recognized = await Promise.all(images.map((img) => recognizeFinancialImageLocally(img)));
+        localParsed = parseDeterministicTransactions(recognized.filter(Boolean).join("\n"), new Date());
         if (localParsed.length) {
           console.info("[SmartAdd] Imagem reconhecida pelo OCR local.");
         }
