@@ -505,9 +505,25 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         throw aiFailure;
       }
       if (!parsed.length) {
+        // Sem lançamento na mensagem: responde como um assistente de conversa normal.
+        let reply = "";
+        if (!image) {
+          try {
+            reply = await chatWithFinanceAssistant({
+              message: String(combinedText || "").slice(0, 2000),
+              history: chat.messages.slice(-8).map((m) => ({
+                role: m.role === "assistant" ? "assistant" : "user",
+                content: m.content,
+              })),
+            });
+          } catch {
+            reply = "";
+          }
+        }
         void chat.append(
           "assistant",
-          "Não consegui identificar um lançamento. Me diga o valor e o que foi, por exemplo: “luz 180 no dia 10”.",
+          reply ||
+            "Não consegui identificar um lançamento aqui. Me diga o valor e o que foi, por exemplo: “luz 180 no dia 10”.",
         );
         return;
       }
