@@ -73,9 +73,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     <header className={cn("relative isolate overflow-hidden gradient-primary px-4 pb-8 pt-4 sm:pb-9", headerClassName)} style={headerStyle}>
       <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-white/[0.045]" aria-hidden />
       <div className="pointer-events-none absolute -right-28 -top-36 h-80 w-80 rounded-full bg-emerald-200/10 blur-3xl" aria-hidden />
-      <div className="relative mx-auto max-w-2xl" style={{ zIndex: 1 }}>
+      <div className={cn("relative mx-auto w-full max-w-6xl", containerClassName)} style={{ zIndex: 1 }}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3.5">
+          <div className="flex w-full min-w-0 items-center gap-2.5 sm:gap-3.5 lg:flex-1">
             {showBack && (
               <Button
                 variant="ghost"
@@ -108,7 +108,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               {greetingLine && (
                 <p className="text-[11px] font-semibold tracking-[0.04em] text-primary-foreground/70">{greetingLine}</p>
               )}
-              <h1 className="break-words font-heading text-[1.45rem] font-bold leading-tight tracking-[-0.02em] text-primary-foreground sm:text-[1.65rem]">
+              <h1 className="break-normal font-heading text-[1.45rem] font-bold leading-tight tracking-[-0.02em] text-primary-foreground sm:text-[1.65rem]">
                 {title}
               </h1>
             </div>
