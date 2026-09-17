@@ -604,6 +604,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         };
       });
       setDrafts(newDrafts);
+      lastDraftsRef.current = newDrafts;
       setStage("input");
       const missing = newDrafts.filter((d) => !d.account_id).length;
       const reused = newDrafts.filter((d) => d.learned_from_history).length;
