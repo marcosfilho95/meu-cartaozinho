@@ -41,7 +41,7 @@ import {
   type SmartClassificationHistory,
   type SmartCategoryOption,
 } from "@/lib/financeSmartClassification";
-import { parseSmartInputWithAi } from "@/lib/finance/aiService";
+import { chatWithFinanceAssistant, parseSmartInputWithAi } from "@/lib/finance/aiService";
 import { recognizeFinancialImageLocally } from "@/lib/finance/localImageOcr";
 import {
   matchAccountByInstitution,
