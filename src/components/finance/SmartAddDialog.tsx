@@ -815,7 +815,20 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                     </span>
                   </p>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setDrafts([])}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        // Mantém a tabela guardada: basta dizer "pode lançar" para voltar.
+                        lastDraftsRef.current = drafts;
+                        setDrafts([]);
+                        void chat.append(
+                          "assistant",
+                          "Sem problema. Me diga o que mudar (valor, data, categoria ou conta) — ou escreva “pode lançar” para eu abrir a revisão com o que já montei.",
+                        );
+                        composerRef.current?.focus();
+                      }}
+                    >
                       Ajustar no texto
                     </Button>
                     <Button
