@@ -17,6 +17,7 @@ import { getStoredAvatarId, setStoredAvatarId } from "@/lib/profileAvatar";
 import { getStoredProfile, setStoredProfile } from "@/lib/profileCache";
 import { getCardDetailCache, setCardDetailCache } from "@/lib/cardDetailCache";
 import { getCardBrandTheme } from "@/lib/cardBrandTheme";
+import { pieEntranceAnimation } from "@/lib/chartAnimation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -550,16 +551,14 @@ const CardDetail: React.FC = () => {
                   <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
+                          key={`subgroup-distribution-${cardId}-${month}`}
                           data={subgroupChartData}
                           dataKey="value"
                           nameKey="name"
                           innerRadius={52}
                           outerRadius={82}
                           paddingAngle={3}
-                          isAnimationActive
-                          animationBegin={40}
-                          animationDuration={600}
-                          animationEasing="ease-out"
+                          {...pieEntranceAnimation}
                         >
                         {subgroupChartData.map((item, index) => (
                           <Cell key={item.name} fill={SUBGROUP_CHART_COLORS[index % SUBGROUP_CHART_COLORS.length]} />

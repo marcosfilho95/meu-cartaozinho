@@ -5,6 +5,7 @@ import { BarChart3, CreditCard, Loader2, PieChart as PieChartIcon, TrendingDown,
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { pieEntranceAnimation } from "@/lib/chartAnimation";
 import { formatCurrency } from "@/lib/constants";
 import { FinanceTx, fetchFinanceTransactions, getLastMonthKeys } from "@/lib/financeShared";
 import { buildExpenseBreakdown, buildMonthlyEvolution, buildSavingsTrend } from "@/lib/financeAnalytics";
@@ -176,7 +177,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userId }) => {
                 <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={breakdown} dataKey="value" nameKey="name" innerRadius="48%" outerRadius="78%" paddingAngle={2}>
+                      <Pie key={`expense-breakdown-${dimension}-${range}`} data={breakdown} dataKey="value" nameKey="name" innerRadius="48%" outerRadius="78%" paddingAngle={2} {...pieEntranceAnimation}>
                         {breakdown.map((item) => (
                           <Cell key={item.key} fill={item.color} />
                         ))}

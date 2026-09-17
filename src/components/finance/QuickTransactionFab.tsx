@@ -34,10 +34,10 @@ export const QuickTransactionFab: React.FC<QuickTransactionFabProps> = ({ userId
         >
           <button
             onClick={openSmart}
-            className="group flex items-center gap-2 rounded-full bg-card px-4 py-2.5 shadow-elevated ring-1 ring-border/60 transition-all hover:ring-primary/40"
+            className="group flex items-center gap-2 rounded-full gradient-primary px-4 py-2.5 text-primary-foreground shadow-elevated ring-2 ring-primary/25 transition-all hover:-translate-y-0.5 hover:opacity-95 hover:shadow-xl"
           >
-            <span className="text-xs font-semibold">Texto ou print</span>
-            <span className="flex h-8 w-8 items-center justify-center rounded-full gradient-primary text-primary-foreground">
+            <span className="text-xs font-bold">Lançamento Inteligente</span>
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-primary-foreground ring-1 ring-white/20">
               <Sparkles className="h-4 w-4" />
             </span>
           </button>

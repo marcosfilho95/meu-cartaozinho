@@ -294,7 +294,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   return (
     <div className="mx-auto max-w-6xl space-y-5 px-4 pb-10">
       <header className="flex flex-col gap-4 pt-1 lg:flex-row lg:items-end lg:justify-between">
-        <div><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">Organizador mensal</p><h1 className="mt-1 font-heading text-2xl font-bold sm:text-3xl">Seu dinheiro, com contexto.</h1><p className="mt-1 text-sm text-muted-foreground">Compare, ajuste e planeje o próximo passo sem transformar finanças em tarefa diária.</p></div>
+        <div><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">Organizador mensal</p><h1 className="mt-1 font-heading text-2xl font-bold sm:text-3xl">Mais clareza para hoje. Mais liberdade para amanhã.</h1><p className="mt-1 max-w-2xl text-sm text-muted-foreground">Entenda cada movimento, ajuste o que importa e transforme seu dinheiro em progresso para os seus planos.</p></div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <MonthNavigator currentMonth={referenceMonth} onMonthChange={setReferenceMonth} />
           <Button onClick={() => navigate(`/financas/fechamento?mes=${referenceMonth}`)} className="gap-2"><BarChart3 className="h-4 w-4" /> Revisar mês</Button>
@@ -303,7 +303,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
 
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" onClick={() => setManualOpen(true)}><Plus className="mr-1.5 h-4 w-4" /> Adicionar valor</Button>
-        <Button variant="outline" size="sm" onClick={() => setSmartOpen(true)}><Sparkles className="mr-1.5 h-4 w-4" /> Texto ou print</Button>
+        <Button size="sm" onClick={() => setSmartOpen(true)} className="gradient-primary gap-2 text-primary-foreground shadow-md shadow-primary/20 ring-1 ring-primary/25 transition-all hover:-translate-y-0.5 hover:opacity-95 hover:shadow-lg"><Sparkles className="h-4 w-4" /> Lançamento Inteligente</Button>
         <Button variant="ghost" size="sm" onClick={() => navigate("/financas/orcamento")}><Target className="mr-1.5 h-4 w-4" /> {spendingGoal > 0 ? "Ajustar meta" : "Definir meta"}</Button>
       </div>
 

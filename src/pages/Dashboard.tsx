@@ -15,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
 import { getDashboardCache, setDashboardCache } from "@/lib/dashboardCache";
 import { getCardBrandTheme } from "@/lib/cardBrandTheme";
+import { pieEntranceAnimation } from "@/lib/chartAnimation";
 import {
   formatCurrency,
   getCurrentMonth,
@@ -237,7 +238,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
                   <div className="relative h-52">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <Pie data={chartData} dataKey="value" nameKey="name" innerRadius="60%" outerRadius="84%" paddingAngle={3} strokeWidth={0}>
+                        <Pie key={`card-distribution-${month}`} data={chartData} dataKey="value" nameKey="name" innerRadius="60%" outerRadius="84%" paddingAngle={3} strokeWidth={0} {...pieEntranceAnimation}>
                           {chartData.map((item) => <Cell key={item.id} fill={item.color} />)}
                         </Pie>
                         <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} />

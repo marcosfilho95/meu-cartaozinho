@@ -160,9 +160,9 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
       <main className="mx-auto max-w-6xl space-y-6 px-4 pt-6 animate-fade-in sm:px-6">
         <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-primary">Visão financeira</p>
-            <h1 className="mt-2 max-w-2xl font-heading text-3xl leading-tight tracking-tight text-foreground sm:text-4xl">Entenda seu mês e transforme planos em progresso.</h1>
-            <p className="mt-2 max-w-xl text-sm text-muted-foreground">Organize receitas, gastos e objetivos em uma revisão mensal simples.</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-primary">Sua vida financeira, em um só lugar</p>
+            <h1 className="mt-2 max-w-2xl font-heading text-3xl leading-tight tracking-tight text-foreground sm:text-4xl">Seu dinheiro em ordem. Seus planos em movimento.</h1>
+            <p className="mt-2 max-w-xl text-sm text-muted-foreground">Entenda o presente, escolha com confiança e avance rumo ao futuro que você quer construir.</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <MonthNavigator currentMonth={selectedMonth} onMonthChange={setSelectedMonth} />
@@ -177,8 +177,8 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
         ) : !hasMonthData ? (
           <Card className="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/10 via-card to-card shadow-elevated">
             <CardContent className="flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
-              <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">{monthTitle(selectedMonth)}</p><h2 className="mt-2 font-heading text-2xl">Revise os valores deste mês</h2><p className="mt-2 max-w-xl text-sm text-muted-foreground">Informe sua renda, faturas e despesas para visualizar o resultado e planejar seus objetivos.</p></div>
-              <Button size="lg" onClick={() => navigate(`/financas/fechamento?mes=${selectedMonth}`)}>Começar agora</Button>
+              <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">{monthTitle(selectedMonth)}</p><h2 className="mt-2 font-heading text-2xl">Seu mês começa com clareza</h2><p className="mt-2 max-w-xl text-sm text-muted-foreground">Reúna renda, faturas e despesas para descobrir o que seu dinheiro pode realizar.</p></div>
+              <Button size="lg" onClick={() => navigate(`/financas/fechamento?mes=${selectedMonth}`)}>Organizar meu mês</Button>
             </CardContent>
           </Card>
         ) : (
@@ -192,15 +192,15 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
           <Card className="border-border/70 bg-primary text-primary-foreground shadow-elevated">
             <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <div className="flex items-center gap-2 text-primary-foreground/75"><Target className="h-4 w-4" /><p className="text-[10px] font-semibold uppercase tracking-[0.16em]">Qualidade financeira</p></div>
+                <div className="flex items-center gap-2 text-primary-foreground/75"><Target className="h-4 w-4" /><p className="text-[10px] font-semibold uppercase tracking-[0.16em]">Seu espaço para avançar</p></div>
                 <p className="mt-2 font-heading text-3xl">{data.summary.savingsRate.toFixed(0)}%</p>
-                <p className="text-sm text-primary-foreground/75">da renda ficou disponível neste mês.</p>
+                <p className="text-sm text-primary-foreground/75">da sua renda segue disponível para suas escolhas.</p>
               </div>
               <div className="grid gap-2 text-xs sm:text-right">
                 <div className="flex justify-between gap-6 sm:justify-end"><span className="text-primary-foreground/65">Gastos fixos</span><strong>{formatCurrency(data.summary.fixedExpenses)}</strong></div>
                 <div className="flex justify-between gap-6 sm:justify-end"><span className="text-primary-foreground/65">Gastos variáveis</span><strong>{formatCurrency(data.summary.variableExpenses)}</strong></div>
                 <div className="flex justify-between gap-6 sm:justify-end"><span className="text-primary-foreground/65">Meta utilizada</span><strong>{goalUsage === null ? "Defina uma meta" : `${goalUsage.toFixed(0)}%`}</strong></div>
-                <Button variant="secondary" size="sm" className="mt-1 gap-2 sm:justify-self-end" onClick={() => navigate("/financas")}>Ver análise completa <ArrowUpRight className="h-4 w-4" /></Button>
+                <Button variant="secondary" size="sm" className="mt-1 gap-2 sm:justify-self-end" onClick={() => navigate("/financas")}>Descobrir oportunidades <ArrowUpRight className="h-4 w-4" /></Button>
               </div>
             </CardContent>
           </Card>
@@ -222,8 +222,8 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
           <CardContent className="flex flex-col p-5">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <h2 className="font-heading text-lg font-bold">Planos e objetivos</h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">Veja o progresso sem misturar com seus gastos</p>
+                <h2 className="font-heading text-lg font-bold">Planos que ganham forma</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">Cada valor guardado aproxima você do que realmente importa.</p>
               </div>
               <PiggyBank className="h-4 w-4 shrink-0 text-primary" />
             </div>
@@ -253,13 +253,13 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
               </div>
             ) : (
               <div className="mt-4 rounded-xl border border-dashed p-5 text-center">
-                <p className="text-sm font-medium">Nenhum plano criado</p>
-                <p className="mt-1 text-xs text-muted-foreground">Crie uma viagem, reserva ou compra futura e acompanhe o progresso.</p>
+                <p className="text-sm font-medium">Seu próximo plano começa aqui</p>
+                <p className="mt-1 text-xs text-muted-foreground">Dê um destino ao seu dinheiro e acompanhe cada passo até realizá-lo.</p>
               </div>
             )}
 
             <Button className="mt-5 w-full" onClick={() => navigate("/financas/cofrinhos")}>
-              {data.goals.length ? "Organizar meus planos" : "Criar primeiro plano"} <ArrowUpRight className="ml-2 h-4 w-4" />
+              {data.goals.length ? "Impulsionar meus planos" : "Tirar um plano do papel"} <ArrowUpRight className="ml-2 h-4 w-4" />
             </Button>
           </CardContent>
         </Card>
