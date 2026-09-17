@@ -70,81 +70,83 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   };
 
   return (
-    <header className={cn("gradient-primary px-4 pb-7 pt-5", headerClassName)} style={headerStyle}>
-      <div className={cn("mx-auto max-w-2xl", containerClassName)}>
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+    <header className={cn("relative isolate overflow-hidden gradient-primary px-4 pb-8 pt-4 sm:pb-9", headerClassName)} style={headerStyle}>
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-white/[0.045]" aria-hidden />
+      <div className="pointer-events-none absolute -right-28 -top-36 h-80 w-80 rounded-full bg-emerald-200/10 blur-3xl" aria-hidden />
+      <div className="relative mx-auto max-w-2xl" style={{ zIndex: 1 }}>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3.5">
             {showBack && (
               <Button
                 variant="ghost"
-                size="icon"
                 onClick={handleBack}
-                className="h-9 w-9 rounded-xl text-primary-foreground/80 hover:bg-white/10 hover:text-primary-foreground"
+                className="h-11 shrink-0 gap-2 rounded-2xl border border-white/15 bg-white/[0.08] px-3 text-primary-foreground shadow-sm backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white/[0.16] hover:text-primary-foreground"
                 aria-label="Voltar"
               >
-                <ArrowLeft className="h-5 w-5" />
+                <ArrowLeft className="h-5 w-5" strokeWidth={2.2} />
+                <span className="hidden text-xs font-semibold sm:inline">Voltar</span>
               </Button>
             )}
-            <AppLogo size="sm" />
+            <AppLogo size="md" className="h-12 w-12 shrink-0 rounded-2xl ring-2 ring-white/30 shadow-lg" />
+            <div className="h-9 w-px shrink-0 bg-white/20" aria-hidden />
+            <button
+              type="button"
+              onClick={() => navigate("/perfil")}
+              className="group shrink-0 rounded-full transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
+              aria-label="Abrir perfil"
+            >
+              <UserAvatar
+                avatarId={avatarId ?? undefined}
+                avatarUrl={avatarUrl ?? undefined}
+                name={resolvedUserName}
+                size={52}
+                pending={avatarPending}
+                className="border-2 border-white/75 shadow-lg"
+              />
+            </button>
+            <div className="min-w-0">
+              {greetingLine && (
+                <p className="truncate text-[11px] font-semibold tracking-[0.04em] text-primary-foreground/70">{greetingLine}</p>
+              )}
+              <h1 className="truncate font-heading text-[1.45rem] font-bold leading-tight tracking-[-0.02em] text-primary-foreground sm:text-[1.65rem]">
+                {title}
+              </h1>
+            </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             {topActions}
             <Button
               variant="ghost"
-              size="icon"
               onClick={togglePrivacy}
-              className="h-9 w-9 rounded-xl text-primary-foreground/70 hover:bg-white/10 hover:text-primary-foreground"
+              className="h-11 gap-2 rounded-2xl border border-white/15 bg-white/[0.08] px-3 text-primary-foreground/85 shadow-sm backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white/[0.16] hover:text-primary-foreground"
               aria-label={isPrivate ? "Mostrar valores" : "Ocultar valores"}
               title={isPrivate ? "Mostrar valores" : "Ocultar valores"}
               aria-pressed={isPrivate}
             >
               {isPrivate ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              <span className="hidden text-xs font-semibold xl:inline">Privacidade</span>
             </Button>
             <Button
               variant="ghost"
-              size="icon"
               data-tour="profile-button"
               onClick={() => navigate("/perfil")}
-              className="h-9 w-9 rounded-xl text-primary-foreground/70 hover:bg-white/10 hover:text-primary-foreground"
+              className="h-11 gap-2 rounded-2xl border border-white/15 bg-white/[0.08] px-3 text-primary-foreground/85 shadow-sm backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white/[0.16] hover:text-primary-foreground"
               aria-label="Perfil"
             >
               <UserCircle2 className="h-5 w-5" />
+              <span className="hidden text-xs font-semibold lg:inline">Perfil</span>
             </Button>
             <Button
               variant="ghost"
-              size="icon"
               data-tour="logout-button"
               onClick={handleLogout}
-              className="h-9 w-9 rounded-xl text-primary-foreground/70 hover:bg-white/10 hover:text-primary-foreground"
+              className="h-11 gap-2 rounded-2xl border border-white/15 bg-white/[0.08] px-3 text-primary-foreground/85 shadow-sm backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white/[0.16] hover:text-primary-foreground"
               aria-label="Sair"
             >
               <LogOut className="h-5 w-5" />
+              <span className="hidden text-xs font-semibold lg:inline">Sair</span>
             </Button>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate("/perfil")}
-            className="flex-shrink-0 rounded-full transition-transform hover:scale-105"
-          >
-            <UserAvatar
-              avatarId={avatarId ?? undefined}
-              avatarUrl={avatarUrl ?? undefined}
-              name={resolvedUserName}
-              size={50}
-              pending={avatarPending}
-            />
-          </button>
-          <div className="min-w-0">
-            {greetingLine && (
-              <p className="text-xs font-semibold tracking-[0.01em] text-primary-foreground/75">{greetingLine}</p>
-            )}
-            <h1 className="truncate font-heading text-[1.35rem] font-extrabold tracking-[-0.01em] text-primary-foreground">
-              {title}
-            </h1>
           </div>
         </div>
 

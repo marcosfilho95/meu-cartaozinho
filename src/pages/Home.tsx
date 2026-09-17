@@ -160,11 +160,11 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
       <AppHeader title="Meu Cartãozinho" greeting={headerProfile.greeting} userName={headerProfile.firstName} avatarId={headerProfile.avatarId} avatarUrl={headerProfile.avatarUrl} avatarPending={!headerProfile.resolved} />
 
       <main className="mx-auto max-w-6xl space-y-6 px-4 pt-6 animate-fade-in sm:px-6">
-        <header className="page-title-shell flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <header className="page-title-shell flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="page-title-content">
             <p className="page-title-eyebrow">Sua vida financeira, em um só lugar</p>
             <h1 className="page-title-heading">Clareza para decidir. Liberdade para viver.</h1>
-            <p className="page-title-description">Um retrato completo do seu mês para transformar intenção em escolhas e planos em realidade.</p>
+            <p className="page-title-description">Uma visão completa do seu mês para decidir com clareza e avançar com intenção.</p>
           </div>
           <div className="page-title-content flex flex-col gap-2 sm:flex-row sm:items-center">
             <MonthNavigator currentMonth={selectedMonth} onMonthChange={setSelectedMonth} />
