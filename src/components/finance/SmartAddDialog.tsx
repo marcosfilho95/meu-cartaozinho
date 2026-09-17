@@ -567,13 +567,15 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         const amount = Number(t.amount) > 0
           ? Number(t.amount)
           : memory?.amount ?? Number(t.amount);
-        let date = t.date;
+        let date = normalizeDraftDate(t.date);
+        const currentMonth = todayIso().slice(0, 7);
         if (!t.explicit_day && memory?.day && !t.explicit_month && !t.explicit_year) {
           date = shiftDateToMonth(memory.day, new Date());
-        } else if (!t.explicit_month && !t.explicit_year && date < new Date().toISOString().slice(0, 7)) {
+        } else if (!t.explicit_month && !t.explicit_year && date.slice(0, 7) < currentMonth) {
           const day = Number(date.slice(8, 10)) || 1;
           date = shiftDateToMonth(day, new Date());
         }
+        date = normalizeDraftDate(date);
         const finalCategoryId = category_id || (memoryCategoryExists ? memory!.category_id! : "");
         const finalAccountId = account_id || (memoryAccountExists ? memory!.account_id! : "");
 
