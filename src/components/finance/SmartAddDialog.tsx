@@ -389,10 +389,14 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
       }
 
       if (isPdf && !isPdfTextSufficient(extracted)) {
-        // PDF escaneado: a IA lê a primeira página como imagem.
+        // PDF escaneado: a IA lê as páginas como imagens (até 4).
         const pages = await renderPdfPagesToImages(file);
         if (pages.length > 0) {
-          setImageDataUrl(pages[0].dataUrl);
+          setImageDataUrls((current) => {
+            const room = Math.max(0, MAX_IMAGES - current.length);
+            const extra = pages.slice(0, Math.min(4, room)).map((page) => page.dataUrl);
+            return [...current, ...extra];
+          });
           setAttachment(null);
           toast.success(`${file.name} anexado como imagem (documento escaneado).`);
           return true;
@@ -433,14 +437,15 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
 
   const runParse = async () => {
     const message = text.trim();
-    const image = imageDataUrl;
+    const images = imageDataUrls;
     const file = attachment;
-    const mode = image ? "image" : file ? "paste" : "text";
-    if (!message && !image && !file) return;
+    const hasImages = images.length > 0;
+    const mode = hasImages ? "image" : file ? "paste" : "text";
+    if (!message && !hasImages && !file) return;
 
     // "Sim, pode lançar": confirma a última tabela conferida sem pedir tudo de novo.
     const pending = drafts.length ? drafts : lastDraftsRef.current;
-    if (!image && !file && message && pending.length && isConfirmation(message)) {
+    if (!hasImages && !file && message && pending.length && isConfirmation(message)) {
       void chat.append("user", message);
       setText("");
       setDrafts(pending);
