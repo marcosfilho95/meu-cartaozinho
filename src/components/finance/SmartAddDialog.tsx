@@ -258,7 +258,7 @@ const AssistantMessage: React.FC<{ content: string }> = ({ content }) => {
 export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) => {
   const queryClient = useQueryClient();
   const [text, setText] = useState("");
-  const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
+  const [imageDataUrls, setImageDataUrls] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [optionsLoading, setOptionsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -291,7 +291,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     let cancelled = false;
     setText("");
 
-    setImageDataUrl(null);
+    setImageDataUrls([]);
     setDrafts([]);
     setStage("input");
     setOptionsLoading(true);
@@ -342,6 +342,8 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     };
   }, [open, userId]);
 
+  const MAX_IMAGES = 8;
+
   const handleImagePick = useCallback(async (file: File | undefined) => {
     if (!file) return false;
     if (!file.type.startsWith("image/")) {
@@ -354,7 +356,13 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     }
     try {
       const url = await fileToDataUrl(file);
-      setImageDataUrl(url);
+      setImageDataUrls((current) => {
+        if (current.length >= MAX_IMAGES) {
+          toast.info(`Máximo de ${MAX_IMAGES} imagens por envio.`);
+          return current;
+        }
+        return [...current, url];
+      });
       return true;
     } catch {
       toast.error("Não foi possível abrir a imagem colada.");
