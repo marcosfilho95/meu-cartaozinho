@@ -11,6 +11,7 @@ import Home from "./pages/Home";
 import { FinanceLayout } from "./components/finance/FinanceLayout";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { prefetchCommonRoutes, routeLoaders } from "@/lib/routeLoaders";
+import { PrivacyModeProvider } from "@/hooks/use-privacy-mode";
 
 const Dashboard = lazy(routeLoaders["/cards"]);
 const CardDetail = lazy(routeLoaders["/cartao"]);
@@ -152,19 +153,21 @@ const AppRoutes = () => {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <Suspense fallback={<RouteFallback />}>
-        <Routes>
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
-          <Route path="/*" element={<AppRoutes />} />
-        </Routes>
-        </Suspense>
-      </BrowserRouter>
-    </TooltipProvider>
+    <PrivacyModeProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <Suspense fallback={<RouteFallback />}>
+          <Routes>
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
+            <Route path="/*" element={<AppRoutes />} />
+          </Routes>
+          </Suspense>
+        </BrowserRouter>
+      </TooltipProvider>
+    </PrivacyModeProvider>
   </QueryClientProvider>
 );
 

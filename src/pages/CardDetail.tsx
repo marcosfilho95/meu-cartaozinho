@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { ChartPie, CreditCard, Pencil, Plus, ReceiptText, ShoppingCart, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useUserHeaderProfile } from "@/hooks/use-user-header-profile";
+import { PrivacyValue, usePrivacyMode } from "@/hooks/use-privacy-mode";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -88,6 +89,7 @@ const CardDetail: React.FC = () => {
   const [editingSubgroupName, setEditingSubgroupName] = useState("");
   const [legendVisible, setLegendVisible] = useState(false);
   const headerProfile = useUserHeaderProfile(userId);
+  const { isPrivate } = usePrivacyMode();
 
   useEffect(() => {
     if (navState.initialUserId) {
@@ -363,7 +365,7 @@ const CardDetail: React.FC = () => {
 
               <div className="mt-auto py-5">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/65">Fatura de {new Date(`${month}-15T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</p>
-                <p className="mt-1 font-heading text-3xl font-extrabold tracking-tight drop-shadow-sm sm:text-4xl">{formatCurrency(subgroupTotal)}</p>
+                <p className="mt-1 font-heading text-3xl font-extrabold tracking-tight drop-shadow-sm sm:text-4xl"><PrivacyValue>{formatCurrency(subgroupTotal)}</PrivacyValue></p>
               </div>
 
               <div className="flex items-end justify-between gap-4 border-t border-white/15 pt-3">
@@ -547,7 +549,8 @@ const CardDetail: React.FC = () => {
               <p className="mt-2 text-sm text-muted-foreground">Nenhuma conta para este mes.</p>
             ) : (
               <div className="mt-3 grid gap-4 lg:grid-cols-[260px_1fr]">
-                <div className="h-60 rounded-xl border border-border/70 bg-background/50 p-2 sm:h-64 lg:h-52">
+                <div key={`subgroup-distribution-animation-${cardId}-${month}`} className="h-60 rounded-xl border border-border/70 bg-background/50 p-2 sm:h-64 lg:h-52">
+                  <div className="h-full chart-intro-spin">
                   <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
@@ -565,7 +568,7 @@ const CardDetail: React.FC = () => {
                         ))}
                       </Pie>
                       <Tooltip
-                        formatter={(value: number) => formatCurrency(value)}
+                        formatter={(value: number) => isPrivate ? "••••" : formatCurrency(value)}
                         contentStyle={{
                           borderRadius: "14px",
                           border: "1px solid hsl(var(--border))",
@@ -579,6 +582,7 @@ const CardDetail: React.FC = () => {
                       />
                     </PieChart>
                   </ResponsiveContainer>
+                  </div>
                 </div>
 
                 <div className={`space-y-2 transition-opacity duration-500 ${legendVisible ? "opacity-100" : "opacity-0"}`}>

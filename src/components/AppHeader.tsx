@@ -1,12 +1,13 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, LogOut, UserCircle2 } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, LogOut, UserCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { UserAvatar } from "@/components/UserAvatar";
 import { AppLogo } from "@/components/AppLogo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { usePrivacyMode } from "@/hooks/use-privacy-mode";
 
 interface AppHeaderProps {
   title: string;
@@ -48,6 +49,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   children,
 }) => {
   const navigate = useNavigate();
+  const { isPrivate, togglePrivacy } = usePrivacyMode();
   const resolvedUserName = (userName || "").trim() || "Usuário";
   const greetingLine = greeting ? `${greeting}, ${resolvedUserName}` : subtitle;
 
@@ -88,6 +90,17 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
           <div className="flex items-center gap-1.5">
             {topActions}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={togglePrivacy}
+              className="h-9 w-9 rounded-xl text-primary-foreground/70 hover:bg-white/10 hover:text-primary-foreground"
+              aria-label={isPrivate ? "Mostrar valores" : "Ocultar valores"}
+              title={isPrivate ? "Mostrar valores" : "Ocultar valores"}
+              aria-pressed={isPrivate}
+            >
+              {isPrivate ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+            </Button>
             <Button
               variant="ghost"
               size="icon"

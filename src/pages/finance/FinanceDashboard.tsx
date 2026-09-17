@@ -47,6 +47,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/constants";
 import { getGoalIcon } from "@/components/finance/goalVisuals";
+import { PrivacyValue, usePrivacyMode } from "@/hooks/use-privacy-mode";
 
 import { syncCartaozinhoIncomeMonths } from "@/lib/finance/cartaozinhoSync";
 import { postDueFixedBillsForMonth } from "@/lib/finance/fixedBills";
@@ -127,6 +128,7 @@ type DashboardCacheShape = {
 };
 
 const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
+  const { isPrivate } = usePrivacyMode();
   const navigate = useNavigate();
   const [referenceMonth, setReferenceMonth] = useState(() => monthKey(new Date()));
   const [analysisPeriod, setAnalysisPeriod] = useState<AnalysisPeriod>("semester");
@@ -294,7 +296,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   return (
     <div className="mx-auto max-w-6xl space-y-5 px-4 pb-10">
       <header className="flex flex-col gap-4 pt-1 lg:flex-row lg:items-end lg:justify-between">
-        <div><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">Organizador mensal</p><h1 className="mt-1 font-heading text-2xl font-bold sm:text-3xl">Mais clareza para hoje. Mais liberdade para amanhã.</h1><p className="mt-1 max-w-2xl text-sm text-muted-foreground">Entenda cada movimento, ajuste o que importa e transforme seu dinheiro em progresso para os seus planos.</p></div>
+        <div className="max-w-3xl space-y-2"><p className="inline-flex items-center rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">Planilha financeira</p><h1 className="font-heading text-3xl font-bold leading-[1.14] tracking-[-0.025em] sm:text-4xl lg:text-[2.7rem]">Seu dinheiro com intenção. Sua vida com direção.</h1><p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">Controle receitas e despesas, planeje seus próximos passos e faça cada escolha aproximar você do que importa.</p></div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <MonthNavigator currentMonth={referenceMonth} onMonthChange={setReferenceMonth} />
           <Button onClick={() => navigate(`/financas/fechamento?mes=${referenceMonth}`)} className="gap-2"><BarChart3 className="h-4 w-4" /> Revisar mês</Button>
@@ -313,7 +315,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
         <Card className="border-primary/20 bg-gradient-to-br from-primary/10 via-card to-card shadow-elevated"><CardContent className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between"><div><Badge variant="outline">{monthTitle(referenceMonth)}</Badge><h2 className="mt-3 font-heading text-xl font-bold">Este mês ainda está em branco</h2><p className="mt-1 max-w-xl text-sm text-muted-foreground">Revise o mês para incluir renda, faturas, gastos fixos e valores destinados aos seus planos.</p></div><Button size="lg" onClick={() => navigate(`/financas/fechamento?mes=${referenceMonth}`)}>Começar revisão <ArrowRight className="ml-2 h-4 w-4" /></Button></CardContent></Card>
       ) : (
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {metricCards.map(({ label, value, icon: Icon, tone, helper }) => <Card key={label} className="border-border/70 shadow-card"><CardContent className="p-4"><div className="flex items-center justify-between"><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{label}</p><Icon className={cn("h-4 w-4", tone)} /></div><p className={cn("mt-3 text-2xl font-bold tabular-nums", tone)}>{formatCurrency(value)}</p><p className="mt-1 text-[11px] text-muted-foreground">{helper}</p></CardContent></Card>)}
+          {metricCards.map(({ label, value, icon: Icon, tone, helper }) => <Card key={label} className="border-border/70 shadow-card"><CardContent className="p-4"><div className="flex items-center justify-between"><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{label}</p><Icon className={cn("h-4 w-4", tone)} /></div><p className={cn("mt-3 text-2xl font-bold tabular-nums", tone)}><PrivacyValue>{formatCurrency(value)}</PrivacyValue></p><p className="mt-1 text-[11px] text-muted-foreground">{helper}</p></CardContent></Card>)}
         </section>
       )}
 
@@ -361,13 +363,13 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
                 <TrendingUp className="h-4 w-4 shrink-0 text-primary" />
               </div>
               <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                <div className="rounded-xl bg-success/5 p-3"><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Receitas</p><p className="mt-1 font-bold tabular-nums text-success">{formatCurrency(periodSummary.income)}</p></div>
-                <div className="rounded-xl bg-destructive/5 p-3"><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Despesas</p><p className="mt-1 font-bold tabular-nums text-destructive">{formatCurrency(periodSummary.expenses)}</p></div>
-                <div className="rounded-xl bg-muted/50 p-3"><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Resultado</p><p className={cn("mt-1 font-bold tabular-nums", periodSummary.result >= 0 ? "text-success" : "text-destructive")}>{formatCurrency(periodSummary.result)}</p></div>
+                <div className="rounded-xl bg-success/5 p-3"><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Receitas</p><p className="mt-1 font-bold tabular-nums text-success"><PrivacyValue>{formatCurrency(periodSummary.income)}</PrivacyValue></p></div>
+                <div className="rounded-xl bg-destructive/5 p-3"><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Despesas</p><p className="mt-1 font-bold tabular-nums text-destructive"><PrivacyValue>{formatCurrency(periodSummary.expenses)}</PrivacyValue></p></div>
+                <div className="rounded-xl bg-muted/50 p-3"><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Resultado</p><p className={cn("mt-1 font-bold tabular-nums", periodSummary.result >= 0 ? "text-success" : "text-destructive")}><PrivacyValue>{formatCurrency(periodSummary.result)}</PrivacyValue></p></div>
               </div>
               <div className="mt-auto flex items-center justify-between border-t border-border/60 pt-4 text-xs">
                 <span className="text-muted-foreground">Resultado médio por mês</span>
-                <strong className={cn("tabular-nums", periodSummary.averageResult >= 0 ? "text-success" : "text-destructive")}>{formatCurrency(periodSummary.averageResult)}</strong>
+                <strong className={cn("tabular-nums", periodSummary.averageResult >= 0 ? "text-success" : "text-destructive")}><PrivacyValue>{formatCurrency(periodSummary.averageResult)}</PrivacyValue></strong>
               </div>
             </CardContent>
           </Card>
@@ -383,7 +385,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
                     <ReferenceLine y={0} stroke="hsl(var(--foreground))" strokeOpacity={0.25} />
                     <XAxis dataKey="month" axisLine={false} tickLine={false} fontSize={9} angle={-42} textAnchor="end" height={38} interval="preserveStartEnd" />
                     <YAxis axisLine={false} tickLine={false} fontSize={8} tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
-                    <Tooltip formatter={(value: number, name: string) => [formatCurrency(name === "Despesas" ? Math.abs(value) : value), name]} contentStyle={chartTooltipStyle} />
+                    <Tooltip formatter={(value: number, name: string) => [isPrivate ? "••••" : formatCurrency(name === "Despesas" ? Math.abs(value) : value), name]} contentStyle={chartTooltipStyle} />
                     <Bar dataKey="receitas" name="Receitas" stackId="movimento" barSize={24} fill="hsl(var(--success))" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="despesas" name="Despesas" stackId="movimento" barSize={24} fill="hsl(var(--destructive))" fillOpacity={0.78} radius={[0, 0, 4, 4]} />
                     <Line type="monotone" dataKey="resultado" name="Resultado" stroke="hsl(var(--primary))" strokeWidth={2.25} dot={false} activeDot={{ r: 4 }} />

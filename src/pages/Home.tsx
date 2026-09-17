@@ -31,6 +31,8 @@ import { getFinanceViewCache, setFinanceViewCache } from "@/lib/financeViewCache
 import { getErrorMessage, untypedSupabase } from "@/lib/supabaseUntyped";
 import { cn } from "@/lib/utils";
 import { subscribeFinanceSync } from "@/lib/financeSyncBus";
+import { PrivacyValue } from "@/hooks/use-privacy-mode";
+import { ProductExplainerDialog } from "@/components/ProductExplainerDialog";
 
 interface HomeProps {
   userId: string;
@@ -160,9 +162,9 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
       <main className="mx-auto max-w-6xl space-y-6 px-4 pt-6 animate-fade-in sm:px-6">
         <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-primary">Sua vida financeira, em um só lugar</p>
-            <h1 className="mt-2 max-w-2xl font-heading text-3xl leading-tight tracking-tight text-foreground sm:text-4xl">Seu dinheiro em ordem. Seus planos em movimento.</h1>
-            <p className="mt-2 max-w-xl text-sm text-muted-foreground">Entenda o presente, escolha com confiança e avance rumo ao futuro que você quer construir.</p>
+            <p className="inline-flex items-center rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">Sua vida financeira, em um só lugar</p>
+            <h1 className="mt-3 max-w-3xl font-heading text-3xl leading-[1.14] tracking-[-0.025em] text-foreground sm:text-4xl lg:text-[2.7rem]">Clareza para decidir. Liberdade para viver.</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">Um retrato completo do seu mês para transformar intenção em escolhas e planos em realidade.</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <MonthNavigator currentMonth={selectedMonth} onMonthChange={setSelectedMonth} />
@@ -183,7 +185,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
           </Card>
         ) : (
           <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {metricCards.map((metric) => <Card key={metric.label} className="border-border/70 shadow-card"><CardContent className="p-4"><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{metric.label}</p><p className={cn("mt-2 text-2xl font-bold tabular-nums", metric.tone)}>{formatCurrency(metric.value)}</p></CardContent></Card>)}
+            {metricCards.map((metric) => <Card key={metric.label} className="border-border/70 shadow-card"><CardContent className="p-4"><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{metric.label}</p><p className={cn("mt-2 text-2xl font-bold tabular-nums", metric.tone)}><PrivacyValue>{formatCurrency(metric.value)}</PrivacyValue></p></CardContent></Card>)}
           </section>
         )}
 
@@ -193,13 +195,13 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
             <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="flex items-center gap-2 text-primary-foreground/75"><Target className="h-4 w-4" /><p className="text-[10px] font-semibold uppercase tracking-[0.16em]">Seu espaço para avançar</p></div>
-                <p className="mt-2 font-heading text-3xl">{data.summary.savingsRate.toFixed(0)}%</p>
+                <p className="mt-2 font-heading text-3xl"><PrivacyValue>{data.summary.savingsRate.toFixed(0)}%</PrivacyValue></p>
                 <p className="text-sm text-primary-foreground/75">da sua renda segue disponível para suas escolhas.</p>
               </div>
               <div className="grid gap-2 text-xs sm:text-right">
-                <div className="flex justify-between gap-6 sm:justify-end"><span className="text-primary-foreground/65">Gastos fixos</span><strong>{formatCurrency(data.summary.fixedExpenses)}</strong></div>
-                <div className="flex justify-between gap-6 sm:justify-end"><span className="text-primary-foreground/65">Gastos variáveis</span><strong>{formatCurrency(data.summary.variableExpenses)}</strong></div>
-                <div className="flex justify-between gap-6 sm:justify-end"><span className="text-primary-foreground/65">Meta utilizada</span><strong>{goalUsage === null ? "Defina uma meta" : `${goalUsage.toFixed(0)}%`}</strong></div>
+                <div className="flex justify-between gap-6 sm:justify-end"><span className="text-primary-foreground/65">Gastos fixos</span><strong><PrivacyValue>{formatCurrency(data.summary.fixedExpenses)}</PrivacyValue></strong></div>
+                <div className="flex justify-between gap-6 sm:justify-end"><span className="text-primary-foreground/65">Gastos variáveis</span><strong><PrivacyValue>{formatCurrency(data.summary.variableExpenses)}</PrivacyValue></strong></div>
+                <div className="flex justify-between gap-6 sm:justify-end"><span className="text-primary-foreground/65">Meta utilizada</span><strong>{goalUsage === null ? "Defina uma meta" : <PrivacyValue>{goalUsage.toFixed(0)}%</PrivacyValue>}</strong></div>
                 <Button variant="secondary" size="sm" className="mt-1 gap-2 sm:justify-self-end" onClick={() => navigate("/financas")}>Descobrir oportunidades <ArrowUpRight className="h-4 w-4" /></Button>
               </div>
             </CardContent>
@@ -207,15 +209,17 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
 
 
         <section className="grid gap-4 md:grid-cols-2">
-          <button type="button" onClick={() => navigate("/cards")} className="group rounded-2xl border border-border/70 bg-card p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-elevated">
-            <div className="flex items-start justify-between gap-4"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary"><CreditCard className="h-5 w-5" /></div><ArrowUpRight className="h-4 w-4 text-muted-foreground transition group-hover:text-primary" /></div>
-            <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Cartões e faturas</p><h2 className="mt-1 font-heading text-xl font-bold">Meu Cartãozinho</h2><p className="mt-3 text-2xl font-bold text-primary">{formatCurrency(data.card.total)}</p><p className="mt-1 text-xs text-muted-foreground">Total de {monthTitle(selectedMonth).toLocaleLowerCase("pt-BR")} · mesmo valor usado no Organizador{data.card.people > 0 ? ` · ${data.card.people} ${data.card.people === 1 ? "pessoa" : "pessoas"}` : ""}</p>
-          </button>
+          <div className="group rounded-2xl border border-border/70 bg-card p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-elevated">
+            <button type="button" onClick={() => navigate("/cards")} className="w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><div className="flex items-start justify-between gap-4"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary"><CreditCard className="h-5 w-5" /></div><ArrowUpRight className="h-4 w-4 text-muted-foreground transition group-hover:text-primary" /></div>
+            <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Controle compartilhado</p><h2 className="mt-1 font-heading text-xl font-bold">Meu Cartãozinho</h2><p className="mt-3 text-2xl font-bold text-primary"><PrivacyValue>{formatCurrency(data.card.total)}</PrivacyValue></p><p className="mt-1 text-xs text-muted-foreground">Acompanhe compras por pessoa e saiba quem gastou o quê{data.card.people > 0 ? ` · ${data.card.people} ${data.card.people === 1 ? "pessoa" : "pessoas"} acompanhadas` : ""}</p></button>
+            <div className="mt-4 border-t border-border/60 pt-2"><ProductExplainerDialog product="cartaozinho" /></div>
+          </div>
 
-          <button type="button" onClick={() => navigate("/financas")} className="group rounded-2xl border border-border/70 bg-card p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-elevated">
-            <div className="flex items-start justify-between gap-4"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent/20 text-primary"><Wallet className="h-5 w-5" /></div><ArrowUpRight className="h-4 w-4 text-muted-foreground transition group-hover:text-primary" /></div>
-            <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Organização mensal</p><h2 className="mt-1 font-heading text-xl font-bold">Organizador</h2><p className={cn("mt-3 text-2xl font-bold", data.summary.result >= 0 ? "text-success" : "text-destructive")}>{formatCurrency(data.summary.result)}</p><p className="mt-1 text-xs text-muted-foreground">Resultado do mês{data.reserved > 0 ? ` · ${formatCurrency(data.reserved)} reservado para planos` : ""}</p>
-          </button>
+          <div className="group rounded-2xl border border-border/70 bg-card p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-elevated">
+            <button type="button" onClick={() => navigate("/financas")} className="w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><div className="flex items-start justify-between gap-4"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent/20 text-primary"><Wallet className="h-5 w-5" /></div><ArrowUpRight className="h-4 w-4 text-muted-foreground transition group-hover:text-primary" /></div>
+            <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Controle financeiro</p><h2 className="mt-1 font-heading text-xl font-bold">Organizador</h2><p className={cn("mt-3 text-2xl font-bold", data.summary.result >= 0 ? "text-success" : "text-destructive")}><PrivacyValue>{formatCurrency(data.summary.result)}</PrivacyValue></p><p className="mt-1 text-xs text-muted-foreground">Sua planilha de receitas, despesas e planos{data.reserved > 0 ? " · valor reservado para planos" : ""}</p></button>
+            <div className="mt-4 border-t border-border/60 pt-2"><ProductExplainerDialog product="organizador" /></div>
+          </div>
         </section>
 
         <Card className="border-border/70 shadow-card">
@@ -236,14 +240,14 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
                     <div key={goal.id}>
                       <div className="flex items-center justify-between gap-2 text-xs">
                         <span className="flex min-w-0 items-center gap-1.5 truncate font-medium"><GoalIcon className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />{goal.name}</span>
-                        {goal.target > 0 ? <strong className="text-primary">{goal.progress.toFixed(0)}%</strong> : <strong className="text-primary">{formatCurrency(goal.saved)}</strong>}
+                        {goal.target > 0 ? <strong className="text-primary">{goal.progress.toFixed(0)}%</strong> : <strong className="text-primary"><PrivacyValue>{formatCurrency(goal.saved)}</PrivacyValue></strong>}
                       </div>
                       {goal.target > 0 && (
                         <>
                           <Progress value={goal.progress} className="mt-1.5 h-2" />
                           <div className="mt-1 flex justify-between gap-2 text-[10px] text-muted-foreground">
-                            <span>{formatCurrency(goal.saved)} guardados</span>
-                            <span>Faltam {formatCurrency(Math.max(goal.target - goal.saved, 0))}</span>
+                            <span><PrivacyValue>{formatCurrency(goal.saved)}</PrivacyValue> guardados</span>
+                            <span>Faltam <PrivacyValue>{formatCurrency(Math.max(goal.target - goal.saved, 0))}</PrivacyValue></span>
                           </div>
                         </>
                       )}
@@ -264,7 +268,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
           </CardContent>
         </Card>
 
-        <p className="text-center text-[11px] text-muted-foreground">Patrimônio estimado: <span className={cn("font-semibold", data.netWorth.total >= 0 ? "text-foreground" : "text-destructive")}>{formatCurrency(data.netWorth.total)}</span></p>
+        <p className="text-center text-[11px] text-muted-foreground">Patrimônio estimado: <span className={cn("font-semibold", data.netWorth.total >= 0 ? "text-foreground" : "text-destructive")}><PrivacyValue>{formatCurrency(data.netWorth.total)}</PrivacyValue></span></p>
           </>
         )}
       </main>

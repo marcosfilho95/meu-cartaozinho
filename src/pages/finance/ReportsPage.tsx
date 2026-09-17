@@ -11,6 +11,7 @@ import { FinanceTx, fetchFinanceTransactions, getLastMonthKeys } from "@/lib/fin
 import { buildExpenseBreakdown, buildMonthlyEvolution, buildSavingsTrend } from "@/lib/financeAnalytics";
 import { untypedSupabase } from "@/lib/supabaseUntyped";
 import type { GoalMovement } from "@/lib/financeOverview";
+import { PrivacyValue, usePrivacyMode } from "@/hooks/use-privacy-mode";
 
 interface ReportsPageProps {
   userId: string;
@@ -24,6 +25,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userId }) => {
   const [goalMovements, setGoalMovements] = useState<GoalMovement[]>([]);
   const [range, setRange] = useState<number>(6);
   const [dimension, setDimension] = useState<"category" | "card">("category");
+  const { isPrivate } = usePrivacyMode();
 
   useEffect(() => {
     let mounted = true;
@@ -97,33 +99,33 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userId }) => {
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground">Sobra do último mês</p>
             <p className={`font-heading text-xl font-bold ${trend.current >= 0 ? "text-success" : "text-destructive"}`}>
-              {formatCurrency(trend.current)}
+              <PrivacyValue>{formatCurrency(trend.current)}</PrivacyValue>
             </p>
             <Badge variant="outline" className={`gap-1 ${trendPositive ? "text-success" : trend.direction === "spending" ? "text-destructive" : ""}`}>
               <TrendIcon className="h-3 w-3" />
               {trend.direction === "stable"
                 ? "Estável em relação ao mês anterior"
-                : `${formatCurrency(Math.abs(trend.delta))} ${trendPositive ? "a mais" : "a menos"} de sobra`}
+                : <><PrivacyValue>{formatCurrency(Math.abs(trend.delta))}</PrivacyValue> {trendPositive ? "a mais" : "a menos"} de sobra</>}
             </Badge>
           </div>
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground">Cofrinhos no último mês</p>
             <p className={`font-heading text-xl font-bold ${(latest?.reservaLiquida || 0) >= 0 ? "text-success" : "text-destructive"}`}>
-              {(latest?.reservaLiquida || 0) > 0 ? "+" : ""}{formatCurrency(latest?.reservaLiquida || 0)}
+              {(latest?.reservaLiquida || 0) > 0 ? "+" : ""}<PrivacyValue>{formatCurrency(latest?.reservaLiquida || 0)}</PrivacyValue>
             </p>
             <p className="text-[11px] text-muted-foreground">
-              {formatCurrency(latest?.aportes || 0)} guardados · {formatCurrency(latest?.retiradas || 0)} retirados
+              <PrivacyValue>{formatCurrency(latest?.aportes || 0)}</PrivacyValue> guardados · <PrivacyValue>{formatCurrency(latest?.retiradas || 0)}</PrivacyValue> retirados
             </p>
           </div>
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground">Média de sobra no período</p>
-            <p className="font-heading text-xl font-bold">{formatCurrency(trend.average)}</p>
+            <p className="font-heading text-xl font-bold"><PrivacyValue>{formatCurrency(trend.average)}</PrivacyValue></p>
             <p className="text-[11px] text-muted-foreground">Últimos {range} meses</p>
           </div>
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground">Variação das despesas</p>
             <p className={`font-heading text-xl font-bold ${trend.expensesDelta <= 0 ? "text-success" : "text-destructive"}`}>
-              {trend.expensesDelta > 0 ? "+" : ""}{formatCurrency(trend.expensesDelta)}
+              {trend.expensesDelta > 0 ? "+" : ""}<PrivacyValue>{formatCurrency(trend.expensesDelta)}</PrivacyValue>
             </p>
             <p className="text-[11px] text-muted-foreground">Comparado ao mês anterior</p>
           </div>
@@ -143,7 +145,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userId }) => {
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} tickFormatter={(value) => `${Math.round(Number(value) / 1000)}k`} />
-                  <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))" }} />
+                  <Tooltip formatter={(value: number) => isPrivate ? "••••" : formatCurrency(value)} contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))" }} />
                   <Bar dataKey="receitas" fill="hsl(152, 55%, 42%)" radius={[3, 3, 0, 0]} />
                   <Bar dataKey="despesas" fill="hsl(0, 72%, 55%)" radius={[3, 3, 0, 0]} />
                 </BarChart>
@@ -174,7 +176,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userId }) => {
               <p className="py-10 text-center text-sm text-muted-foreground">Sem despesas para exibir.</p>
             ) : (
               <>
-                <div className="h-72">
+                <div key={`expense-breakdown-animation-${dimension}-${range}`} className="h-72 chart-intro-spin">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie key={`expense-breakdown-${dimension}-${range}`} data={breakdown} dataKey="value" nameKey="name" innerRadius="48%" outerRadius="78%" paddingAngle={2} {...pieEntranceAnimation}>
@@ -182,7 +184,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userId }) => {
                           <Cell key={item.key} fill={item.color} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))" }} />
+                      <Tooltip formatter={(value: number) => isPrivate ? "••••" : formatCurrency(value)} contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))" }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -195,7 +197,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userId }) => {
                       </span>
                       <span className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground">{item.percentage.toFixed(1)}%</span>
-                        <span className="font-bold">{formatCurrency(item.value)}</span>
+                        <span className="font-bold"><PrivacyValue>{formatCurrency(item.value)}</PrivacyValue></span>
                       </span>
                     </div>
                   ))}
@@ -222,7 +224,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userId }) => {
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={(value) => `${Math.round(Number(value) / 1000)}k`} />
                 <ReferenceLine y={0} stroke="hsl(var(--border))" />
-                <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))" }} />
+                <Tooltip formatter={(value: number) => isPrivate ? "••••" : formatCurrency(value)} contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))" }} />
                 <Legend />
                 <Line type="monotone" dataKey="saldo" name="Sobra do mês" stroke="hsl(var(--primary))" strokeWidth={2.4} dot={{ r: 3 }} />
                 <Line type="monotone" dataKey="reservaLiquida" name="Cofrinhos" stroke="hsl(152, 55%, 42%)" strokeWidth={2.2} dot={{ r: 3 }} />

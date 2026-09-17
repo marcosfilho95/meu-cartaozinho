@@ -23,6 +23,7 @@ import {
   isInstallmentOpen,
 } from "@/lib/installments";
 import { cn } from "@/lib/utils";
+import { PrivacyValue, usePrivacyMode } from "@/hooks/use-privacy-mode";
 
 interface CardItem {
   id: string;
@@ -69,6 +70,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
   const [openingCardId, setOpeningCardId] = useState<string | null>(null);
   const navigationTimerRef = useRef<number | null>(null);
   const headerProfile = useUserHeaderProfile(userId);
+  const { isPrivate } = usePrivacyMode();
 
   useEffect(() => () => {
     if (navigationTimerRef.current !== null) window.clearTimeout(navigationTimerRef.current);
@@ -180,9 +182,9 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
       <main className="mx-auto w-full max-w-6xl flex-1 space-y-5 px-4 pb-8 pt-6 sm:px-6">
         <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">Cartões e valores a receber</p>
-            <h1 className="mt-1 font-heading text-2xl font-bold sm:text-3xl">Uma visão clara de cada cartão.</h1>
-            <p className="mt-1 max-w-xl text-sm text-muted-foreground">Veja o total do mês, a participação de cada cartão e abra os detalhes quando precisar.</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">Controle compartilhado</p>
+            <h1 className="mt-1 font-heading text-2xl font-bold sm:text-3xl">Saiba quem gastou e quanto.</h1>
+            <p className="mt-1 max-w-xl text-sm text-muted-foreground">Organize compras por pessoa, acompanhe parcelas e evite surpresas na fatura.</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <MonthNavigator currentMonth={month} onMonthChange={setMonth} />
@@ -222,10 +224,10 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
                   <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary-foreground/65">Total do mês</p>
                   <WalletCards className="h-5 w-5 text-primary-foreground/65" />
                 </div>
-                <p className="mt-5 font-heading text-4xl font-bold tracking-tight sm:text-5xl">{formatCurrency(grandTotal)}</p>
+                <p className="mt-5 font-heading text-4xl font-bold tracking-tight sm:text-5xl"><PrivacyValue>{formatCurrency(grandTotal)}</PrivacyValue></p>
                 <p className="mt-2 text-sm text-primary-foreground/70">{totalInstallments} {totalInstallments === 1 ? "parcela" : "parcelas"} em {chartData.length} {chartData.length === 1 ? "cartão" : "cartões"}</p>
                 <div className="mt-auto grid grid-cols-2 gap-3 border-t border-primary-foreground/15 pt-5">
-                  <div><p className="text-[10px] uppercase tracking-wide text-primary-foreground/55">Média por cartão</p><p className="mt-1 font-semibold">{formatCurrency(averagePerCard)}</p></div>
+                  <div><p className="text-[10px] uppercase tracking-wide text-primary-foreground/55">Média por cartão</p><p className="mt-1 font-semibold"><PrivacyValue>{formatCurrency(averagePerCard)}</PrivacyValue></p></div>
                   <div><p className="text-[10px] uppercase tracking-wide text-primary-foreground/55">Maior participação</p><p className="mt-1 truncate font-semibold">{leadingCard?.name} · {leadingShare.toFixed(0)}%</p></div>
                 </div>
               </CardContent>
@@ -236,22 +238,24 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
                 <div><h2 className="font-heading text-lg font-bold">Distribuição por cartão</h2><p className="mt-1 text-xs text-muted-foreground">Quanto cada cartão representa no total do mês.</p></div>
                 <div className="mt-3 grid items-center gap-3 sm:grid-cols-[0.8fr_1.2fr]">
                   <div className="relative h-52">
+                    <div key={`card-distribution-animation-${month}`} className="h-full chart-intro-spin">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie key={`card-distribution-${month}`} data={chartData} dataKey="value" nameKey="name" innerRadius="60%" outerRadius="84%" paddingAngle={3} strokeWidth={0} {...pieEntranceAnimation}>
                           {chartData.map((item) => <Cell key={item.id} fill={item.color} />)}
                         </Pie>
-                        <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} />
+                        <Tooltip formatter={(value: number) => isPrivate ? "••••" : formatCurrency(value)} contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} />
                       </PieChart>
                     </ResponsiveContainer>
-                    <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"><span className="text-[10px] uppercase tracking-wide text-muted-foreground">Total</span><strong className="mt-1 text-sm">{formatCurrency(grandTotal)}</strong></div>
+                    </div>
+                    <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"><span className="text-[10px] uppercase tracking-wide text-muted-foreground">Total</span><strong className="mt-1 text-sm"><PrivacyValue>{formatCurrency(grandTotal)}</PrivacyValue></strong></div>
                   </div>
                   <div className="space-y-2">
                     {chartData.map((item) => {
                       const percentage = grandTotal > 0 ? (item.value / grandTotal) * 100 : 0;
                       return (
                         <div key={item.id} className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5">
-                          <div className="flex items-center justify-between gap-3 text-xs"><span className="flex min-w-0 items-center gap-2 font-medium"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} /><span className="truncate">{item.name}</span></span><strong>{formatCurrency(item.value)}</strong></div>
+                          <div className="flex items-center justify-between gap-3 text-xs"><span className="flex min-w-0 items-center gap-2 font-medium"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} /><span className="truncate">{item.name}</span></span><strong><PrivacyValue>{formatCurrency(item.value)}</PrivacyValue></strong></div>
                           <div className="mt-2 flex items-center gap-2"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full" style={{ width: `${percentage}%`, backgroundColor: item.color }} /></div><span className="w-10 text-right text-[10px] font-semibold text-muted-foreground">{percentage.toFixed(0)}%</span></div>
                         </div>
                       );
@@ -308,7 +312,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
 
                       <div className="mt-auto pb-4 pt-4 sm:pb-5">
                         <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-white/65">Fatura de {formatCardMonth(month)}</p>
-                        <p className={cn("mt-1 font-heading text-[1.65rem] font-bold tracking-tight drop-shadow-sm sm:text-3xl", total > 0 ? "text-white" : "text-white/60")}>{formatCurrency(total)}</p>
+                        <p className={cn("mt-1 font-heading text-[1.65rem] font-bold tracking-tight drop-shadow-sm sm:text-3xl", total > 0 ? "text-white" : "text-white/60")}><PrivacyValue>{formatCurrency(total)}</PrivacyValue></p>
                       </div>
 
                       <div className="flex items-end justify-between gap-4 border-t border-white/15 pt-3">
