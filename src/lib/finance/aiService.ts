@@ -88,6 +88,7 @@ export const classifyTransactionsWithAi = async (
 export type SmartParsePayload = {
   text?: string;
   imageDataUrl?: string;
+  imageDataUrls?: string[];
   categories?: AiCategoryRef[];
   [key: string]: unknown;
 };

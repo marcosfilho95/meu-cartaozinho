@@ -258,7 +258,7 @@ const AssistantMessage: React.FC<{ content: string }> = ({ content }) => {
 export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) => {
   const queryClient = useQueryClient();
   const [text, setText] = useState("");
-  const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
+  const [imageDataUrls, setImageDataUrls] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [optionsLoading, setOptionsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -291,7 +291,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     let cancelled = false;
     setText("");
 
-    setImageDataUrl(null);
+    setImageDataUrls([]);
     setDrafts([]);
     setStage("input");
     setOptionsLoading(true);
@@ -342,6 +342,8 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     };
   }, [open, userId]);
 
+  const MAX_IMAGES = 8;
+
   const handleImagePick = useCallback(async (file: File | undefined) => {
     if (!file) return false;
     if (!file.type.startsWith("image/")) {
@@ -354,7 +356,13 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     }
     try {
       const url = await fileToDataUrl(file);
-      setImageDataUrl(url);
+      setImageDataUrls((current) => {
+        if (current.length >= MAX_IMAGES) {
+          toast.info(`Máximo de ${MAX_IMAGES} imagens por envio.`);
+          return current;
+        }
+        return [...current, url];
+      });
       return true;
     } catch {
       toast.error("Não foi possível abrir a imagem colada.");
@@ -381,10 +389,14 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
       }
 
       if (isPdf && !isPdfTextSufficient(extracted)) {
-        // PDF escaneado: a IA lê a primeira página como imagem.
+        // PDF escaneado: a IA lê as páginas como imagens (até 4).
         const pages = await renderPdfPagesToImages(file);
         if (pages.length > 0) {
-          setImageDataUrl(pages[0].dataUrl);
+          setImageDataUrls((current) => {
+            const room = Math.max(0, MAX_IMAGES - current.length);
+            const extra = pages.slice(0, Math.min(4, room)).map((page) => page.dataUrl);
+            return [...current, ...extra];
+          });
           setAttachment(null);
           toast.success(`${file.name} anexado como imagem (documento escaneado).`);
           return true;
@@ -425,14 +437,15 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
 
   const runParse = async () => {
     const message = text.trim();
-    const image = imageDataUrl;
+    const images = imageDataUrls;
     const file = attachment;
-    const mode = image ? "image" : file ? "paste" : "text";
-    if (!message && !image && !file) return;
+    const hasImages = images.length > 0;
+    const mode = hasImages ? "image" : file ? "paste" : "text";
+    if (!message && !hasImages && !file) return;
 
     // "Sim, pode lançar": confirma a última tabela conferida sem pedir tudo de novo.
     const pending = drafts.length ? drafts : lastDraftsRef.current;
-    if (!image && !file && message && pending.length && isConfirmation(message)) {
+    if (!hasImages && !file && message && pending.length && isConfirmation(message)) {
       void chat.append("user", message);
       setText("");
       setDrafts(pending);
@@ -447,19 +460,19 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     setLoading(true);
     void chat.append(
       "user",
-      image
-        ? `${message || "Print enviado"} (imagem anexada)`
+      hasImages
+        ? `${message || "Print enviado"} (${images.length === 1 ? "1 imagem anexada" : `${images.length} imagens anexadas`})`
         : file
           ? `${message || "Arquivo enviado"} (${file.name})`
           : message,
     );
     setText("");
-    setImageDataUrl(null);
+    setImageDataUrls([]);
     setAttachment(null);
     try {
       const payload: any = { mode };
       if (combinedText) payload.text = combinedText;
-      if (image) payload.imageDataUrl = image;
+      if (hasImages) payload.imageDataUrls = images;
       const categoryById = new Map(categories.map((category) => [category.id, category]));
       payload.categories = categories.map((category) => ({
         name: category.name,
@@ -467,7 +480,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         parent: category.parent_id ? categoryById.get(category.parent_id)?.name || null : null,
       }));
 
-      let localParsed = !image
+      let localParsed = !hasImages
         ? parseDeterministicTransactions(String(payload.text || ""), new Date())
         : [];
       let aiParsed: SmartParsedTransaction[] = [];
@@ -478,10 +491,10 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         aiFailure = error;
       }
 
-      if (image && (aiFailure || aiParsed.length === 0)) {
-        toast.info("A leitura online não encontrou dados. Tentando reconhecer o texto da imagem...");
-        const recognizedText = await recognizeFinancialImageLocally(image);
-        localParsed = parseDeterministicTransactions(recognizedText, new Date());
+      if (hasImages && (aiFailure || aiParsed.length === 0)) {
+        toast.info("A leitura online não encontrou dados. Tentando reconhecer o texto das imagens...");
+        const recognized = await Promise.all(images.map((img) => recognizeFinancialImageLocally(img)));
+        localParsed = parseDeterministicTransactions(recognized.filter(Boolean).join("\n"), new Date());
         if (localParsed.length) {
           console.info("[SmartAdd] Imagem reconhecida pelo OCR local.");
         }
@@ -507,7 +520,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
       if (!parsed.length) {
         // Sem lançamento na mensagem: responde como um assistente de conversa normal.
         let reply = "";
-        if (!image) {
+        if (!hasImages) {
           try {
             reply = await chatWithFinanceAssistant({
               message: String(combinedText || "").slice(0, 2000),
@@ -743,8 +756,8 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
 
   const canParse = useMemo(() => {
     if (loading || optionsLoading || attachmentLoading) return false;
-    return text.trim().length > 2 || !!imageDataUrl || !!attachment;
-  }, [text, imageDataUrl, attachment, attachmentLoading, loading, optionsLoading]);
+    return text.trim().length > 2 || imageDataUrls.length > 0 || !!attachment;
+  }, [text, imageDataUrls.length, attachment, attachmentLoading, loading, optionsLoading]);
 
   useEffect(() => {
     if (stage === "input") messagesEndRef.current?.scrollIntoView({ block: "end" });
@@ -847,9 +860,12 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                capture="environment"
+                multiple
                 hidden
-                onChange={(e) => handleImagePick(e.target.files?.[0])}
+                onChange={(e) => {
+                  Array.from(e.target.files || []).forEach((file) => void handleImagePick(file));
+                  e.currentTarget.value = "";
+                }}
               />
 
               <input
@@ -879,17 +895,21 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
               )}
 
 
-              {imageDataUrl && (
-                <div className="relative w-fit overflow-hidden rounded-xl border bg-muted">
-                  <img src={imageDataUrl} alt="Comprovante" className="max-h-32 object-contain" />
-                  <button
-                    type="button"
-                    onClick={() => setImageDataUrl(null)}
-                    aria-label="Remover imagem"
-                    className="absolute right-1 top-1 rounded-full bg-background/90 p-1 text-muted-foreground hover:text-destructive"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
+              {imageDataUrls.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {imageDataUrls.map((url, index) => (
+                    <div key={index} className="relative w-fit overflow-hidden rounded-xl border bg-muted">
+                      <img src={url} alt={`Comprovante ${index + 1}`} className="max-h-32 object-contain" />
+                      <button
+                        type="button"
+                        onClick={() => setImageDataUrls((current) => current.filter((_, i) => i !== index))}
+                        aria-label={`Remover imagem ${index + 1}`}
+                        className="absolute right-1 top-1 rounded-full bg-background/90 p-1 text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
 
