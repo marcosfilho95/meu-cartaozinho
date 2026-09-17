@@ -160,13 +160,13 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
       <AppHeader title="Meu Cartãozinho" greeting={headerProfile.greeting} userName={headerProfile.firstName} avatarId={headerProfile.avatarId} avatarUrl={headerProfile.avatarUrl} avatarPending={!headerProfile.resolved} />
 
       <main className="mx-auto max-w-6xl space-y-6 px-4 pt-6 animate-fade-in sm:px-6">
-        <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="inline-flex items-center rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">Sua vida financeira, em um só lugar</p>
-            <h1 className="mt-3 max-w-3xl font-heading text-3xl leading-[1.14] tracking-[-0.025em] text-foreground sm:text-4xl lg:text-[2.7rem]">Clareza para decidir. Liberdade para viver.</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">Um retrato completo do seu mês para transformar intenção em escolhas e planos em realidade.</p>
+        <header className="page-title-shell flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="page-title-content">
+            <p className="page-title-eyebrow">Sua vida financeira, em um só lugar</p>
+            <h1 className="page-title-heading">Clareza para decidir. Liberdade para viver.</h1>
+            <p className="page-title-description">Um retrato completo do seu mês para transformar intenção em escolhas e planos em realidade.</p>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="page-title-content flex flex-col gap-2 sm:flex-row sm:items-center">
             <MonthNavigator currentMonth={selectedMonth} onMonthChange={setSelectedMonth} />
             <Button onClick={() => navigate(`/financas/fechamento?mes=${selectedMonth}`)} className="gap-2"><LineChartIcon className="h-4 w-4" /> Revisar mês</Button>
           </div>

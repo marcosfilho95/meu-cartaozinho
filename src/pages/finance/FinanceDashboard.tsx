@@ -295,9 +295,9 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 px-4 pb-10">
-      <header className="flex flex-col gap-4 pt-1 lg:flex-row lg:items-end lg:justify-between">
-        <div className="max-w-3xl space-y-2"><p className="inline-flex items-center rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">Planilha financeira</p><h1 className="font-heading text-3xl font-bold leading-[1.14] tracking-[-0.025em] sm:text-4xl lg:text-[2.7rem]">Seu dinheiro com intenção. Sua vida com direção.</h1><p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">Controle receitas e despesas, planeje seus próximos passos e faça cada escolha aproximar você do que importa.</p></div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      <header className="page-title-shell flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div className="page-title-content"><p className="page-title-eyebrow">Planilha financeira</p><h1 className="page-title-heading">Seu dinheiro com intenção. Sua vida com direção.</h1><p className="page-title-description">Controle receitas e despesas, planeje seus próximos passos e faça cada escolha aproximar você do que importa.</p></div>
+        <div className="page-title-content flex flex-col gap-2 sm:flex-row sm:items-center">
           <MonthNavigator currentMonth={referenceMonth} onMonthChange={setReferenceMonth} />
           <Button onClick={() => navigate(`/financas/fechamento?mes=${referenceMonth}`)} className="gap-2"><BarChart3 className="h-4 w-4" /> Revisar mês</Button>
         </div>

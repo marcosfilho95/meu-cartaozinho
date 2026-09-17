@@ -85,6 +85,12 @@ interface DraftTx {
   is_fixed: boolean;
 }
 
+interface SmartAttachment {
+  id: string;
+  name: string;
+  text: string;
+}
+
 const FIXED_PATTERN = /\b(fixa|fixo|fixas|fixos|mensal|mensalidade|todo mes|todos os meses|todo mês|recorrente|assinatura)\b/;
 /** Receitas que costumam se repetir todo mês. */
 const FIXED_INCOME_PATTERN = /\b(salario|salarios|aposentadoria|pensao|bolsa|aluguel recebido|pro labore|prolabore)\b/;
@@ -108,6 +114,7 @@ const detectFixedNature = (
 };
 
 const uid = () => Math.random().toString(36).slice(2, 10);
+const MAX_SMART_DOCUMENTS = 8;
 
 const todayIso = () => {
   const now = new Date();
@@ -267,7 +274,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
   const [categories, setCategories] = useState<SmartCategoryOption[]>([]);
   const [classificationHistory, setClassificationHistory] = useState<SmartClassificationHistory[]>([]);
   const [memoryHistory, setMemoryHistory] = useState<MemoryTransaction[]>([]);
-  const [attachment, setAttachment] = useState<{ name: string; text: string } | null>(null);
+  const [attachments, setAttachments] = useState<SmartAttachment[]>([]);
   const [attachmentLoading, setAttachmentLoading] = useState(false);
   /** Guarda a última tabela conferida para o usuário poder confirmar depois. */
   const lastDraftsRef = useRef<DraftTx[]>([]);
@@ -290,6 +297,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     setText("");
 
     setImageDataUrls([]);
+    setAttachments([]);
     setDrafts([]);
     setStage("input");
     setOptionsLoading(true);
@@ -395,19 +403,24 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
             const extra = pages.slice(0, Math.min(4, room)).map((page) => page.dataUrl);
             return [...current, ...extra];
           });
-          setAttachment(null);
           toast.success(`${file.name} anexado como imagem (documento escaneado).`);
           return true;
         }
       }
 
-      const cleaned = extracted.replace(/\u0000/g, "").trim();
+      const cleaned = extracted.replaceAll(String.fromCharCode(0), "").trim();
       if (!cleaned) {
         toast.error("Não consegui ler o conteúdo desse arquivo.");
         return false;
       }
-      setAttachment({ name: file.name, text: cleaned.slice(0, 60000) });
-      toast.success(`${file.name} anexado. Envie na conversa quando estiver pronto.`);
+      setAttachments((current) => {
+        if (current.length >= MAX_SMART_DOCUMENTS) {
+          toast.info(`Você pode anexar até ${MAX_SMART_DOCUMENTS} arquivos por lançamento.`);
+          return current;
+        }
+        toast.success(`${file.name} anexado. Envie na conversa quando estiver pronto.`);
+        return [...current, { id: uid(), name: file.name, text: cleaned.slice(0, 60000) }];
+      });
       return true;
     } catch {
       toast.error("Não foi possível abrir esse arquivo.");
@@ -416,6 +429,16 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
       setAttachmentLoading(false);
     }
   }, [handleImagePick]);
+
+  const handleFilesPick = useCallback(async (files: File[]) => {
+    for (const file of files) {
+      if (file.type.startsWith("image/")) {
+        await handleImagePick(file);
+      } else {
+        await handleDocumentPick(file);
+      }
+    }
+  }, [handleDocumentPick, handleImagePick]);
 
   useEffect(() => {
     if (!open || drafts.length > 0) return;
@@ -436,14 +459,15 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
   const runParse = async () => {
     const message = text.trim();
     const images = imageDataUrls;
-    const file = attachment;
+    const files = attachments;
     const hasImages = images.length > 0;
-    const mode = hasImages ? "image" : file ? "paste" : "text";
-    if (!message && !hasImages && !file) return;
+    const hasFiles = files.length > 0;
+    const mode = hasImages ? "image" : hasFiles ? "paste" : "text";
+    if (!message && !hasImages && !hasFiles) return;
 
     // "Sim, pode lançar": confirma a última tabela conferida sem pedir tudo de novo.
     const pending = drafts.length ? drafts : lastDraftsRef.current;
-    if (!hasImages && !file && message && pending.length && isConfirmation(message)) {
+    if (!hasImages && !hasFiles && message && pending.length && isConfirmation(message)) {
       void chat.append("user", message);
       setText("");
       setDrafts(pending);
@@ -452,21 +476,22 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
       return;
     }
 
-    const combinedText = file
-      ? `${message ? `${message}\n\n` : ""}Conteúdo do arquivo ${file.name}:\n${file.text}`
-      : message;
+    const combinedText = [
+      message,
+      ...files.map((file) => `Conteúdo do arquivo ${file.name}:\n${file.text}`),
+    ].filter(Boolean).join("\n\n");
     setLoading(true);
     void chat.append(
       "user",
       hasImages
-        ? `${message || "Print enviado"} (${images.length === 1 ? "1 imagem anexada" : `${images.length} imagens anexadas`})`
-        : file
-          ? `${message || "Arquivo enviado"} (${file.name})`
+        ? `${message || "Imagem enviada"} (${images.length === 1 ? "1 imagem anexada" : `${images.length} imagens anexadas`}${hasFiles ? ` · ${files.length} arquivos` : ""})`
+        : hasFiles
+          ? `${message || "Arquivo enviado"} (${files.map((file) => file.name).join(", ")})`
           : message,
     );
     setText("");
     setImageDataUrls([]);
-    setAttachment(null);
+    setAttachments([]);
     try {
       const payload: any = { mode };
       if (combinedText) payload.text = combinedText;
@@ -478,7 +503,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         parent: category.parent_id ? categoryById.get(category.parent_id)?.name || null : null,
       }));
 
-      let localParsed = !hasImages
+      let localParsed = (!hasImages || hasFiles)
         ? parseDeterministicTransactions(String(payload.text || ""), new Date())
         : [];
       let aiParsed: SmartParsedTransaction[] = [];
@@ -492,7 +517,11 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
       if (hasImages && (aiFailure || aiParsed.length === 0)) {
         toast.info("A leitura online não encontrou dados. Tentando reconhecer o texto das imagens...");
         const recognized = await Promise.all(images.map((img) => recognizeFinancialImageLocally(img)));
-        localParsed = parseDeterministicTransactions(recognized.filter(Boolean).join("\n"), new Date());
+        const recognizedText = recognized.filter(Boolean).join("\n");
+        const localImageParsed = parseDeterministicTransactions(recognizedText, new Date());
+        localParsed = hasFiles
+          ? [...localParsed, ...localImageParsed]
+          : localImageParsed;
         if (localParsed.length) {
           console.info("[SmartAdd] Imagem reconhecida pelo OCR local.");
         }
@@ -502,11 +531,13 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
       let parsed: SmartParsedTransaction[] = aiParsed;
       if (localParsed.length > 0 && aiParsed.length === localParsed.length) {
         parsed = localParsed.map((local, index) => mergeAiWithDeterministicResult(aiParsed[index], local));
-      } else if (localParsed.length > 1) {
+      } else if (!hasImages && localParsed.length > 1) {
         // Uma linha representa sempre um lançamento; não permita que a IA agrupe a lista.
         parsed = localParsed;
-      } else if (localParsed.length === 1 && aiParsed.length <= 1) {
+      } else if (!hasImages && localParsed.length === 1 && aiParsed.length <= 1) {
         parsed = [mergeAiWithDeterministicResult(aiParsed[0], localParsed[0])];
+      } else if (hasImages && aiParsed.length === 0 && localParsed.length > 0) {
+        parsed = localParsed;
       }
       if (aiFailure && localParsed.length) {
         console.warn("[SmartAdd] IA indisponível; usando parser local.", aiFailure);
@@ -656,6 +687,18 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     setDrafts((prev) => prev.filter((d) => d.id !== id));
   };
 
+  const clearConversation = async () => {
+    if (voice.recording) voice.cancel();
+    setText("");
+    setImageDataUrls([]);
+    setAttachments([]);
+    setDrafts([]);
+    lastDraftsRef.current = [];
+    setStage("input");
+    await chat.clear();
+    composerRef.current?.focus();
+  };
+
   const saveAll = async () => {
     if (!drafts.length) return;
     const missingAccount = drafts.find((d) => !d.account_id);
@@ -754,8 +797,8 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
 
   const canParse = useMemo(() => {
     if (loading || optionsLoading || attachmentLoading) return false;
-    return text.trim().length > 2 || imageDataUrls.length > 0 || !!attachment;
-  }, [text, imageDataUrls.length, attachment, attachmentLoading, loading, optionsLoading]);
+    return text.trim().length > 2 || imageDataUrls.length > 0 || attachments.length > 0;
+  }, [text, imageDataUrls.length, attachments.length, attachmentLoading, loading, optionsLoading]);
 
   useEffect(() => {
     if (stage === "input") messagesEndRef.current?.scrollIntoView({ block: "end" });
@@ -768,7 +811,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl overflow-hidden rounded-2xl p-0">
         <DialogHeader className="border-b bg-gradient-to-br from-primary/5 to-transparent px-5 py-4">
-          <DialogTitle className="flex items-center justify-between gap-2 font-heading text-lg">
+          <DialogTitle className="flex items-center justify-between gap-3 pr-12 font-heading text-lg">
             <span className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
               Lançamento Inteligente
@@ -777,16 +820,16 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 gap-1.5 rounded-lg border-primary/20 bg-primary/5 px-2.5 text-xs font-semibold text-primary shadow-sm transition-colors hover:bg-primary/10 hover:text-primary"
-                onClick={() => void chat.clear()}
-                title="Apagar as mensagens e começar do zero"
+                className="h-8 shrink-0 gap-1.5 rounded-lg border-primary/25 bg-primary/5 px-2.5 text-xs font-semibold text-primary shadow-sm transition-colors hover:bg-primary/10 hover:text-primary"
+                onClick={() => void clearConversation()}
+                title="Apagar mensagens, lançamento em edição e anexos"
               >
                 <RotateCcw className="h-3.5 w-3.5" /> Limpar conversa
               </Button>
             )}
           </DialogTitle>
           <p className="text-xs text-muted-foreground">
-            Escreva, fale ou anexe uma imagem ou arquivo. Eu organizo e você confirma antes de lançar.
+            Escreva, fale ou anexe imagens e arquivos. Eu organizo tudo e você confirma antes de lançar.
           </p>
         </DialogHeader>
 
@@ -863,25 +906,27 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                 hidden
                 onChange={(e) => {
                   const files = Array.from(e.target.files || []);
-                  files.filter((file) => file.type.startsWith("image/")).forEach((file) => void handleImagePick(file));
-                  const document = files.find((file) => !file.type.startsWith("image/"));
-                  if (document) void handleDocumentPick(document);
+                  void handleFilesPick(files);
                   e.currentTarget.value = "";
                 }}
               />
 
-              {attachment && (
-                <div className="flex w-fit max-w-full items-center gap-2 rounded-xl border bg-muted/50 px-3 py-2">
-                  <FileText className="h-4 w-4 shrink-0 text-primary" />
-                  <span className="truncate text-xs font-medium">{attachment.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => setAttachment(null)}
-                    aria-label="Remover arquivo"
-                    className="rounded-full p-1 text-muted-foreground hover:text-destructive"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {attachments.map((file) => (
+                    <div key={file.id} className="flex max-w-full items-center gap-2 rounded-xl border bg-muted/50 px-3 py-2">
+                      <FileText className="h-4 w-4 shrink-0 text-primary" />
+                      <span className="max-w-[220px] truncate text-xs font-medium">{file.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setAttachments((current) => current.filter((item) => item.id !== file.id))}
+                        aria-label={`Remover arquivo ${file.name}`}
+                        className="rounded-full p-1 text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -904,14 +949,14 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                 </div>
               )}
 
-              <div className="rounded-2xl border bg-card p-2 shadow-sm">
+              <div className="rounded-2xl border bg-card p-3 shadow-sm">
                 <Textarea
                   ref={composerRef}
                   placeholder="Ex.: salário de 7.000 todo dia 5"
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   rows={2}
-                  className="resize-none border-0 p-2 text-sm shadow-none focus-visible:ring-0"
+                  className="min-h-[88px] resize-none rounded-xl border-border/70 bg-muted/20 p-3 text-sm shadow-none focus-visible:border-primary/40 focus-visible:ring-0"
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
@@ -920,7 +965,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                     }
                   }}
                 />
-                <div className="flex items-center justify-between gap-2 px-1 pb-1">
+                <div className="mt-2 flex min-h-9 items-center justify-between gap-2 border-t border-border/60 pt-2">
                   <div className="flex items-center gap-1">
                     <Button
                       type="button"
@@ -929,7 +974,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                       className="h-9 w-9 rounded-full"
                       disabled={attachmentLoading}
                       onClick={() => fileInputRef.current?.click()}
-                      aria-label="Anexar imagem ou arquivo (PDF, CSV, XML, OFX, Excel)"
+                      aria-label="Anexar imagens ou arquivos (PDF, CSV, XML, OFX, Excel)"
                     >
                       {attachmentLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
                     </Button>
@@ -975,8 +1020,8 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                 </div>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Dica: cole um print com Ctrl + V ou anexe o arquivo do banco (PDF, CSV, XML, OFX, Excel). Cada linha vira um
-                lançamento separado.
+                Dica: cole prints com Ctrl + V ou anexe vários arquivos do banco (PDF, CSV, XML, OFX, Excel). Cada linha vira
+                um lançamento separado.
               </p>
             </div>
 

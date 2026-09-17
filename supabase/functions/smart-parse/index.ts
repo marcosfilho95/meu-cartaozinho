@@ -262,8 +262,9 @@ Deno.serve(async (req) => {
       const single: string = String(body.imageDataUrl || "");
       if (dataUrls.length === 0 && single.startsWith("data:")) dataUrls.push(single);
       if (dataUrls.length === 0) throw new Error("Imagem inválida");
+      const supplementalText = String(body.text || "").trim();
       userContent = [
-        { type: "text", text: `${contextLine}\n\nAnalise ${dataUrls.length > 1 ? `estes ${dataUrls.length} comprovantes/prints` : "este comprovante/print"} e extraia uma ou mais transações no total. Se houver apenas o total de uma fatura, registre-o como uma única despesa agregada; não exija a lista de compras. Trate todas as imagens como um único envio: some as transações de todas elas, sem duplicar itens que apareçam em mais de uma imagem.` },
+        { type: "text", text: `${contextLine}\n\nAnalise ${dataUrls.length > 1 ? `estes ${dataUrls.length} comprovantes/prints` : "este comprovante/print"} e extraia uma ou mais transações no total. Se houver apenas o total de uma fatura, registre-o como uma única despesa agregada; não exija a lista de compras. Trate todas as imagens como um único envio: some as transações de todas elas, sem duplicar itens que apareçam em mais de uma imagem.${supplementalText ? `\n\nTexto complementar de outros arquivos anexados; inclua também as transações encontradas nele:\n\n"""${supplementalText}"""` : ""}` },
         ...dataUrls.map((url) => ({ type: "image_url", image_url: { url } })),
       ];
     } else {

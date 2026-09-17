@@ -180,13 +180,13 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
       />
 
       <main className="mx-auto w-full max-w-6xl flex-1 space-y-5 px-4 pb-8 pt-6 sm:px-6">
-        <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">Controle compartilhado</p>
-            <h1 className="mt-1 font-heading text-2xl font-bold sm:text-3xl">Saiba quem gastou e quanto.</h1>
-            <p className="mt-1 max-w-xl text-sm text-muted-foreground">Organize compras por pessoa, acompanhe parcelas e evite surpresas na fatura.</p>
+        <header className="page-title-shell flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="page-title-content">
+            <p className="page-title-eyebrow">Controle compartilhado</p>
+            <h1 className="page-title-heading">Saiba quem gastou e quanto.</h1>
+            <p className="page-title-description">Organize compras por pessoa, acompanhe parcelas e evite surpresas na fatura.</p>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="page-title-content flex flex-col gap-2 sm:flex-row sm:items-center">
             <MonthNavigator currentMonth={month} onMonthChange={setMonth} />
             <AddCardDialog
               userId={userId}

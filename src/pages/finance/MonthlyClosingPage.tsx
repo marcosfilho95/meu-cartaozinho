@@ -357,8 +357,8 @@ const MonthlyClosingPage: React.FC<MonthlyClosingPageProps> = ({ userId }) => {
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 pb-10">
       {loading && <FinanceSyncLoader overlay monthLabel={monthTitle(refMonth)} hint="Sincronizando lançamentos e preparando os valores do mês." />}
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">Revisão mensal</p><h1 className="mt-1 font-heading text-2xl font-bold">Confira o mês em poucos passos.</h1><p className="mt-1 text-sm text-muted-foreground">Nada fica bloqueado: você pode voltar e atualizar quando precisar.</p></div>
+      <header className="page-title-shell flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="page-title-content"><p className="page-title-eyebrow">Revisão mensal</p><h1 className="page-title-heading">Confira o mês em poucos passos.</h1><p className="page-title-description">Nada fica bloqueado: você pode voltar e atualizar quando precisar.</p></div>
         <MonthNavigator currentMonth={refMonth} onMonthChange={(month) => { setLoading(true); setRefMonth(month); }} />
       </header>
 
