@@ -8,8 +8,6 @@ import { genericTextParser } from "./genericTextParser";
 import { picpayPdfParser } from "./picpayPdfParser";
 import { nubankPdfParser } from "./nubankPdfParser";
 import { ofxParser } from "./ofxParser";
-import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
-import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
 
 export * from "./types";
 export * from "./utils";
@@ -38,12 +36,27 @@ export const financialFileParsers: FinancialFileParser[] = [
   genericTextParser,
 ];
 
-pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+let pdfJsPromise: Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")> | null = null;
+
+/** Carrega o motor de PDF somente quando um PDF realmente é aberto. */
+const getPdfJs = () => {
+  if (!pdfJsPromise) {
+    pdfJsPromise = Promise.all([
+      import("pdfjs-dist/legacy/build/pdf.mjs"),
+      import("pdfjs-dist/legacy/build/pdf.worker.mjs?url"),
+    ]).then(([pdfjs, worker]) => {
+      pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+      return pdfjs;
+    });
+  }
+  return pdfJsPromise;
+};
 
 const isPdfFile = (file: File) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 export const isImageFile = (file: File) => file.type.startsWith("image/") || /\.(png|jpe?g|webp|heic)$/i.test(file.name);
 
 export const extractPdfText = async (file: File) => {
+  const pdfjs = await getPdfJs();
   const document = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
   const pages: string[] = [];
 
@@ -97,6 +110,7 @@ export const renderPdfPagesToImages = async (
   file: File,
   onProgress?: (completed: number, total: number) => void,
 ) => {
+  const pdfjs = await getPdfJs();
   const document = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
   const images: Array<{ pageNumber: number; dataUrl: string }> = [];
   for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {

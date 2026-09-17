@@ -207,6 +207,58 @@ const FINANCE_TRANSACTION_SELECT =
 const removeDisconnectedCardTransactions = (transactions: FinanceTx[]) =>
   transactions.filter((tx) => !String(tx.notes || "").startsWith("mc_sync_installment:"));
 
+type TransactionMemoryEntry = {
+  data: FinanceTx[];
+  expiresAt: number;
+};
+
+const TRANSACTION_MEMORY_TTL_MS = 30_000;
+const transactionMemoryCache = new Map<string, TransactionMemoryEntry>();
+const transactionRequests = new Map<string, Promise<FinanceTx[]>>();
+const transactionCacheGeneration = new Map<string, number>();
+
+/** Compartilha leituras recentes entre páginas e evita consultas duplicadas simultâneas. */
+const memoizeFinanceTransactions = (key: string, loader: () => Promise<FinanceTx[]>) => {
+  const cached = transactionMemoryCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.data);
+
+  const pending = transactionRequests.get(key);
+  if (pending) return pending;
+
+  const generation = transactionCacheGeneration.get(key) || 0;
+  const request = loader()
+    .then((data) => {
+      if ((transactionCacheGeneration.get(key) || 0) === generation) {
+        transactionMemoryCache.set(key, { data, expiresAt: Date.now() + TRANSACTION_MEMORY_TTL_MS });
+      }
+      return data;
+    })
+    .finally(() => {
+      if (transactionRequests.get(key) === request) transactionRequests.delete(key);
+    });
+  transactionRequests.set(key, request);
+  return request;
+};
+
+export const clearFinanceTransactionMemoryCache = (userId?: string) => {
+  if (!userId) {
+    transactionMemoryCache.clear();
+    transactionRequests.clear();
+    for (const key of transactionCacheGeneration.keys()) {
+      transactionCacheGeneration.set(key, (transactionCacheGeneration.get(key) || 0) + 1);
+    }
+    return;
+  }
+  const keys = new Set([...transactionMemoryCache.keys(), ...transactionRequests.keys()]);
+  for (const key of keys) {
+    if (key.includes(`:${userId}:`) || key.endsWith(`:${userId}`)) {
+      transactionMemoryCache.delete(key);
+      transactionRequests.delete(key);
+      transactionCacheGeneration.set(key, (transactionCacheGeneration.get(key) || 0) + 1);
+    }
+  }
+};
+
 type FinanceTransactionScope = {
   from?: string;
   before?: string;
@@ -265,38 +317,44 @@ const fetchFinanceTransactionScope = async (
 };
 
 export const fetchFinanceTransactions = async (userId: string, monthsBack = 12) => {
-  const windowStart = getFinanceTransactionsWindowStart(monthsBack);
-  const [currentWindow, olderPending] = await Promise.all([
-    fetchFinanceTransactionScope(userId, { from: windowStart }),
-    fetchFinanceTransactionScope(userId, {
-      before: windowStart,
-      statuses: ["pending", "overdue"],
-    }),
-  ]);
-  const transactionsById = new Map<string, FinanceTx>();
-  [...olderPending, ...currentWindow].forEach((transaction) => {
-    transactionsById.set(transaction.id, transaction);
+  return memoizeFinanceTransactions(`window:${userId}:${monthsBack}`, async () => {
+    const windowStart = getFinanceTransactionsWindowStart(monthsBack);
+    const [currentWindow, olderPending] = await Promise.all([
+      fetchFinanceTransactionScope(userId, { from: windowStart }),
+      fetchFinanceTransactionScope(userId, {
+        before: windowStart,
+        statuses: ["pending", "overdue"],
+      }),
+    ]);
+    const transactionsById = new Map<string, FinanceTx>();
+    [...olderPending, ...currentWindow].forEach((transaction) => {
+      transactionsById.set(transaction.id, transaction);
+    });
+    return removeDisconnectedCardTransactions(
+      [...transactionsById.values()].sort(compareFinanceTransactions),
+    );
   });
-  return removeDisconnectedCardTransactions(
-    [...transactionsById.values()].sort(compareFinanceTransactions),
-  );
 };
 
 export const fetchAllFinanceTransactions = async (userId: string) =>
-  removeDisconnectedCardTransactions(await fetchFinanceTransactionScope(userId, {}));
+  memoizeFinanceTransactions(`all:${userId}`, async () =>
+    removeDisconnectedCardTransactions(await fetchFinanceTransactionScope(userId, {})),
+  );
 
 export const fetchFinanceTransactionsByMonth = async (userId: string, refMonth: string) => {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(refMonth)) {
     throw new Error("Mês de referência inválido.");
   }
 
-  const monthStart = `${refMonth}-01`;
-  const nextMonthStart = `${addMonthsToKey(refMonth, 1)}-01`;
-  const transactions = await fetchFinanceTransactionScope(userId, {
-    from: monthStart,
-    before: nextMonthStart,
+  return memoizeFinanceTransactions(`month:${userId}:${refMonth}`, async () => {
+    const monthStart = `${refMonth}-01`;
+    const nextMonthStart = `${addMonthsToKey(refMonth, 1)}-01`;
+    const transactions = await fetchFinanceTransactionScope(userId, {
+      from: monthStart,
+      before: nextMonthStart,
+    });
+    return removeDisconnectedCardTransactions(transactions);
   });
-  return removeDisconnectedCardTransactions(transactions);
 };
 
 type FinanceDimensionFilters = {

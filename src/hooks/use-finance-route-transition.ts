@@ -35,7 +35,7 @@ export const useFinanceRouteTransition = () => {
 
     const timer = window.setTimeout(() => {
       setTransitionClass("finance-page-ready");
-    }, 320);
+    }, 220);
 
     return () => window.clearTimeout(timer);
   }, [currentIndex]);

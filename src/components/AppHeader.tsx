@@ -74,7 +74,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
       <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-white/[0.045]" aria-hidden />
       <div className="pointer-events-none absolute -right-28 -top-36 h-80 w-80 rounded-full bg-emerald-200/10 blur-3xl" aria-hidden />
       <div className="relative mx-auto max-w-2xl" style={{ zIndex: 1 }}>
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-center gap-2.5 sm:gap-3.5">
             {showBack && (
               <Button
@@ -104,17 +104,17 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 className="border-2 border-white/75 shadow-lg"
               />
             </button>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               {greetingLine && (
-                <p className="truncate text-[11px] font-semibold tracking-[0.04em] text-primary-foreground/70">{greetingLine}</p>
+                <p className="text-[11px] font-semibold tracking-[0.04em] text-primary-foreground/70">{greetingLine}</p>
               )}
-              <h1 className="truncate font-heading text-[1.45rem] font-bold leading-tight tracking-[-0.02em] text-primary-foreground sm:text-[1.65rem]">
+              <h1 className="break-words font-heading text-[1.45rem] font-bold leading-tight tracking-[-0.02em] text-primary-foreground sm:text-[1.65rem]">
                 {title}
               </h1>
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 self-end sm:gap-2 lg:self-auto">
             {topActions}
             <Button
               variant="ghost"

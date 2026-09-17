@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { prefetchRoute } from "@/lib/routeLoaders";
 
 const PRIMARY_ITEMS = [
   { to: "/financas", icon: LayoutDashboard, label: "Início", end: true },
@@ -73,6 +74,9 @@ export const FinanceTopNav: React.FC = () => {
               <DropdownMenuItem key={to} asChild>
                 <RouterNavLink
                   to={to}
+                  onMouseEnter={() => prefetchRoute(to)}
+                  onFocus={() => prefetchRoute(to)}
+                  onTouchStart={() => prefetchRoute(to)}
                   className={({ isActive }) =>
                     cn(
                       "flex w-full cursor-pointer items-center gap-2 text-sm",

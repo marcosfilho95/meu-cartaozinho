@@ -26,7 +26,7 @@ import { getMonthlySpendingGoal } from "@/lib/financeBudget";
 import { buildFinancialPlan, fetchFinancialRuleVersions } from "@/lib/financialRules";
 import { monthTitle, summarizeMonth, type MonthSummary } from "@/lib/financeInsights";
 import { calculateNetWorth, calculateReserveMovement, type GoalMovement } from "@/lib/financeOverview";
-import { fetchFinanceTransactions, monthKey, type FinanceTx } from "@/lib/financeShared";
+import { clearFinanceTransactionMemoryCache, fetchFinanceTransactions, monthKey, type FinanceTx } from "@/lib/financeShared";
 import { getFinanceViewCache, setFinanceViewCache } from "@/lib/financeViewCache";
 import { getErrorMessage, untypedSupabase } from "@/lib/supabaseUntyped";
 import { cn } from "@/lib/utils";
@@ -75,7 +75,7 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
     goals: [],
   }));
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (skipMaintenance = false) => {
     if (!userId) return;
     const cacheKey = `home:${userId}:${selectedMonth}`;
     const cached = getFinanceViewCache<HomeData>(cacheKey);
@@ -86,10 +86,17 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
       setLoading(true);
     }
     setError(null);
-    try {
+    const maintenancePromise = skipMaintenance ? null : (async () => {
       await Promise.allSettled([ensureDefaultAccounts(userId), ensureDefaultCategories(userId)]);
-      await syncCartaozinhoIncomeMonth(userId, selectedMonth);
-
+      try {
+        const result = await syncCartaozinhoIncomeMonth(userId, selectedMonth);
+        return result.action === "created" || result.action === "updated" || result.action === "removed";
+      } catch (error) {
+        console.error("[Home maintenance]", error);
+        return false;
+      }
+    })();
+    try {
       const [accountsRes, goalsRes, goalTxRes, budgetsRes, transactions, cardTotals, financialRules] = await Promise.all([
         supabase.from("accounts").select("type, current_balance, include_in_net_worth").eq("user_id", userId).eq("is_active", true),
         supabase.from("goals").select("id, name, goal_type, target_amount, current_amount, is_completed").eq("user_id", userId),
@@ -136,13 +143,21 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
       if (!cached) setError(getErrorMessage(loadError, "Não foi possível carregar sua visão financeira."));
     } finally {
       setLoading(false);
+      if (maintenancePromise) {
+        void maintenancePromise.then((changed) => {
+          if (changed) {
+            clearFinanceTransactionMemoryCache(userId);
+            void load(true);
+          }
+        });
+      }
     }
   }, [selectedMonth, userId]);
 
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
-    return subscribeFinanceSync(() => void load());
+    return subscribeFinanceSync(() => void load(true));
   }, [load]);
 
 

@@ -5,6 +5,7 @@ import { NavLink as RouterNavLink } from "react-router-dom";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { FINANCE_MORE_ITEMS } from "@/components/finance/FinanceTopNav";
 import { cn } from "@/lib/utils";
+import { prefetchRoute } from "@/lib/routeLoaders";
 
 const NAV_ITEMS = [
   { to: "/financas", icon: LayoutDashboard, label: "Início" },
@@ -55,6 +56,9 @@ export const FinanceBottomNav: React.FC = () => {
                   key={to}
                   to={to}
                   onClick={() => setMoreOpen(false)}
+                  onMouseEnter={() => prefetchRoute(to)}
+                  onFocus={() => prefetchRoute(to)}
+                  onTouchStart={() => prefetchRoute(to)}
                   className={({ isActive }) =>
                     cn(
                       "flex items-center gap-3 rounded-xl border border-border/60 px-3 py-3 text-sm font-medium transition hover:bg-muted/50",

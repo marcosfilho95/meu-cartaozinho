@@ -5,6 +5,7 @@
  */
 import { clearFinanceViewCache } from "@/lib/financeViewCache";
 import { clearFinancePageCaches } from "@/lib/financePageCache";
+import { clearFinanceTransactionMemoryCache } from "@/lib/financeShared";
 
 export const FINANCE_SYNC_EVENT = "finance-sync-updated";
 const CHANNEL_NAME = "finance-sync";
@@ -33,6 +34,7 @@ const getChannel = () => {
 
 const invalidateCaches = (detail: FinanceSyncDetail) => {
   clearFinanceViewCache();
+  clearFinanceTransactionMemoryCache(detail.userId);
   if (detail.userId) clearFinancePageCaches(detail.userId);
 };
 

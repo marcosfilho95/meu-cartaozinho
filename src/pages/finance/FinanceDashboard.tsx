@@ -67,7 +67,7 @@ import {
 } from "@/lib/financeInsights";
 import { calculateReserveMovement, getTransactionReferenceMonth, type GoalMovement } from "@/lib/financeOverview";
 import { type PlanningGoal } from "@/lib/financePlanning";
-import { addMonthsToKey, fetchAllFinanceTransactions, monthKey, resolveBankCategoryColor, type FinanceTx } from "@/lib/financeShared";
+import { addMonthsToKey, clearFinanceTransactionMemoryCache, fetchAllFinanceTransactions, monthKey, resolveBankCategoryColor, type FinanceTx } from "@/lib/financeShared";
 import { getErrorMessage, untypedSupabase } from "@/lib/supabaseUntyped";
 import { cn } from "@/lib/utils";
 import { subscribeFinanceSync } from "@/lib/financeSyncBus";
@@ -143,7 +143,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
   const [insightsOpen, setInsightsOpen] = useState(false);
   const [showAllExpenses, setShowAllExpenses] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (skipMaintenance = false) => {
     const cacheKey = `dashboard:${userId}:${referenceMonth}`;
     const cached = getFinanceViewCache<DashboardCacheShape>(cacheKey);
     if (cached) {
@@ -156,12 +156,20 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
     } else {
       setLoading(true);
     }
-    try {
+    const maintenancePromise = skipMaintenance ? null : (async () => {
       await Promise.allSettled([ensureDefaultAccounts(userId), ensureDefaultCategories(userId)]);
       const syncMonths = Array.from({ length: 6 }, (_, index) => addMonthsToKey(referenceMonth, -index));
-      await syncCartaozinhoIncomeMonths(userId, syncMonths);
-      await postDueFixedBillsForMonth(userId, referenceMonth).catch(() => undefined);
-
+      const [syncResult, fixedResult] = await Promise.allSettled([
+        syncCartaozinhoIncomeMonths(userId, syncMonths),
+        postDueFixedBillsForMonth(userId, referenceMonth),
+      ]);
+      const synced = syncResult.status === "fulfilled" && syncResult.value.some((item) =>
+        item.action === "created" || item.action === "updated" || item.action === "removed",
+      );
+      const fixed = fixedResult.status === "fulfilled" && fixedResult.value.created > 0;
+      return synced || fixed;
+    })();
+    try {
       const [goalsRes, goalTxRes, budgetsRes, loadedTransactions, loadedRules] = await Promise.all([
         supabase.from("goals").select("*").eq("user_id", userId).order("created_at"),
         untypedSupabase.from("goal_transactions").select("amount, type, created_at").eq("user_id", userId).limit(1000),
@@ -190,6 +198,14 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
       if (!cached) toast.error(getErrorMessage(error, "Não foi possível carregar sua análise financeira."));
     } finally {
       setLoading(false);
+      if (maintenancePromise) {
+        void maintenancePromise.then((changed) => {
+          if (changed) {
+            clearFinanceTransactionMemoryCache(userId);
+            void load(true);
+          }
+        });
+      }
     }
   }, [referenceMonth, userId]);
 
@@ -197,7 +213,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
 
   useEffect(() => {
     return subscribeFinanceSync((detail) => {
-      if (!detail?.userId || detail.userId === userId) void load();
+      if (!detail?.userId || detail.userId === userId) void load(true);
     });
   }, [load, userId]);
 
