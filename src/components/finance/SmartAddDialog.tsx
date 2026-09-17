@@ -41,7 +41,7 @@ import {
   type SmartClassificationHistory,
   type SmartCategoryOption,
 } from "@/lib/financeSmartClassification";
-import { parseSmartInputWithAi } from "@/lib/finance/aiService";
+import { chatWithFinanceAssistant, parseSmartInputWithAi } from "@/lib/finance/aiService";
 import { recognizeFinancialImageLocally } from "@/lib/finance/localImageOcr";
 import {
   matchAccountByInstitution,
@@ -429,6 +429,18 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
     const file = attachment;
     const mode = image ? "image" : file ? "paste" : "text";
     if (!message && !image && !file) return;
+
+    // "Sim, pode lançar": confirma a última tabela conferida sem pedir tudo de novo.
+    const pending = drafts.length ? drafts : lastDraftsRef.current;
+    if (!image && !file && message && pending.length && isConfirmation(message)) {
+      void chat.append("user", message);
+      setText("");
+      setDrafts(pending);
+      setStage("review");
+      void chat.append("assistant", "Perfeito! Abri a tela de revisão para você conferir e lançar.");
+      return;
+    }
+
     const combinedText = file
       ? `${message ? `${message}\n\n` : ""}Conteúdo do arquivo ${file.name}:\n${file.text}`
       : message;
@@ -493,9 +505,25 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         throw aiFailure;
       }
       if (!parsed.length) {
+        // Sem lançamento na mensagem: responde como um assistente de conversa normal.
+        let reply = "";
+        if (!image) {
+          try {
+            reply = await chatWithFinanceAssistant({
+              message: String(combinedText || "").slice(0, 2000),
+              history: chat.messages.slice(-8).map((m) => ({
+                role: m.role === "assistant" ? "assistant" : "user",
+                content: m.content,
+              })),
+            });
+          } catch {
+            reply = "";
+          }
+        }
         void chat.append(
           "assistant",
-          "Não consegui identificar um lançamento. Me diga o valor e o que foi, por exemplo: “luz 180 no dia 10”.",
+          reply ||
+            "Não consegui identificar um lançamento aqui. Me diga o valor e o que foi, por exemplo: “luz 180 no dia 10”.",
         );
         return;
       }
@@ -539,13 +567,15 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         const amount = Number(t.amount) > 0
           ? Number(t.amount)
           : memory?.amount ?? Number(t.amount);
-        let date = t.date;
+        let date = normalizeDraftDate(t.date);
+        const currentMonth = todayIso().slice(0, 7);
         if (!t.explicit_day && memory?.day && !t.explicit_month && !t.explicit_year) {
           date = shiftDateToMonth(memory.day, new Date());
-        } else if (!t.explicit_month && !t.explicit_year && date < new Date().toISOString().slice(0, 7)) {
+        } else if (!t.explicit_month && !t.explicit_year && date.slice(0, 7) < currentMonth) {
           const day = Number(date.slice(8, 10)) || 1;
           date = shiftDateToMonth(day, new Date());
         }
+        date = normalizeDraftDate(date);
         const finalCategoryId = category_id || (memoryCategoryExists ? memory!.category_id! : "");
         const finalAccountId = account_id || (memoryAccountExists ? memory!.account_id! : "");
 
@@ -574,6 +604,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         };
       });
       setDrafts(newDrafts);
+      lastDraftsRef.current = newDrafts;
       setStage("input");
       const missing = newDrafts.filter((d) => !d.account_id).length;
       const reused = newDrafts.filter((d) => d.learned_from_history).length;
@@ -784,7 +815,20 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                     </span>
                   </p>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setDrafts([])}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        // Mantém a tabela guardada: basta dizer "pode lançar" para voltar.
+                        lastDraftsRef.current = drafts;
+                        setDrafts([]);
+                        void chat.append(
+                          "assistant",
+                          "Sem problema. Me diga o que mudar (valor, data, categoria ou conta) — ou escreva “pode lançar” para eu abrir a revisão com o que já montei.",
+                        );
+                        composerRef.current?.focus();
+                      }}
+                    >
                       Ajustar no texto
                     </Button>
                     <Button
