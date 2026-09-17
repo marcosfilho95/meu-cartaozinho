@@ -520,7 +520,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
       if (!parsed.length) {
         // Sem lançamento na mensagem: responde como um assistente de conversa normal.
         let reply = "";
-        if (!image) {
+        if (!hasImages) {
           try {
             reply = await chatWithFinanceAssistant({
               message: String(combinedText || "").slice(0, 2000),
@@ -756,8 +756,8 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
 
   const canParse = useMemo(() => {
     if (loading || optionsLoading || attachmentLoading) return false;
-    return text.trim().length > 2 || !!imageDataUrl || !!attachment;
-  }, [text, imageDataUrl, attachment, attachmentLoading, loading, optionsLoading]);
+    return text.trim().length > 2 || imageDataUrls.length > 0 || !!attachment;
+  }, [text, imageDataUrls.length, attachment, attachmentLoading, loading, optionsLoading]);
 
   useEffect(() => {
     if (stage === "input") messagesEndRef.current?.scrollIntoView({ block: "end" });
@@ -860,9 +860,12 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                capture="environment"
+                multiple
                 hidden
-                onChange={(e) => handleImagePick(e.target.files?.[0])}
+                onChange={(e) => {
+                  Array.from(e.target.files || []).forEach((file) => void handleImagePick(file));
+                  e.currentTarget.value = "";
+                }}
               />
 
               <input
@@ -892,17 +895,21 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
               )}
 
 
-              {imageDataUrl && (
-                <div className="relative w-fit overflow-hidden rounded-xl border bg-muted">
-                  <img src={imageDataUrl} alt="Comprovante" className="max-h-32 object-contain" />
-                  <button
-                    type="button"
-                    onClick={() => setImageDataUrl(null)}
-                    aria-label="Remover imagem"
-                    className="absolute right-1 top-1 rounded-full bg-background/90 p-1 text-muted-foreground hover:text-destructive"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
+              {imageDataUrls.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {imageDataUrls.map((url, index) => (
+                    <div key={index} className="relative w-fit overflow-hidden rounded-xl border bg-muted">
+                      <img src={url} alt={`Comprovante ${index + 1}`} className="max-h-32 object-contain" />
+                      <button
+                        type="button"
+                        onClick={() => setImageDataUrls((current) => current.filter((_, i) => i !== index))}
+                        aria-label={`Remover imagem ${index + 1}`}
+                        className="absolute right-1 top-1 rounded-full bg-background/90 p-1 text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
 
