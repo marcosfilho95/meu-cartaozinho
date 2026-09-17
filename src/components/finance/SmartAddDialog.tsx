@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/select";
 import {
   Sparkles,
-  ImageIcon,
   Loader2,
   Trash2,
   ArrowUpCircle,
@@ -273,7 +272,6 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
   /** Guarda a última tabela conferida para o usuário poder confirmar depois. */
   const lastDraftsRef = useRef<DraftTx[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const docInputRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chat = useSmartChat(userId, open);
@@ -773,21 +771,22 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
           <DialogTitle className="flex items-center justify-between gap-2 font-heading text-lg">
             <span className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
-              Adicionar Inteligente
+              Lançamento Inteligente
             </span>
             {stage === "input" && (
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                className="gap-1.5 text-xs text-muted-foreground"
+                className="h-8 gap-1.5 rounded-lg border-primary/20 bg-primary/5 px-2.5 text-xs font-semibold text-primary shadow-sm transition-colors hover:bg-primary/10 hover:text-primary"
                 onClick={() => void chat.clear()}
+                title="Apagar as mensagens e começar do zero"
               >
-                <RotateCcw className="h-3.5 w-3.5" /> Nova conversa
+                <RotateCcw className="h-3.5 w-3.5" /> Limpar conversa
               </Button>
             )}
           </DialogTitle>
           <p className="text-xs text-muted-foreground">
-            Escreva, fale ou envie um print. Eu organizo e você confirma antes de lançar.
+            Escreva, fale ou anexe uma imagem ou arquivo. Eu organizo e você confirma antes de lançar.
           </p>
         </DialogHeader>
 
@@ -859,22 +858,14 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept=".pdf,.csv,.txt,.ofx,.qfx,.xml,.xls,.xlsx,.xlsm,image/*,application/pdf,text/csv,text/plain,text/xml,application/xml"
                 multiple
                 hidden
                 onChange={(e) => {
-                  Array.from(e.target.files || []).forEach((file) => void handleImagePick(file));
-                  e.currentTarget.value = "";
-                }}
-              />
-
-              <input
-                ref={docInputRef}
-                type="file"
-                accept=".pdf,.csv,.txt,.ofx,.qfx,.xml,.xls,.xlsx,.xlsm,image/*,application/pdf,text/csv,text/plain,text/xml,application/xml"
-                hidden
-                onChange={(e) => {
-                  void handleDocumentPick(e.target.files?.[0]);
+                  const files = Array.from(e.target.files || []);
+                  files.filter((file) => file.type.startsWith("image/")).forEach((file) => void handleImagePick(file));
+                  const document = files.find((file) => !file.type.startsWith("image/"));
+                  if (document) void handleDocumentPick(document);
                   e.currentTarget.value = "";
                 }}
               />
@@ -936,19 +927,9 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                       variant="ghost"
                       size="icon"
                       className="h-9 w-9 rounded-full"
-                      onClick={() => fileInputRef.current?.click()}
-                      aria-label="Enviar imagem"
-                    >
-                      <ImageIcon className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-9 w-9 rounded-full"
                       disabled={attachmentLoading}
-                      onClick={() => docInputRef.current?.click()}
-                      aria-label="Anexar arquivo do banco (PDF, CSV, XML, OFX, Excel)"
+                      onClick={() => fileInputRef.current?.click()}
+                      aria-label="Anexar imagem ou arquivo (PDF, CSV, XML, OFX, Excel)"
                     >
                       {attachmentLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
                     </Button>
