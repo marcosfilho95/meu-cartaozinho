@@ -121,6 +121,12 @@
 }
 
 @layer utilities {
+  .auth-grain {
+    background-image: radial-gradient(circle at center, hsl(158 40% 12% / 0.16) 0.55px, transparent 0.7px);
+    background-size: 7px 7px;
+    mask-image: linear-gradient(to bottom right, black, transparent 72%);
+  }
+
   .wow-click {
     position: relative;
     overflow: visible;

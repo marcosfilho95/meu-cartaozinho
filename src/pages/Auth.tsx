@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { AppLogo } from "@/components/AppLogo";
 import { AppFooter } from "@/components/AppFooter";
 import { toast } from "sonner";
-import { Mail, Lock, Eye, EyeOff, User, Loader2 } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Lock, Mail, ShieldCheck, Sparkles, User, Loader2 } from "lucide-react";
 import { checkSupabaseConnection } from "@/integrations/supabase/diagnostics";
 
 type View = "login" | "signup" | "forgot";
@@ -255,7 +255,7 @@ const Auth: React.FC = () => {
   };
 
   const inputClasses =
-    "h-12 rounded-xl border-border/60 bg-card/80 pl-10 pr-10 transition-all duration-200 placeholder:text-muted-foreground/60 focus:border-primary focus:ring-2 focus:ring-inset focus:ring-primary/35";
+    "h-14 rounded-2xl border-border/70 bg-[#fbfaf7] pl-11 pr-11 text-[0.95rem] shadow-[0_1px_0_rgba(14,59,43,0.02)] transition-all duration-200 placeholder:text-muted-foreground/55 hover:border-primary/25 focus:border-primary/55 focus:bg-white focus:ring-4 focus:ring-primary/10";
 
   React.useEffect(() => {
     if (view === "forgot") return;
@@ -293,34 +293,84 @@ const Auth: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex min-h-screen items-start justify-center overflow-y-auto bg-gradient-to-br from-background via-accent/30 to-background p-4 md:items-center">
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -right-32 -top-32 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
-        <div className="absolute -bottom-32 -left-32 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f3eddd] px-3 py-3 sm:px-6 sm:py-6 lg:px-10 lg:py-10">
+      <div className="pointer-events-none absolute inset-0" aria-hidden>
+        <div className="absolute -left-24 top-[-8rem] h-80 w-80 rounded-full bg-[#d8bd70]/20 blur-3xl" />
+        <div className="absolute -bottom-40 right-[-6rem] h-[28rem] w-[28rem] rounded-full bg-primary/10 blur-3xl" />
+        <div className="auth-grain absolute inset-0 opacity-[0.22]" />
       </div>
 
-      <div className="relative z-10 w-full max-w-md animate-fade-in py-4">
-        <div className="mb-8 text-center">
-          <AppLogo size="lg" className="mx-auto mb-4" />
-          <h1 className="font-heading text-[2.15rem] font-extrabold tracking-[-0.02em] text-foreground">
-            Meu Cartãozinho
-            <span className="sr-only"> — Gestão de Finanças e Cartões</span>
-          </h1>
-          <p className="mt-2 text-[0.95rem] font-semibold tracking-[0.01em] text-muted-foreground/90">Suas parcelas organizadas, mês a mês</p>
-        </div>
+      <section className="relative z-10 grid min-w-0 w-full max-w-[1120px] animate-fade-in overflow-hidden rounded-[2rem] border border-white/60 bg-white shadow-[0_30px_90px_-35px_rgba(12,54,40,0.38)] md:grid-cols-[0.92fr_1.08fr] md:rounded-[2.5rem]">
+        <aside className="relative isolate min-w-0 overflow-hidden bg-[#0b3b2b] px-6 py-7 text-white sm:px-9 sm:py-9 md:flex md:min-h-[720px] md:flex-col md:justify-between md:p-12 lg:p-14">
+          <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+            <div className="absolute -right-24 -top-28 h-72 w-72 rounded-full border border-white/10" />
+            <div className="absolute -right-10 -top-10 h-44 w-44 rounded-full border border-[#d6b968]/25" />
+            <div className="absolute bottom-[-9rem] left-[-8rem] h-80 w-80 rounded-full bg-[#d6b968]/10 blur-2xl" />
+            <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-black/10 to-transparent" />
+          </div>
 
-        <div className="rounded-3xl border border-border/40 bg-card/90 p-6 shadow-elevated backdrop-blur-sm sm:p-8">
+          <div className="relative z-10">
+            <div className="flex items-center gap-4 md:block">
+              <AppLogo size="lg" className="h-14 w-14 shrink-0 rounded-2xl bg-[#f5efdf] ring-1 ring-white/20 shadow-[0_16px_35px_-18px_rgba(0,0,0,0.55)] sm:h-16 sm:w-16 md:mb-8 md:h-20 md:w-20 md:rounded-3xl" />
+              <div className="min-w-0">
+                <p className="mb-1 text-[0.65rem] font-semibold uppercase tracking-[0.24em] text-[#dcc882] md:mb-3">Planejamento financeiro</p>
+                <h1 className="font-heading text-[1.55rem] font-bold leading-tight tracking-[-0.035em] min-[400px]:text-[1.85rem] sm:text-[2.15rem] md:max-w-sm md:text-[2.8rem] lg:text-[3.25rem]">
+                  Meu Cartãozinho
+                  <span className="sr-only"> — Gestão de Finanças e Cartões</span>
+                </h1>
+              </div>
+            </div>
+            <p className="mt-5 max-w-[31rem] font-heading text-[1.02rem] italic leading-relaxed text-white/80 sm:text-[1.08rem] md:mt-6 md:text-[1.22rem] md:leading-[1.75]">
+              “Nem todo futuro pode ser previsto. Mas todo futuro pode ser planejado.”
+            </p>
+          </div>
+
+          <div className="relative z-10 mt-8 hidden md:block">
+            <div className="relative mb-10 h-36">
+              <div className="absolute left-4 top-4 h-28 w-44 -rotate-6 rounded-[1.4rem] border border-white/10 bg-white/[0.06]" />
+              <div className="absolute left-16 top-0 h-32 w-52 rotate-3 rounded-[1.5rem] border border-[#e1cc86]/30 bg-gradient-to-br from-white/[0.16] to-white/[0.04] p-5 shadow-2xl backdrop-blur-md">
+                <div className="flex items-start justify-between">
+                  <Sparkles className="h-5 w-5 text-[#e1cc86]" />
+                  <span className="text-[0.55rem] font-semibold uppercase tracking-[0.22em] text-white/55">Seu futuro</span>
+                </div>
+                <div className="mt-8 h-1.5 w-24 rounded-full bg-white/25" />
+                <div className="mt-2 h-1.5 w-14 rounded-full bg-[#e1cc86]/65" />
+              </div>
+            </div>
+            <div className="flex items-center gap-3 border-t border-white/10 pt-6 text-sm text-white/65">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-[#e1cc86]">
+                <ShieldCheck className="h-4 w-4" />
+              </span>
+              <p><strong className="block font-semibold text-white/90">Simples, seguro e organizado</strong>Suas finanças em boas mãos.</p>
+            </div>
+          </div>
+        </aside>
+
+        <div className="flex min-w-0 flex-col bg-[#fffefa] px-5 py-7 sm:px-9 sm:py-9 md:min-h-[720px] md:justify-center md:px-12 md:py-12 lg:px-16">
+          <div className="mx-auto min-w-0 w-full max-w-[440px]">
+            <div className="mb-7">
+              <p className="text-[0.68rem] font-bold uppercase tracking-[0.2em] text-primary/60">
+                {view === "forgot" ? "Recupere seu acesso" : view === "signup" ? "Comece agora" : "Bem-vindo de volta"}
+              </p>
+              <h2 className="mt-2 font-heading text-2xl font-bold tracking-[-0.025em] text-foreground sm:text-[1.75rem]">
+                {view === "forgot" ? "Redefina seu PIN" : view === "signup" ? "Crie sua conta" : "Acesse sua conta"}
+              </h2>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                {view === "forgot" ? "Vamos enviar as instruções de recuperação para você." : view === "signup" ? "Organize hoje as escolhas que constroem o seu amanhã." : "Entre para continuar cuidando do que importa para você."}
+              </p>
+            </div>
+
           {!!connectionIssue && (
-            <div className="mb-4 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            <div className="mb-5 rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-xs text-destructive">
               <p className="font-semibold">Falha de configuração/conexão do servidor</p>
               <p className="mt-1">{connectionIssue}</p>
             </div>
           )}
 
           {view !== "forgot" && (
-            <div className="relative mb-6 grid grid-cols-2 rounded-2xl bg-secondary/55 p-1">
+            <div className="relative mb-7 grid grid-cols-2 rounded-2xl border border-border/45 bg-[#f4f0e6] p-1.5">
               <span
-                className={`pointer-events-none absolute bottom-1 top-1 w-[calc(50%-0.25rem)] rounded-xl gradient-primary shadow-sm transition-transform duration-300 ease-out ${
+                className={`pointer-events-none absolute bottom-1.5 top-1.5 w-[calc(50%-0.375rem)] rounded-xl bg-primary shadow-[0_8px_20px_-10px_rgba(6,78,53,0.75)] transition-transform duration-300 ease-out ${
                   view === "signup" ? "translate-x-full" : "translate-x-0"
                 }`}
               />
@@ -359,13 +409,14 @@ const Auth: React.FC = () => {
                 <div className="space-y-2">
                   <Label htmlFor="identifier">Usuário</Label>
                   <div className="relative">
-                    <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
+                    <User className="absolute left-4 top-1/2 h-[1.1rem] w-[1.1rem] -translate-y-1/2 text-primary/45" />
                     <Input
                       id="identifier"
                       type="text"
                       placeholder="Usuário ou e-mail"
                       value={loginIdentifier}
                       onChange={(e) => setLoginIdentifier(e.target.value)}
+                      autoComplete="username"
                       required
                       className={`${inputClasses} placeholder:text-[0.92rem] sm:placeholder:text-base`}
                     />
@@ -374,7 +425,7 @@ const Auth: React.FC = () => {
                 <div className="space-y-2">
                   <Label htmlFor="password">PIN (6 dígitos)</Label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
+                    <Lock className="absolute left-4 top-1/2 h-[1.1rem] w-[1.1rem] -translate-y-1/2 text-primary/45" />
                     <Input
                       id="password"
                       type={showPassword ? "text" : "password"}
@@ -384,32 +435,34 @@ const Auth: React.FC = () => {
                       inputMode="numeric"
                       pattern="[0-9]*"
                       maxLength={6}
+                      autoComplete="current-password"
                       required
                       className={inputClasses}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 hover:text-foreground"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground/70 transition hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                      aria-label={showPassword ? "Ocultar PIN" : "Mostrar PIN"}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
-                  {pinError && <p className="text-xs text-destructive">{pinError}</p>}
+                  {password.length > 0 && pinError && <p className="text-xs text-destructive">{pinError}</p>}
                 </div>
                 <div className="text-right">
-                  <button type="button" onClick={() => setView("forgot")} className="text-xs font-medium text-primary hover:underline">
+                  <button type="button" onClick={() => setView("forgot")} className="text-xs font-semibold text-primary underline-offset-4 transition hover:text-primary/75 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25">
                     Esqueci meu PIN
                   </button>
                 </div>
-                <Button type="submit" className="h-12 w-full rounded-xl gradient-primary text-base font-semibold text-primary-foreground" disabled={loading}>
+                <Button type="submit" className="group h-14 w-full rounded-2xl bg-primary text-base font-semibold text-primary-foreground shadow-[0_12px_28px_-14px_rgba(6,78,53,0.9)] transition-all hover:-translate-y-0.5 hover:bg-primary/95 hover:shadow-[0_16px_32px_-14px_rgba(6,78,53,0.95)]" disabled={loading}>
                   {loading ? (
                     <span className="flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Entrando...
                     </span>
                   ) : (
-                    "Entrar"
+                    <span className="flex items-center gap-2">Entrar <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></span>
                   )}
                 </Button>
               </form>
@@ -426,52 +479,54 @@ const Auth: React.FC = () => {
                 <div className="space-y-2">
                   <Label htmlFor="name">Nome</Label>
                   <div className="relative">
-                    <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
-                    <Input id="name" type="text" placeholder="Seu nome" value={name} onChange={(e) => setName(e.target.value)} required maxLength={100} className={inputClasses} />
+                    <User className="absolute left-4 top-1/2 h-[1.1rem] w-[1.1rem] -translate-y-1/2 text-primary/45" />
+                    <Input id="name" type="text" placeholder="Seu nome" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required maxLength={100} className={inputClasses} />
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="username">Nome de usuário</Label>
                   <div className="relative">
-                    <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
+                    <User className="absolute left-4 top-1/2 h-[1.1rem] w-[1.1rem] -translate-y-1/2 text-primary/45" />
                     <Input
                       id="username"
                       type="text"
                       placeholder="ex: marcosfilho"
                       value={username}
                       onChange={(e) => setUsername(e.target.value.toLowerCase())}
+                      autoComplete="username"
                       required
                       minLength={3}
                       maxLength={20}
                       className={inputClasses}
                     />
                   </div>
-                  {usernameError && <p className="text-xs text-destructive">{usernameError}</p>}
+                  {username.length > 0 && usernameError && <p className="text-xs text-destructive">{usernameError}</p>}
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">Email</Label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
+                    <Mail className="absolute left-4 top-1/2 h-[1.1rem] w-[1.1rem] -translate-y-1/2 text-primary/45" />
                     <Input
                       id="signup-email"
                       type="email"
                       placeholder="seu@email.com"
                       value={signupEmail}
                       onChange={(e) => setSignupEmail(e.target.value)}
+                      autoComplete="email"
                       required
                       maxLength={255}
                       className={inputClasses}
                     />
                   </div>
-                  {signupEmailError && <p className="text-xs text-destructive">{signupEmailError}</p>}
+                  {signupEmail.length > 0 && signupEmailError && <p className="text-xs text-destructive">{signupEmailError}</p>}
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="signup-password">PIN (6 dígitos)</Label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
+                    <Lock className="absolute left-4 top-1/2 h-[1.1rem] w-[1.1rem] -translate-y-1/2 text-primary/45" />
                     <Input
                       id="signup-password"
                       type={showPassword ? "text" : "password"}
@@ -482,23 +537,25 @@ const Auth: React.FC = () => {
                       inputMode="numeric"
                       pattern="[0-9]*"
                       maxLength={6}
+                      autoComplete="new-password"
                       className={inputClasses}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 hover:text-foreground"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground/70 transition hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                      aria-label={showPassword ? "Ocultar PIN" : "Mostrar PIN"}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
-                  {pinError && <p className="text-xs text-destructive">{pinError}</p>}
+                  {password.length > 0 && pinError && <p className="text-xs text-destructive">{pinError}</p>}
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="confirm-password">Confirmar PIN</Label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
+                    <Lock className="absolute left-4 top-1/2 h-[1.1rem] w-[1.1rem] -translate-y-1/2 text-primary/45" />
                     <Input
                       id="confirm-password"
                       type={showConfirmPassword ? "text" : "password"}
@@ -508,13 +565,15 @@ const Auth: React.FC = () => {
                       inputMode="numeric"
                       pattern="[0-9]*"
                       maxLength={6}
+                      autoComplete="new-password"
                       required
                       className={`${inputClasses} ${passwordsMatch ? "border-green-400/60" : passwordsMismatch ? "border-destructive/60" : ""}`}
                     />
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 hover:text-foreground"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground/70 transition hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                      aria-label={showConfirmPassword ? "Ocultar confirmação do PIN" : "Mostrar confirmação do PIN"}
                     >
                       {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
@@ -525,7 +584,7 @@ const Auth: React.FC = () => {
 
                 <Button
                   type="submit"
-                  className="h-12 w-full rounded-xl gradient-primary text-base font-semibold text-primary-foreground"
+                  className="group h-14 w-full rounded-2xl bg-primary text-base font-semibold text-primary-foreground shadow-[0_12px_28px_-14px_rgba(6,78,53,0.9)] transition-all hover:-translate-y-0.5 hover:bg-primary/95"
                   disabled={loading || !canSubmitSignup}
                 >
                   {loading ? (
@@ -534,7 +593,7 @@ const Auth: React.FC = () => {
                       Criando conta...
                     </span>
                   ) : (
-                    "Criar conta"
+                    <span className="flex items-center gap-2">Criar conta <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></span>
                   )}
                 </Button>
               </form>
@@ -543,14 +602,10 @@ const Auth: React.FC = () => {
 
           {view === "forgot" && (
             <form onSubmit={handleForgotPassword} className="space-y-5">
-              <div>
-                <h2 className="font-heading text-xl font-bold text-foreground">Recuperar PIN</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Informe seu e-mail para receber o link de redefinição.</p>
-              </div>
               <div className="space-y-2">
                 <Label htmlFor="forgot-identifier">Usuário ou e-mail</Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
+                  <Mail className="absolute left-4 top-1/2 h-[1.1rem] w-[1.1rem] -translate-y-1/2 text-primary/45" />
                   <Input
                     id="forgot-identifier"
                     type="text"
@@ -563,7 +618,7 @@ const Auth: React.FC = () => {
                 </div>
                 <p className="text-xs text-muted-foreground">Use o mesmo usuário ou e-mail do login.</p>
               </div>
-              <Button type="submit" className="h-12 w-full rounded-xl gradient-primary text-base font-semibold text-primary-foreground" disabled={loading}>
+              <Button type="submit" className="h-14 w-full rounded-2xl bg-primary text-base font-semibold text-primary-foreground shadow-[0_12px_28px_-14px_rgba(6,78,53,0.9)]" disabled={loading}>
                 {loading ? (
                   <span className="flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -573,16 +628,16 @@ const Auth: React.FC = () => {
                   "Enviar link de recuperação"
                 )}
               </Button>
-              <button type="button" onClick={() => setView("login")} className="w-full text-center text-sm font-medium text-primary hover:underline">
+              <button type="button" onClick={() => setView("login")} className="w-full text-center text-sm font-semibold text-primary underline-offset-4 hover:underline">
                 Voltar ao login
               </button>
             </form>
           )}
+            <AppFooter useContainer={false} plain className="mt-8 w-full border-t border-border/60 p-0 pt-5 [&>div]:p-0" />
+          </div>
         </div>
-
-        <AppFooter useContainer={false} className="w-full p-0 pb-0 pt-3" />
-      </div>
-    </div>
+      </section>
+    </main>
   );
 };
 
