@@ -79,6 +79,81 @@ const containsPhrase = (normalizedText: string, phrase: string): boolean => {
   return new RegExp(`(?:^|\\s)${escaped}(?:$|\\s)`).test(` ${normalizedText} `);
 };
 
+/** Abreviações e gírias comuns em lançamentos rápidos ("merc 50", "gas 120 cc"). */
+const ABBREVIATIONS: Record<string, string> = {
+  "p/": "para",
+  "c/": "com",
+  hj: "hoje",
+  ont: "ontem",
+  amn: "amanha",
+  vlr: "valor",
+  qtd: "quantidade",
+  merc: "mercado",
+  mercd: "mercado",
+  super: "supermercado",
+  sup: "supermercado",
+  padoca: "padaria",
+  pad: "padaria",
+  alm: "almoco",
+  almc: "almoco",
+  jant: "jantar",
+  lanche: "lanche",
+  rest: "restaurante",
+  ifd: "ifood",
+  gas: "gasolina",
+  comb: "combustivel",
+  posto: "posto",
+  farm: "farmacia",
+  farmac: "farmacia",
+  med: "medicamento",
+  remedio: "farmacia",
+  acad: "academia",
+  vet: "veterinario",
+  alug: "aluguel",
+  cond: "condominio",
+  inet: "internet",
+  net: "internet",
+  cel: "celular",
+  tel: "telefone",
+  tv: "streaming",
+  sal: "salario",
+  sl: "salario",
+  freela: "freelance",
+  pgto: "pagamento",
+  pag: "paguei",
+  paguei: "paguei",
+  receb: "recebi",
+  rec: "recebi",
+  transf: "transferencia",
+  tranf: "transferencia",
+  cc: "cartao de credito",
+  cart: "cartao",
+  deb: "debito",
+  cred: "credito",
+  din: "dinheiro",
+  bol: "boleto",
+  fat: "fatura",
+  venc: "vencimento",
+  mens: "mensalidade",
+  assin: "assinatura",
+  unif: "uniforme",
+  esc: "escola",
+  fac: "faculdade",
+  ub: "uber",
+  est: "estacionamento",
+  pedag: "pedagio",
+  seg: "seguro",
+};
+
+/** Expande abreviações mantendo o restante do texto intacto. */
+export const expandAbbreviations = (value: string): string =>
+  value.replace(/[a-zA-ZÀ-ú]+\/?|[a-zA-ZÀ-ú]+/g, (token) => {
+    const key = normalizeText(token);
+    const expanded = ABBREVIATIONS[key];
+    return expanded ?? token;
+  });
+
+
 export const parseBrazilianCurrency = (raw: string): number | null => {
   const cleaned = raw.replace(/r\$/gi, "").replace(/\s/g, "").replace(/[^\d,.-]/g, "");
   if (!cleaned || !/\d/.test(cleaned)) return null;
