@@ -7,11 +7,11 @@
 @layer base {
   :root {
     /* Emerald Prestige — verde profundo, dourado sutil, off-white cremoso. */
-    --background: 40 33% 96%;
+    --background: 42 37% 95%;
     --foreground: 158 40% 10%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 340 20% 15%;
+    --card: 42 33% 99%;
+    --card-foreground: 158 40% 10%;
 
     /* Finance module tokens (escopados ao Organizador Financeiro).
        Verde emerald para entradas, rose contido para saídas, âmbar só p/ alertas. */
@@ -27,17 +27,17 @@
     --finance-border: 220 14% 92%;
     --finance-muted-fg: 220 8% 46%;
 
-    --popover: 0 0% 100%;
+    --popover: 42 33% 99%;
     --popover-foreground: 158 40% 10%;
 
-    --primary: 158 78% 17%;
+    --primary: 158 72% 15%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 42 40% 92%;
+    --secondary: 42 36% 91%;
     --secondary-foreground: 158 40% 15%;
 
-    --muted: 40 25% 94%;
-    --muted-foreground: 158 12% 38%;
+    --muted: 42 24% 92%;
+    --muted-foreground: 158 10% 40%;
 
     --accent: 44 62% 54%;
     --accent-foreground: 158 40% 12%;
@@ -45,11 +45,11 @@
     --destructive: 0 72% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 42 20% 88%;
-    --input: 42 20% 88%;
-    --ring: 158 78% 25%;
+    --border: 42 18% 84%;
+    --input: 42 18% 84%;
+    --ring: 158 64% 22%;
 
-    --radius: 0.6rem;
+    --radius: 0.9rem;
 
     --sidebar-background: 40 30% 97%;
     --sidebar-foreground: 158 20% 22%;
@@ -68,11 +68,11 @@
     --gold: 44 62% 54%;
     --gold-soft: 44 72% 88%;
     --pink-glow: 44 62% 54%; /* legado — mapeia para dourado para não quebrar componentes antigos */
-    --gradient-primary: linear-gradient(135deg, hsl(158, 78%, 17%), hsl(158, 60%, 28%));
+    --gradient-primary: linear-gradient(135deg, hsl(158, 72%, 15%), hsl(158, 54%, 23%));
     --gradient-gold: linear-gradient(135deg, hsl(44, 62%, 54%), hsl(38, 60%, 66%));
-    --gradient-card: linear-gradient(160deg, hsl(0, 0%, 100%) 0%, hsl(40, 33%, 97%) 100%);
-    --shadow-card: 0 1px 2px hsl(158 40% 12% / 0.04), 0 4px 20px -8px hsl(158 40% 12% / 0.08);
-    --shadow-elevated: 0 2px 4px hsl(158 40% 12% / 0.04), 0 20px 40px -18px hsl(158 40% 12% / 0.18);
+    --gradient-card: linear-gradient(160deg, hsl(42, 33%, 99%) 0%, hsl(42, 32%, 97%) 100%);
+    --shadow-card: 0 1px 2px hsl(158 40% 12% / 0.025), 0 12px 30px -24px hsl(158 40% 12% / 0.2);
+    --shadow-elevated: 0 2px 4px hsl(158 40% 12% / 0.025), 0 24px 55px -30px hsl(158 40% 12% / 0.34);
 
     --font-heading: 'Libre Baskerville', 'Georgia', serif;
     --font-body: 'IBM Plex Sans', 'Inter', sans-serif;
@@ -112,7 +112,45 @@
 
   body {
     @apply bg-background text-foreground;
+    min-width: 320px;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(circle at 4% 4%, hsl(var(--accent) / 0.075), transparent 24rem),
+      radial-gradient(circle at 96% 96%, hsl(var(--primary) / 0.055), transparent 28rem);
+    background-attachment: fixed;
     font-family: var(--font-body);
+    font-feature-settings: "kern" 1, "liga" 1;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  ::selection {
+    background: hsl(var(--accent) / 0.35);
+    color: hsl(var(--foreground));
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--primary) / 0.22) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: hsl(var(--primary) / 0.2);
+    background-clip: padding-box;
+  }
+
+  :focus-visible {
+    scroll-margin: 1rem;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -125,6 +163,14 @@
     background-image: radial-gradient(circle at center, hsl(158 40% 12% / 0.16) 0.55px, transparent 0.7px);
     background-size: 7px 7px;
     mask-image: linear-gradient(to bottom right, black, transparent 72%);
+  }
+
+  .auth-header-grid {
+    background-image:
+      linear-gradient(hsl(0 0% 100% / 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(0 0% 100% / 0.025) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: linear-gradient(to right, black, transparent 72%);
   }
 
   .wow-click {
@@ -211,12 +257,8 @@
   .page-title-shell {
     position: relative;
     isolation: isolate;
-    overflow: hidden;
-    border: 1px solid hsl(var(--border) / 0.72);
-    border-radius: 1.5rem;
-    background: linear-gradient(125deg, hsl(var(--card)) 0%, hsl(var(--card)) 62%, hsl(var(--primary) / 0.045) 100%);
-    padding: 1.35rem 1.5rem;
-    box-shadow: var(--shadow-card);
+    border-bottom: 1px solid hsl(var(--border) / 0.72);
+    padding: 1.1rem 0 1.6rem;
   }
 
   .page-title-shell > .page-title-content:first-child {
@@ -230,15 +272,13 @@
 
   .page-title-shell::after {
     position: absolute;
-    z-index: -1;
-    top: -5rem;
-    right: -3rem;
-    width: 13rem;
-    height: 13rem;
-    border-radius: 9999px;
-    background: hsl(var(--accent) / 0.075);
+    bottom: -1px;
+    left: 0;
+    width: 4.5rem;
+    height: 2px;
+    border-radius: 999px;
+    background: hsl(var(--accent));
     content: "";
-    filter: blur(1px);
   }
 
   .page-title-content {
@@ -249,24 +289,20 @@
   .page-title-eyebrow {
     display: inline-flex;
     align-items: center;
-    border: 1px solid hsl(var(--primary) / 0.16);
-    border-radius: 9999px;
-    background: hsl(var(--primary) / 0.055);
-    padding: 0.34rem 0.72rem;
-    color: hsl(var(--primary));
+    color: hsl(var(--primary) / 0.66);
     font-size: 0.625rem;
     font-weight: 700;
-    letter-spacing: 0.2em;
+    letter-spacing: 0.19em;
     line-height: 1;
     text-transform: uppercase;
   }
 
   .page-title-heading {
     max-width: 42rem;
-    margin-top: 0.85rem;
+    margin-top: 0.65rem;
     color: hsl(var(--foreground));
     font-family: var(--font-heading);
-    font-size: clamp(2rem, 4.2vw, 3.1rem);
+    font-size: clamp(1.85rem, 4vw, 2.8rem);
     font-weight: 700;
     letter-spacing: -0.04em;
     line-height: 1.08;
@@ -275,7 +311,7 @@
 
   .page-title-description {
     max-width: 38rem;
-    margin-top: 0.85rem;
+    margin-top: 0.7rem;
     color: hsl(var(--muted-foreground));
     font-size: 0.9375rem;
     line-height: 1.6;
@@ -283,8 +319,7 @@
 
   @media (max-width: 640px) {
     .page-title-shell {
-      border-radius: 1.35rem;
-      padding: 1.25rem;
+      padding: 0.85rem 0 1.35rem;
     }
 
     .page-title-heading {

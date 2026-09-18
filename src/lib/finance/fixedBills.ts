@@ -106,7 +106,23 @@ export const fetchExpectedBillsForMonth = async (userId: string, monthKey: strin
     .lte("due_date", `${monthKey}-${pad(daysInMonth(monthKey))}`)
     .order("due_date", { ascending: true });
   if (error) throw error;
-  return ((data || []) as Array<Record<string, unknown>>).map((row) => ({
+  const rows = (data || []) as Array<Record<string, unknown>>;
+  const recurrenceIds = [...new Set(rows.map((row) => row.recurrence_id).filter((id): id is string => typeof id === "string"))];
+  const recurrenceKindById = new Map<string, { kind?: string | null; payloadType?: string | null }>();
+  if (recurrenceIds.length > 0) {
+    const { data: recurrences, error: recurrencesError } = await supabase
+      .from("recurrences")
+      .select("id, kind, template_payload")
+      .eq("user_id", userId)
+      .in("id", recurrenceIds);
+    if (recurrencesError) throw recurrencesError;
+    (recurrences || []).forEach((recurrence) => {
+      const payload = (recurrence.template_payload || {}) as { type?: string | null };
+      recurrenceKindById.set(recurrence.id, { kind: recurrence.kind, payloadType: payload.type });
+    });
+  }
+
+  return rows.map((row) => ({
     id: String(row.id),
     name: String(row.name),
     amount: Number(row.amount || 0),
@@ -116,7 +132,11 @@ export const fetchExpectedBillsForMonth = async (userId: string, monthKey: strin
     accountId: (row.account_id as string | null) ?? null,
     categoryId: (row.category_id as string | null) ?? null,
     transactionId: (row.transaction_id as string | null) ?? null,
-    kind: ((row.metadata as { kind?: string } | null)?.kind === "income" ? "income" : "expense") as FixedBillKind,
+    kind: (((row.metadata as { kind?: string } | null)?.kind === "income" ||
+      recurrenceKindById.get(String(row.recurrence_id))?.kind === "income" ||
+      recurrenceKindById.get(String(row.recurrence_id))?.payloadType === "income")
+      ? "income"
+      : "expense") as FixedBillKind,
   })) as FixedBillPreview[];
 };
 

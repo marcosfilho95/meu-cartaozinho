@@ -109,7 +109,7 @@ const Purchases: React.FC<PurchasesProps> = ({ initialUserId }) => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background/70 flex flex-col">
       <AppHeader
         containerClassName="max-w-6xl"
         title="Compras e ordens"

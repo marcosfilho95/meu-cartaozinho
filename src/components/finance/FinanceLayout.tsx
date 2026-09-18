@@ -18,7 +18,7 @@ export const FinanceLayout: React.FC<FinanceLayoutProps> = ({ userId }) => {
   const location = useLocation();
 
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <div className="min-h-screen bg-background/70 pb-24">
       <AppHeader
         containerClassName="max-w-6xl"
         title="Organizador Financeiro"
@@ -33,7 +33,7 @@ export const FinanceLayout: React.FC<FinanceLayoutProps> = ({ userId }) => {
 
       <FinanceTopNav />
 
-      <div key={location.pathname} className={transitionClass}>
+      <div key={location.pathname} className={`${transitionClass} pt-5 md:pt-0`}>
         <Outlet />
       </div>
 

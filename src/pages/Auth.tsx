@@ -321,7 +321,7 @@ const Auth: React.FC = () => {
               </div>
             </div>
             <p className="mt-5 max-w-[31rem] font-heading text-[1.02rem] italic leading-relaxed text-white/80 sm:text-[1.08rem] md:mt-6 md:text-[1.22rem] md:leading-[1.75]">
-              “Nem todo futuro pode ser previsto. Mas todo futuro pode ser planejado.”
+              Nem todo futuro pode ser previsto. Mas todo futuro pode ser planejado.
             </p>
           </div>
 

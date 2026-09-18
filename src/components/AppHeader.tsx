@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Eye, EyeOff, LogOut, UserCircle2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, Eye, EyeOff, LogOut, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -8,6 +8,14 @@ import { AppLogo } from "@/components/AppLogo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { usePrivacyMode } from "@/hooks/use-privacy-mode";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface AppHeaderProps {
   title: string;
@@ -70,83 +78,82 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   };
 
   return (
-    <header className={cn("relative isolate overflow-hidden gradient-primary px-4 pb-8 pt-4 sm:pb-9", headerClassName)} style={headerStyle}>
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-white/[0.045]" aria-hidden />
-      <div className="pointer-events-none absolute -right-28 -top-36 h-80 w-80 rounded-full bg-emerald-200/10 blur-3xl" aria-hidden />
+    <header className={cn("relative isolate overflow-hidden border-b border-[#cdb66e]/20 bg-[#0b3b2b] px-4 pb-7 pt-4 sm:pb-8", headerClassName)} style={headerStyle}>
+      <div className="pointer-events-none absolute inset-0 auth-header-grid opacity-30" aria-hidden />
+      <div className="pointer-events-none absolute -right-24 -top-44 h-80 w-80 rounded-full border border-white/10" aria-hidden />
+      <div className="pointer-events-none absolute -right-8 -top-28 h-56 w-56 rounded-full border border-[#d6bd73]/20" aria-hidden />
       <div className={cn("relative mx-auto w-full max-w-6xl", containerClassName)} style={{ zIndex: 1 }}>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex w-full min-w-0 items-center gap-2.5 sm:gap-3.5 lg:flex-1">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3.5">
             {showBack && (
               <Button
                 variant="ghost"
                 onClick={handleBack}
-                className="h-11 shrink-0 gap-2 rounded-2xl border border-white/15 bg-white/[0.08] px-3 text-primary-foreground shadow-sm backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white/[0.16] hover:text-primary-foreground"
+                className="h-10 shrink-0 gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-3 text-white/80 shadow-none hover:-translate-y-0.5 hover:bg-white/[0.12] hover:text-white"
                 aria-label="Voltar"
               >
-                <ArrowLeft className="h-5 w-5" strokeWidth={2.2} />
+                <ArrowLeft className="h-4 w-4" strokeWidth={2.2} />
                 <span className="hidden text-xs font-semibold sm:inline">Voltar</span>
               </Button>
             )}
-            <AppLogo size="md" className="h-12 w-12 shrink-0 rounded-2xl ring-2 ring-white/30 shadow-lg" />
-            <div className="h-9 w-px shrink-0 bg-white/20" aria-hidden />
-            <button
-              type="button"
-              onClick={() => navigate("/perfil")}
-              className="group shrink-0 rounded-full transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
-              aria-label="Abrir perfil"
-            >
-              <UserAvatar
-                avatarId={avatarId ?? undefined}
-                avatarUrl={avatarUrl ?? undefined}
-                name={resolvedUserName}
-                size={52}
-                pending={avatarPending}
-                className="border-2 border-white/75 shadow-lg"
-              />
-            </button>
+            <AppLogo size="md" className="h-11 w-11 shrink-0 rounded-xl bg-[#f5efdf] ring-1 ring-white/20 shadow-[0_10px_24px_-16px_rgba(0,0,0,0.75)] sm:h-12 sm:w-12 sm:rounded-2xl" />
             <div className="min-w-0 flex-1">
               {greetingLine && (
-                <p className="text-[11px] font-semibold tracking-[0.04em] text-primary-foreground/70">{greetingLine}</p>
+                <p className="truncate text-[10px] font-semibold uppercase tracking-[0.15em] text-[#d9c47f]/80">{greetingLine}</p>
               )}
-              <h1 className="break-normal font-heading text-[1.45rem] font-bold leading-tight tracking-[-0.02em] text-primary-foreground sm:text-[1.65rem]">
+              <h1 className="truncate font-heading text-[1.25rem] font-bold leading-tight tracking-[-0.025em] text-white sm:text-[1.55rem]">
                 {title}
               </h1>
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-1.5 self-end sm:gap-2 lg:self-auto">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             {topActions}
             <Button
               variant="ghost"
               onClick={togglePrivacy}
-              className="h-11 gap-2 rounded-2xl border border-white/15 bg-white/[0.08] px-3 text-primary-foreground/85 shadow-sm backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white/[0.16] hover:text-primary-foreground"
+              size="icon"
+              className="h-10 w-10 rounded-xl border border-white/10 bg-white/[0.06] p-0 text-white/75 shadow-none hover:-translate-y-0.5 hover:bg-white/[0.12] hover:text-white"
               aria-label={isPrivate ? "Mostrar valores" : "Ocultar valores"}
               title={isPrivate ? "Mostrar valores" : "Ocultar valores"}
               aria-pressed={isPrivate}
             >
-              {isPrivate ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-              <span className="hidden text-xs font-semibold xl:inline">Privacidade</span>
+              {isPrivate ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </Button>
-            <Button
-              variant="ghost"
-              data-tour="profile-button"
-              onClick={() => navigate("/perfil")}
-              className="h-11 gap-2 rounded-2xl border border-white/15 bg-white/[0.08] px-3 text-primary-foreground/85 shadow-sm backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white/[0.16] hover:text-primary-foreground"
-              aria-label="Perfil"
-            >
-              <UserCircle2 className="h-5 w-5" />
-              <span className="hidden text-xs font-semibold lg:inline">Perfil</span>
-            </Button>
-            <Button
-              variant="ghost"
-              data-tour="logout-button"
-              onClick={handleLogout}
-              className="h-11 gap-2 rounded-2xl border border-white/15 bg-white/[0.08] px-3 text-primary-foreground/85 shadow-sm backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white/[0.16] hover:text-primary-foreground"
-              aria-label="Sair"
-            >
-              <LogOut className="h-5 w-5" />
-              <span className="hidden text-xs font-semibold lg:inline">Sair</span>
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  data-tour="profile-button"
+                  className="flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] pl-1 pr-2 text-white/85 transition-all hover:-translate-y-0.5 hover:bg-white/[0.12] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/15 sm:pr-3"
+                  aria-label="Abrir menu da conta"
+                >
+                  <UserAvatar
+                    avatarId={avatarId ?? undefined}
+                    avatarUrl={avatarUrl ?? undefined}
+                    name={resolvedUserName}
+                    size={32}
+                    pending={avatarPending}
+                    className="border border-white/40"
+                  />
+                  <span className="hidden max-w-28 truncate text-xs font-semibold sm:block">{resolvedUserName}</span>
+                  <ChevronDown className="h-3.5 w-3.5 text-white/55" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 rounded-2xl border-border/70 p-1.5 shadow-elevated">
+                <DropdownMenuLabel className="px-2.5 py-2">
+                  <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Sua conta</span>
+                  <span className="mt-0.5 block truncate text-sm text-foreground">{resolvedUserName}</span>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate("/perfil")} className="cursor-pointer rounded-xl py-2.5">
+                  <UserRound className="mr-2 h-4 w-4" /> Perfil
+                </DropdownMenuItem>
+                <DropdownMenuItem data-tour="logout-button" onClick={handleLogout} className="cursor-pointer rounded-xl py-2.5 text-destructive focus:text-destructive">
+                  <LogOut className="mr-2 h-4 w-4" /> Sair
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 

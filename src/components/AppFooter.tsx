@@ -1,5 +1,5 @@
 ﻿import React from "react";
-import { Github, User } from "lucide-react";
+import { Github } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const REPO_URL = "https://github.com/marcosfilho95/meu-cartaozinho";
@@ -16,19 +16,17 @@ export const AppFooter: React.FC<AppFooterProps> = ({ useContainer = true, class
     <footer className={cn(useContainer ? "container pb-6 pt-2" : "w-full pb-6 pt-2", className)}>
       <div
         className={cn(
-          "text-center text-xs text-muted-foreground",
+          "flex flex-col items-center justify-center gap-1.5 text-center text-[11px] text-muted-foreground sm:flex-row sm:gap-2",
           minimal
             ? "px-1 py-1"
             : plain
               ? "px-2 py-2"
-              : "rounded-xl border border-border/60 bg-card/65 px-4 py-3 shadow-card backdrop-blur-sm",
+              : "rounded-2xl border border-border/50 bg-card/55 px-4 py-3 backdrop-blur-sm",
         )}
       >
+        <p>Desenvolvido por Marcos Antonio Felix</p>
+        <span className="hidden text-border sm:inline" aria-hidden>•</span>
         <p className="flex items-center justify-center gap-1.5">
-          <User className="h-3.5 w-3.5" aria-hidden />
-          <span>Desenvolvido por Marcos Antonio Felix</span>
-        </p>
-        <p className="mt-1 flex items-center justify-center gap-1.5">
           <Github className="h-3.5 w-3.5" aria-hidden />
           <a
             href={REPO_URL}

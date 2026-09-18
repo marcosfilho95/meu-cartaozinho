@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
+import { Loader2, ShieldCheck } from "lucide-react";
+import { AppLogo } from "@/components/AppLogo";
 
 type AuthorizationDetails = {
   client?: { name?: string; client_name?: string; redirect_uris?: string[] };
@@ -11,6 +12,28 @@ type AuthorizationDetails = {
   redirect_url?: string;
   redirect_to?: string;
 };
+
+const ConsentShell = ({ children }: { children: ReactNode }) => (
+  <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f3eddd] p-3 sm:p-6">
+    <div className="pointer-events-none absolute -left-28 -top-28 h-80 w-80 rounded-full bg-[#d8bd70]/20 blur-3xl" />
+    <section className="relative grid w-full max-w-[900px] overflow-hidden rounded-[2rem] border border-white/70 bg-card shadow-[0_30px_90px_-35px_rgba(12,54,40,0.38)] md:grid-cols-[0.72fr_1.28fr]">
+      <aside className="relative overflow-hidden bg-[#0b3b2b] p-7 text-white sm:p-9 md:flex md:min-h-[560px] md:flex-col md:justify-between md:p-10">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full border border-[#d6b968]/25" />
+        <div className="relative">
+          <AppLogo size="lg" className="mb-6 h-16 w-16 rounded-2xl bg-[#f5efdf] ring-1 ring-white/20" />
+          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-[#dcc882]">Conexão segura</p>
+          <h1 className="mt-3 font-heading text-3xl font-bold tracking-[-0.035em]">Meu Cartãozinho</h1>
+        </div>
+        <div className="relative mt-8 hidden items-center gap-3 border-t border-white/10 pt-6 text-sm text-white/65 md:flex">
+          <ShieldCheck className="h-5 w-5 text-[#dcc882]" /> Você decide quem acessa seus dados.
+        </div>
+      </aside>
+      <div className="flex min-h-[360px] items-center p-7 sm:p-10 md:p-12">
+        <div className="w-full">{children}</div>
+      </div>
+    </section>
+  </main>
+);
 
 // Minimal wrapper for the beta supabase.auth.oauth namespace.
 function oauthApi() {
@@ -88,9 +111,10 @@ export default function OAuthConsent() {
 
   if (needsLogin) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-background p-6">
-        <div className="w-full max-w-md rounded-2xl border bg-card p-8 text-center shadow-sm">
-          <h1 className="text-2xl font-semibold">Faça login para continuar</h1>
+      <ConsentShell>
+        <div className="text-center md:text-left">
+          <p className="text-[0.68rem] font-bold uppercase tracking-[0.2em] text-primary/60">Autorização</p>
+          <h1 className="mt-2 font-heading text-2xl font-bold tracking-[-0.025em]">Faça login para continuar</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Você precisa entrar na sua conta para autorizar este aplicativo.
           </p>
@@ -103,26 +127,27 @@ export default function OAuthConsent() {
             Ir para login
           </Button>
         </div>
-      </main>
+      </ConsentShell>
     );
   }
 
   if (error) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-background p-6">
-        <div className="w-full max-w-md rounded-2xl border bg-card p-8 shadow-sm">
-          <h1 className="text-xl font-semibold">Não foi possível carregar a autorização</h1>
+      <ConsentShell>
+        <div>
+          <p className="text-[0.68rem] font-bold uppercase tracking-[0.2em] text-destructive/70">Algo não saiu como esperado</p>
+          <h1 className="mt-2 font-heading text-2xl font-bold tracking-[-0.025em]">Não foi possível carregar a autorização</h1>
           <p className="mt-2 text-sm text-muted-foreground break-words">{error}</p>
         </div>
-      </main>
+      </ConsentShell>
     );
   }
 
   if (!details) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-      </main>
+      <ConsentShell>
+        <div className="flex flex-col items-center text-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /><p className="mt-3 text-sm text-muted-foreground">Carregando autorização...</p></div>
+      </ConsentShell>
     );
   }
 
@@ -131,14 +156,15 @@ export default function OAuthConsent() {
     details.scopes ?? (details.scope ? details.scope.split(/\s+/).filter(Boolean) : []);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background p-6">
-      <div className="w-full max-w-md rounded-2xl border bg-card p-8 shadow-sm">
-        <h1 className="text-2xl font-semibold">Conectar {clientName} à sua conta</h1>
+    <ConsentShell>
+      <div>
+        <p className="text-[0.68rem] font-bold uppercase tracking-[0.2em] text-primary/60">Nova conexão</p>
+        <h1 className="mt-2 font-heading text-2xl font-bold tracking-[-0.025em]">Conectar {clientName} à sua conta</h1>
         <p className="mt-3 text-sm text-muted-foreground">
           {clientName} poderá usar as ferramentas deste app em seu nome enquanto você estiver conectado.
         </p>
         {scopeList.length > 0 && (
-          <div className="mt-4 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+          <div className="mt-5 rounded-2xl border border-border/60 bg-secondary/35 p-4 text-xs text-muted-foreground">
             <div className="mb-1 font-medium text-foreground">Permissões solicitadas</div>
             <ul className="list-disc pl-4">
               {scopeList.map((s) => (
@@ -160,6 +186,6 @@ export default function OAuthConsent() {
           </Button>
         </div>
       </div>
-    </main>
+    </ConsentShell>
   );
 }
