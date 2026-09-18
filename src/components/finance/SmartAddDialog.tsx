@@ -16,6 +16,7 @@ import {
   Sparkles,
   Loader2,
   Trash2,
+  ArrowLeft,
   ArrowUpCircle,
   ArrowDownCircle,
   Mic,
