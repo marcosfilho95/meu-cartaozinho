@@ -884,7 +884,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                         composerRef.current?.focus();
                       }}
                     >
-                      Ajustar no texto
+                      Corrigir
                     </Button>
                     <Button
                       size="sm"
