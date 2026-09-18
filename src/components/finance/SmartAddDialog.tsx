@@ -16,6 +16,7 @@ import {
   Sparkles,
   Loader2,
   Trash2,
+  ArrowLeft,
   ArrowUpCircle,
   ArrowDownCircle,
   Mic,
@@ -1027,14 +1028,24 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
 
           ) : (
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold">
-                  {drafts.length === 1
-                    ? "Transação para revisar"
-                    : `${drafts.length} transações para revisar`}
-                </p>
-                <Button variant="ghost" size="sm" onClick={() => setStage("input")}>
-                  Voltar à conversa
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2.5">
+                <div>
+                  <p className="text-sm font-semibold">
+                    {drafts.length === 1
+                      ? "Revise o lançamento"
+                      : `Revise os ${drafts.length} lançamentos`}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Confira e ajuste o que precisar antes de salvar.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setStage("input")}
+                  className="h-9 shrink-0 gap-1.5 rounded-lg border-primary/30 bg-background px-3 text-xs font-semibold text-primary shadow-sm transition-colors hover:bg-primary/10 hover:text-primary"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" /> Voltar à conversa
                 </Button>
               </div>
 
@@ -1042,7 +1053,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                 {drafts.map((d) => (
                   <div
                     key={d.id}
-                    className="rounded-xl border bg-card p-3 shadow-sm"
+                    className="rounded-xl border border-border/80 bg-card p-3 shadow-sm transition-shadow hover:shadow-md"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2">
@@ -1066,7 +1077,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                             learned_from_history: false,
                           });
                         }}>
-                          <SelectTrigger className="h-7 w-32 text-[11px]"><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="h-8 w-32 rounded-lg border-primary/30 bg-background text-[11px] font-semibold shadow-sm ring-1 ring-primary/10"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="expense">Despesa</SelectItem>
                             <SelectItem value="income">Receita</SelectItem>
@@ -1078,7 +1089,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                             value={d.is_fixed ? "fixed" : "variable"}
                             onValueChange={(value) => updateDraft(d.id, { is_fixed: value === "fixed" })}
                           >
-                            <SelectTrigger className="h-7 w-28 text-[11px]"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-8 w-28 rounded-lg border-primary/30 bg-background text-[11px] font-semibold shadow-sm ring-1 ring-primary/10"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="variable">Variável</SelectItem>
                               <SelectItem value="fixed">Fixa</SelectItem>
@@ -1093,7 +1104,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                       </div>
                       <button
                         onClick={() => removeDraft(d.id)}
-                        className="text-muted-foreground hover:text-destructive"
+                        className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                         aria-label="Remover transação"
                       >
                         <Trash2 className="h-4 w-4" />
