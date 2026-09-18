@@ -408,7 +408,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
         }
       }
 
-      const cleaned = extracted.replaceAll(String.fromCharCode(0), "").trim();
+      const cleaned = extracted.split(String.fromCharCode(0)).join("").trim();
       if (!cleaned) {
         toast.error("Não consegui ler o conteúdo desse arquivo.");
         return false;
@@ -884,7 +884,7 @@ export const SmartAddDialog: React.FC<Props> = ({ open, onOpenChange, userId }) 
                         composerRef.current?.focus();
                       }}
                     >
-                      Ajustar no texto
+                      Corrigir
                     </Button>
                     <Button
                       size="sm"
