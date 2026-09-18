@@ -137,9 +137,9 @@ const ABBREVIATIONS: Record<string, string> = {
   esc: "escola",
   fac: "faculdade",
   ub: "uber",
-  est: "estacionamento",
+  estac: "estacionamento",
   pedag: "pedagio",
-  seg: "seguro",
+
 };
 
 /** Expande abreviações mantendo o restante do texto intacto. */
