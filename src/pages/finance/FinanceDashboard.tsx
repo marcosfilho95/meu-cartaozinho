@@ -302,7 +302,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ userId }) => {
 
   const metricCards = [
     { label: "Receitas", value: summary.income, icon: TrendingUp, tone: "text-success", helper: "Tudo que entrou no mês" },
-    { label: "Despesas", value: summary.expenses, icon: TrendingDown, tone: "text-foreground", helper: `${summary.committedRate.toFixed(0)}% da renda` },
+    { label: "Despesas", value: summary.expenses, icon: TrendingDown, tone: "text-destructive", helper: `${summary.committedRate.toFixed(0)}% da renda` },
     { label: "Resultado", value: summary.result, icon: CircleDollarSign, tone: summary.result >= 0 ? "text-success" : "text-destructive", helper: "Receitas menos despesas" },
     { label: "Reservado", value: reservedForPlans, icon: PiggyBank, tone: "text-primary", helper: "Para seus planos" },
   ];

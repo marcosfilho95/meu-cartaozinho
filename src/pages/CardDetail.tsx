@@ -322,7 +322,7 @@ const CardDetail: React.FC = () => {
 
   return (
     <div
-      className="flex min-h-screen flex-col bg-background"
+      className="flex min-h-screen flex-col bg-background/70"
       style={{ background: `linear-gradient(180deg, ${cardTheme.soft} 0px, hsl(var(--background)) 520px)` }}
     >
       <AppHeader

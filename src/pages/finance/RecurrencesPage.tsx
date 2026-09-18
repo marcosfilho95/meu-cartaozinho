@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { untypedSupabase } from "@/lib/supabaseUntyped";
 import { formatCurrency } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 
 interface RecurrencesPageProps {
   userId: string;
@@ -25,6 +26,7 @@ type Recurrence = {
   next_date: string | null;
   end_date?: string | null;
   is_active: boolean;
+  kind?: "income" | "expense" | null;
   template_payload: {
     source?: string;
     amount?: number;
@@ -42,6 +44,7 @@ const RecurrencesPage: React.FC<RecurrencesPageProps> = ({ userId }) => {
   const [items, setItems] = useState<Recurrence[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [recurrenceType, setRecurrenceType] = useState<"income" | "expense">("expense");
   const [editing, setEditing] = useState<Recurrence | null>(null);
   const [editName, setEditName] = useState("");
   const [editAmount, setEditAmount] = useState("");
@@ -52,7 +55,7 @@ const RecurrencesPage: React.FC<RecurrencesPageProps> = ({ userId }) => {
     setLoading(true);
     const { data, error } = await untypedSupabase
       .from("recurrences")
-      .select("id, name, amount, day_of_month, frequency, next_date, end_date, is_active, template_payload")
+      .select("id, name, amount, day_of_month, frequency, next_date, end_date, is_active, kind, template_payload")
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
     if (error) {
@@ -139,11 +142,14 @@ const RecurrencesPage: React.FC<RecurrencesPageProps> = ({ userId }) => {
           <div>
             <div className="flex items-center gap-2">
               <Repeat className="h-4 w-4 text-primary" />
-              <h1 className="font-heading text-base font-bold">Despesas fixas</h1>
+              <h1 className="font-heading text-base font-bold">Lançamentos fixos</h1>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">Valores que se repetem são reaproveitados automaticamente na revisão de cada mês.</p>
           </div>
-          <Button onClick={() => setDialogOpen(true)} className="gap-1.5">Nova despesa fixa</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => { setRecurrenceType("income"); setDialogOpen(true); }} className="gap-1.5 text-success hover:border-success/30 hover:text-success">Nova receita fixa</Button>
+            <Button onClick={() => { setRecurrenceType("expense"); setDialogOpen(true); }} className="gap-1.5">Nova despesa fixa</Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -165,7 +171,7 @@ const RecurrencesPage: React.FC<RecurrencesPageProps> = ({ userId }) => {
                     {frequencyLabel[item.frequency]}{item.day_of_month ? ` · dia ${item.day_of_month}` : ""}{item.end_date ? ` · encerrada em ${new Date(`${item.end_date}T12:00:00`).toLocaleDateString("pt-BR")}` : ""}
                   </p>
                 </div>
-                <p className="font-bold">{formatCurrency(Number(item.amount ?? item.template_payload?.amount ?? 0))}</p>
+                <p className={cn("font-bold", (item.kind || item.template_payload?.type) === "income" ? "text-success" : "text-destructive")}>{(item.kind || item.template_payload?.type) === "income" ? "+" : "-"}{formatCurrency(Number(item.amount ?? item.template_payload?.amount ?? 0))}</p>
                 <Badge variant="outline" className={item.is_active ? "border-success/30 bg-success/15 text-success" : "border-border bg-muted text-muted-foreground"}>
                   {item.is_active ? "Ativa" : "Pausada"}
                 </Badge>
@@ -187,7 +193,7 @@ const RecurrencesPage: React.FC<RecurrencesPageProps> = ({ userId }) => {
         </div>
       )}
 
-      <AddTransactionDialog key={dialogOpen ? "open" : "closed"} open={dialogOpen} onOpenChange={setDialogOpen} userId={userId} defaultType="expense" defaultMode="recurrence" onSaved={load} />
+      <AddTransactionDialog key={`${dialogOpen ? "open" : "closed"}-${recurrenceType}`} open={dialogOpen} onOpenChange={setDialogOpen} userId={userId} defaultType={recurrenceType} defaultMode="recurrence" onSaved={load} />
 
       <Dialog open={Boolean(editing)} onOpenChange={(open) => !open && setEditing(null)}>
         <DialogContent className="sm:max-w-md">

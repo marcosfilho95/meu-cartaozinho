@@ -165,13 +165,13 @@ const Home: React.FC<HomeProps> = ({ userId }) => {
   const goalUsage = data.spendingGoal > 0 ? Math.min((data.summary.expenses / data.spendingGoal) * 100, 999) : null;
   const metricCards = [
     { label: "Receitas", value: data.summary.income, tone: "text-success" },
-    { label: "Despesas", value: data.summary.expenses, tone: "text-foreground" },
+    { label: "Despesas", value: data.summary.expenses, tone: "text-destructive" },
     { label: "Resultado", value: data.summary.result, tone: data.summary.result >= 0 ? "text-success" : "text-destructive" },
     { label: "Reservado para planos", value: data.reserved, tone: "text-primary" },
   ];
 
   return (
-    <div className="min-h-screen bg-background pb-16">
+    <div className="min-h-screen bg-background/70 pb-16">
       <AppHeader title="Meu Cartãozinho" greeting={headerProfile.greeting} userName={headerProfile.firstName} avatarId={headerProfile.avatarId} avatarUrl={headerProfile.avatarUrl} avatarPending={!headerProfile.resolved} />
 
       <main className="mx-auto max-w-6xl space-y-6 px-4 pt-6 animate-fade-in sm:px-6">

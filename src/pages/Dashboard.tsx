@@ -167,7 +167,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
   if (!userId) return null;
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex min-h-screen flex-col bg-background/70">
       <AppHeader
         containerClassName="max-w-6xl"
         title="Meu Cartãozinho"
@@ -270,7 +270,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
         {!loading && cards.length > 0 && (
           <section className="space-y-3">
             <div className="flex items-end justify-between gap-3"><div><h2 className="font-heading text-xl font-bold">Seus cartões</h2><p className="text-xs text-muted-foreground">Abra um cartão para ver pessoas, parcelas e compras.</p></div><span className="text-xs text-muted-foreground">{cards.length} cadastrados</span></div>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2 md:justify-items-center">
               {cards.map((card, index) => {
                 const total = totals[card.id]?.total || 0;
                 const count = totals[card.id]?.count || 0;
@@ -286,8 +286,8 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
                     aria-busy={isOpening}
                     style={{ background: cardBackground }}
                     className={cn(
-                      "group relative isolate flex aspect-[1.72/1] min-h-[220px] touch-manipulation overflow-hidden rounded-[1.7rem] border border-white/20 p-5 text-left text-white shadow-[0_18px_38px_-18px_rgba(15,23,42,0.75)] outline-none transition-all duration-300 ease-out hover:z-10 hover:-translate-y-2 hover:rotate-[-0.35deg] hover:scale-[1.015] hover:shadow-[0_30px_55px_-20px_rgba(15,23,42,0.85)] focus-visible:z-10 focus-visible:-translate-y-1 focus-visible:ring-4 focus-visible:ring-primary/30 active:scale-[0.985] motion-reduce:transform-none motion-reduce:transition-none sm:min-h-0 sm:p-6",
-                      isOpening && "z-20 -translate-y-3 scale-[1.025] ring-4 ring-primary/25 shadow-[0_28px_52px_-16px_rgba(2,44,34,0.95)]",
+                      "group relative isolate flex aspect-[1.82/1] w-full max-w-[460px] min-h-[190px] touch-manipulation overflow-hidden rounded-[1.55rem] border border-white/20 p-4 text-left text-white shadow-[0_16px_32px_-18px_rgba(15,23,42,0.72)] outline-none transition-all duration-300 ease-out hover:z-10 hover:-translate-y-1.5 hover:rotate-[-0.25deg] hover:scale-[1.01] hover:shadow-[0_24px_44px_-20px_rgba(15,23,42,0.82)] focus-visible:z-10 focus-visible:-translate-y-1 focus-visible:ring-4 focus-visible:ring-primary/30 active:scale-[0.985] motion-reduce:transform-none motion-reduce:transition-none sm:min-h-0 sm:p-5",
+                      isOpening && "z-20 -translate-y-2 scale-[1.015] ring-4 ring-primary/25 shadow-[0_26px_48px_-16px_rgba(2,44,34,0.9)]",
                     )}
                   >
                     <span aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(115deg,transparent_20%,rgba(255,255,255,0.10)_46%,transparent_70%)] opacity-0 transition-all duration-700 group-hover:translate-x-1/3 group-hover:opacity-100" />
@@ -335,7 +335,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialUserId }) => {
               <AddCardDialog
                 userId={userId}
                 onCardAdded={fetchData}
-                trigger={<button type="button" className="group flex aspect-[1.72/1] min-h-[220px] touch-manipulation flex-col items-center justify-center rounded-[1.7rem] border border-dashed border-border bg-muted/15 p-5 text-center outline-none transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 hover:bg-primary/5 hover:shadow-card focus-visible:ring-4 focus-visible:ring-primary/20 active:scale-[0.985] motion-reduce:transform-none sm:min-h-0"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary transition-transform duration-300 group-hover:scale-110"><Plus className="h-5 w-5" /></div><p className="mt-3 text-sm font-semibold">Adicionar outro cartão</p><p className="mt-1 text-xs text-muted-foreground">Nubank, Amazon Prime, Mercado Pago e outros</p></button>}
+                trigger={<button type="button" className="group flex aspect-[1.82/1] w-full max-w-[460px] min-h-[190px] touch-manipulation flex-col items-center justify-center rounded-[1.55rem] border border-dashed border-border bg-muted/15 p-4 text-center outline-none transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 hover:bg-primary/5 hover:shadow-card focus-visible:ring-4 focus-visible:ring-primary/20 active:scale-[0.985] motion-reduce:transform-none sm:min-h-0 sm:p-5"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary transition-transform duration-300 group-hover:scale-110"><Plus className="h-5 w-5" /></div><p className="mt-3 text-sm font-semibold">Adicionar outro cartão</p><p className="mt-1 text-xs text-muted-foreground">Nubank, Amazon Prime, Mercado Pago e outros</p></button>}
               />
             </div>
           </section>

@@ -274,7 +274,7 @@ const Profile: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background/70 flex flex-col">
       <AppHeader
         title="Perfil"
         subtitle="Personalize sua conta"
