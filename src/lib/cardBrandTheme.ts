@@ -16,6 +16,15 @@ const THEMES: Record<string, CardBrandTheme> = {
   caixa: { accent: "#005ca8", soft: "rgba(0, 92, 168, 0.10)", background: "linear-gradient(135deg, #0875b9 0%, #07527e 55%, #06263d 100%)" },
   picpay: { accent: "#21c25e", soft: "rgba(33, 194, 94, 0.10)", background: "linear-gradient(135deg, #21c25e 0%, #08783a 52%, #03321d 100%)" },
   mercadopago: { accent: "#009ee3", soft: "rgba(0, 158, 227, 0.10)", background: "linear-gradient(135deg, #009ee3 0%, #086b9e 52%, #062d46 100%)" },
+  btg: { accent: "#06244d", soft: "rgba(6, 36, 77, 0.10)", background: "linear-gradient(135deg, #174b85 0%, #06244d 55%, #021329 100%)" },
+  xp: { accent: "#111111", soft: "rgba(17, 17, 17, 0.10)", background: "linear-gradient(135deg, #4b5563 0%, #111827 55%, #030712 100%)" },
+  neon: { accent: "#00a9e8", soft: "rgba(0, 169, 232, 0.10)", background: "linear-gradient(135deg, #00a9e8 0%, #0875a5 55%, #043047 100%)" },
+  pagbank: { accent: "#08a66a", soft: "rgba(8, 166, 106, 0.10)", background: "linear-gradient(135deg, #08a66a 0%, #087047 55%, #032d1d 100%)" },
+  pan: { accent: "#00a7df", soft: "rgba(0, 167, 223, 0.10)", background: "linear-gradient(135deg, #00a7df 0%, #086b9e 55%, #062d46 100%)" },
+  safra: { accent: "#008acb", soft: "rgba(0, 138, 203, 0.10)", background: "linear-gradient(135deg, #008acb 0%, #07527e 55%, #06263d 100%)" },
+  original: { accent: "#f15a24", soft: "rgba(241, 90, 36, 0.10)", background: "linear-gradient(135deg, #f15a24 0%, #a83d19 55%, #3a1609 100%)" },
+  will: { accent: "#d9b800", soft: "rgba(217, 184, 0, 0.12)", background: "linear-gradient(135deg, #d9b800 0%, #9a7d00 55%, #3b2f00 100%)" },
+  others: { accent: "#64748b", soft: "rgba(100, 116, 139, 0.10)", background: "linear-gradient(135deg, #64748b 0%, #334155 55%, #0f172a 100%)" },
 };
 
 const FALLBACK_THEMES: CardBrandTheme[] = [

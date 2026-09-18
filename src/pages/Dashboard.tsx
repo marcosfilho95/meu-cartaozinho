@@ -46,6 +46,15 @@ const BANK_CHART_COLORS: Record<string, string> = {
   caixa: "#005CA8",
   picpay: "#21C25E",
   mercadopago: "#009EE3",
+  btg: "#06244D",
+  xp: "#111111",
+  neon: "#00A9E8",
+  pagbank: "#08A66A",
+  pan: "#00A7DF",
+  safra: "#008ACB",
+  original: "#F15A24",
+  will: "#D9B800",
+  others: "#64748B",
 };
 
 const FALLBACK_CHART_COLORS = ["#0F766E", "#2563EB", "#D97706", "#DB2777", "#7C3AED"];
