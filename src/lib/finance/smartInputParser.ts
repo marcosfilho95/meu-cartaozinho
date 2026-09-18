@@ -169,6 +169,18 @@ export const parseBrazilianCurrency = (raw: string): number | null => {
   return Number.isFinite(amount) && amount > 0 ? amount : null;
 };
 
+/** "3k" = 3.000, "1,5k" = 1.500, "2 mil" = 2.000, "1kk"/"1 mi" = 1.000.000. */
+const MULTIPLIER_PATTERN = /^\s*(kk|k|mil|mi|milhao|milhoes)\b/i;
+
+const readMultiplier = (after: string): number => {
+  const match = MULTIPLIER_PATTERN.exec(
+    after.normalize("NFD").replace(/[\u0300-\u036f]/g, ""),
+  );
+  if (!match) return 1;
+  const token = match[1].toLowerCase();
+  return token === "k" || token === "mil" ? 1000 : 1_000_000;
+};
+
 const extractAmount = (text: string): number | null => {
   const tokenPattern = /(?:r\$\s*)?\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|(?:r\$\s*)?\d+(?:[.,]\d{1,2})?/gi;
   const candidates = [...text.matchAll(tokenPattern)].flatMap((match) => {
@@ -177,26 +189,31 @@ const extractAmount = (text: string): number | null => {
     const before = text.slice(Math.max(0, index - 18), index);
     const after = text.slice(index + raw.length, index + raw.length + 12);
     const digits = raw.replace(/\D/g, "");
-    const amount = parseBrazilianCurrency(raw);
-    if (amount === null) return [];
+    const base = parseBrazilianCurrency(raw);
+    if (base === null) return [];
+    const multiplier = readMultiplier(after);
+    const amount = base * multiplier;
     if (/(?:\/|-)\s*$/.test(before) || /^\s*(?:\/|-)/.test(after)) return [];
     if (/\b(?:dia|ano)\s*$/i.test(before) && !/r\$/i.test(raw)) return [];
-    if (amount <= 31 && /^\s*(?:de\s+)?(?:janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)/i.test(after)) return [];
+    if (multiplier === 1 && amount <= 31 && /^\s*(?:de\s+)?(?:janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)/i.test(after)) return [];
     const likelyYearContext = !before.trim() ||
       /\b(?:ano|em|de|janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s*$/i.test(before);
     if (
+      multiplier === 1 &&
       digits.length === 4 &&
       amount >= 1900 &&
       amount <= 2200 &&
       !/r\$|reais?/i.test(`${raw}${after}`) &&
       likelyYearContext
     ) return [];
-    const score = (/r\$/i.test(raw) ? 5 : 0) + (/^\s*reais?\b/i.test(after) ? 4 : 0) + (amount > 31 ? 2 : 0);
+    const score = (/r\$/i.test(raw) ? 5 : 0) + (/^\s*reais?\b/i.test(after) ? 4 : 0)
+      + (multiplier > 1 ? 4 : 0) + (amount > 31 ? 2 : 0);
     return [{ amount, score, index }];
   });
   candidates.sort((a, b) => b.score - a.score || a.index - b.index);
   return candidates[0]?.amount ?? null;
 };
+
 
 export const extractInstitution = (text: string): string | null => {
   const normalized = normalizeText(text);
