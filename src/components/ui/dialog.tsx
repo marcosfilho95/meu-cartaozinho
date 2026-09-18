@@ -46,7 +46,7 @@ const DialogContent = React.forwardRef<
         aria-label="Fechar"
         className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted/80 text-foreground shadow-md transition-all hover:scale-105 hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none"
       >
-        <X className="h-4.5 w-4.5" strokeWidth={2.5} />
+        <X className="h-5 w-5" strokeWidth={2.5} />
         <span className="sr-only">Fechar</span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
